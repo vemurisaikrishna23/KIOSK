@@ -4197,6 +4197,33 @@ button { font-family: inherit; }
   color: var(--ink-3);
   font-size: 13px;
 }
+.admin-empty.perm-denied {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 16px;
+}
+.perm-denied-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-top: 4px;
+}
+.perm-denied-sub {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.row-actions-none {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 8px 0;
+  width: 100%;
+  text-align: center;
+}
 .admin-loading {
   display: flex;
   align-items: center;

@@ -38,6 +38,13 @@ export default function Cameras() {
   const navigate = useNavigate()
   if (!auth.getUser()) { navigate('/signin', { replace: true }); return null }
 
+  // Permission gates — UI affordances mirror the backend's HasCustomPermission
+  // rules so a user can't see buttons for actions they can't perform.
+  const canView   = auth.hasPerm('camera_view')
+  const canCreate = auth.hasPerm('camera_create')
+  const canUpdate = auth.hasPerm('camera_update')
+  const canDelete = auth.hasPerm('camera_delete')
+
   const [cameras, setCameras] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -93,6 +100,12 @@ export default function Cameras() {
 
   /* ----------------------- data load ----------------------- */
   const reload = useCallback(async ({ silent = false } = {}) => {
+    if (!canView) {
+      // Without view permission the backend will 403 anyway — skip the
+      // request entirely so the network panel doesn't fill with errors.
+      setLoading(false)
+      return
+    }
     const myReqId = ++reqIdRef.current
     if (!silent) { setLoading(true); setError(null) }
     try {
@@ -112,15 +125,17 @@ export default function Cameras() {
     } finally {
       if (!silent && myReqId === reqIdRef.current) setLoading(false)
     }
-  }, [])
+  }, [canView])
 
   // Initial foreground load.
   useEffect(() => { reload() }, [reload])
 
   // Background poll — every 10s pull fresh status + viewer counts from the
   // backend (which itself queries MediaMTX live). Paused while the browser
-  // tab is hidden to avoid wasted requests + battery.
+  // tab is hidden to avoid wasted requests + battery. Skipped entirely if
+  // the user can't view cameras.
   useEffect(() => {
+    if (!canView) return
     let timer = null
     function tick() { reload({ silent: true }) }
     function start() {
@@ -140,7 +155,7 @@ export default function Cameras() {
       stop()
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [reload])
+  }, [reload, canView])
 
   /* ----------------------- derived ----------------------- */
   // Backend doesn't support ?q= for cameras, so filter on the client. The
@@ -339,7 +354,9 @@ export default function Cameras() {
                 >×</button>
               )}
             </div>
-            <button type="button" className="btn-primary" onClick={openCreate}>+ Add Camera</button>
+            {canCreate && (
+              <button type="button" className="btn-primary" onClick={openCreate}>+ Add Camera</button>
+            )}
           </div>
         </header>
 
@@ -357,7 +374,9 @@ export default function Cameras() {
             <span className="card-count">{filtered.length}</span>
           </div>
           <div className="list-scroll">
-            {loading ? (
+            {!canView ? (
+              <PermissionDenied resource="cameras" />
+            ) : loading ? (
               <div className="admin-empty admin-loading">
                 <span className="admin-spinner" aria-hidden="true" />
                 <span>Loading cameras…</span>
@@ -368,7 +387,9 @@ export default function Cameras() {
                   ? <>No cameras match <strong>"{debouncedQuery}"</strong>.{' '}
                       <button type="button" className="link-btn" onClick={() => setQuery('')}>Clear search</button>
                     </>
-                  : 'No cameras registered yet. Click "+ Add Camera" to get started.'}
+                  : (canCreate
+                      ? 'No cameras registered yet. Click "+ Add Camera" to get started.'
+                      : 'No cameras registered yet.')}
               </div>
             ) : (
               <div className="camera-grid">
@@ -377,6 +398,8 @@ export default function Cameras() {
                     key={c.id}
                     camera={c}
                     isViewing={viewingCamera?.id === c.id}
+                    canUpdate={canUpdate}
+                    canDelete={canDelete}
                     onOpen={() => setViewingCamera(c)}
                     onEdit={() => openEdit(c)}
                     onDelete={() => onDelete(c)}
@@ -387,7 +410,7 @@ export default function Cameras() {
             )}
           </div>
 
-          {filtered.length > 0 && (
+          {canView && filtered.length > 0 && (
             <Pager
               page={page}
               totalPages={totalPages}
@@ -564,7 +587,7 @@ export default function Cameras() {
 }
 
 /* ----------------------- camera card ----------------------- */
-function CameraCard({ camera, isViewing, onOpen, onEdit, onDelete, onShowDesc }) {
+function CameraCard({ camera, isViewing, canUpdate, canDelete, onOpen, onEdit, onDelete, onShowDesc }) {
   const protocolLabel = (PROTOCOL_OPTIONS.find((p) => p.value === camera.protocol)?.label) || camera.protocol?.toUpperCase()
 
   // Detect whether the description is being visually clamped (more text
@@ -669,8 +692,15 @@ function CameraCard({ camera, isViewing, onOpen, onEdit, onDelete, onShowDesc })
       </div>
 
       <div className="camera-actions" onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="row-btn" onClick={onEdit}>Edit</button>
-        <button type="button" className="row-btn danger" onClick={onDelete}>Delete</button>
+        {canUpdate && (
+          <button type="button" className="row-btn" onClick={onEdit}>Edit</button>
+        )}
+        {canDelete && (
+          <button type="button" className="row-btn danger" onClick={onDelete}>Delete</button>
+        )}
+        {!canUpdate && !canDelete && (
+          <span className="row-actions-none">View only</span>
+        )}
       </div>
     </article>
   )
@@ -760,6 +790,19 @@ function Modal({ title, children, onClose }) {
         </header>
         <div className="modal-body">{children}</div>
       </div>
+    </div>
+  )
+}
+
+export function PermissionDenied({ resource }) {
+  return (
+    <div className="admin-empty perm-denied">
+      <svg width="42" height="42" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="#B5500F" strokeWidth="1.6" />
+        <path d="M5.5 5.5 18.5 18.5" stroke="#B5500F" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <div className="perm-denied-title">You don't have permission to view {resource}.</div>
+      <div className="perm-denied-sub">Ask an administrator to grant you the relevant permission.</div>
     </div>
   )
 }

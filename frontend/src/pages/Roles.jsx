@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import { Pager } from './Users.jsx'
+import { PermissionDenied } from './Cameras.jsx'
 import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
 
 // System-managed roles the API will refuse to delete — mirror the backend's
@@ -24,6 +25,12 @@ const EMPTY_FORM = { id: null, name: '', description: '', permissions: [] /* ids
 export default function Roles() {
   const navigate = useNavigate()
   if (!auth.getUser()) { navigate('/signin', { replace: true }); return null }
+
+  // Permission gates — mirror the backend's HasCustomPermission rules.
+  const canView   = auth.hasPerm('role_view')
+  const canCreate = auth.hasPerm('role_create')
+  const canUpdate = auth.hasPerm('role_update')
+  const canDelete = auth.hasPerm('role_delete')
 
   const [roles, setRoles] = useState([])
   const [rolesCount, setRolesCount] = useState(0)
@@ -59,6 +66,7 @@ export default function Roles() {
   useEffect(() => { setPage(1) }, [debouncedQuery])
 
   const reload = useCallback(async () => {
+    if (!canView) { setLoading(false); return }
     setLoading(true); setError(null)
     try {
       const [r, p] = await Promise.all([
@@ -74,7 +82,7 @@ export default function Roles() {
     } finally {
       setLoading(false)
     }
-  }, [page, pageSize, debouncedQuery])
+  }, [page, pageSize, debouncedQuery, canView])
   useEffect(() => { reload() }, [reload])
 
   const permsByPolicy = useMemo(() => groupByPolicy(permissions), [permissions])
@@ -259,7 +267,9 @@ export default function Roles() {
                 aria-label="Search roles"
               />
             </div>
-            <button type="button" className="btn-primary" onClick={openCreate}>+ Add Role</button>
+            {canCreate && (
+              <button type="button" className="btn-primary" onClick={openCreate}>+ Add Role</button>
+            )}
           </div>
         </header>
 
@@ -279,7 +289,9 @@ export default function Roles() {
               <span className="card-count">{filtered.length}</span>
             </div>
             <div className="list-scroll">
-            {loading ? (
+            {!canView ? (
+              <PermissionDenied resource="roles" />
+            ) : loading ? (
               <div className="admin-empty">Loading…</div>
             ) : filtered.length === 0 ? (
               <div className="admin-empty">No roles match your filter.</div>
@@ -324,18 +336,14 @@ export default function Roles() {
                               <path d="m6 9 6 6 6-6" stroke="#6b6258" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>
                           </button>
-                          <div className="role-actions-group">
-                            <button type="button" className="row-btn" onClick={(e) => { e.stopPropagation(); openEdit(r) }}>Edit</button>
-                            {!PROTECTED_ROLE_NAMES.has(r.name) && (
-                              <button
-                                type="button"
-                                className="row-btn danger"
-                                onClick={(e) => { e.stopPropagation(); onDelete(r) }}
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
+                          <RoleActions
+                            role={r}
+                            isProtected={PROTECTED_ROLE_NAMES.has(r.name)}
+                            canUpdate={canUpdate}
+                            canDelete={canDelete}
+                            onEdit={(e) => { e.stopPropagation(); openEdit(r) }}
+                            onDelete={(e) => { e.stopPropagation(); onDelete(r) }}
+                          />
                         </div>
                       </header>
 
@@ -544,6 +552,28 @@ export default function Roles() {
 }
 
 /* ----- shared ----- */
+function RoleActions({ role, isProtected, canUpdate, canDelete, onEdit, onDelete }) {
+  const showEdit = canUpdate
+  const showDelete = canDelete && !isProtected
+  if (!showEdit && !showDelete) {
+    return (
+      <div className="role-actions-group">
+        <span className="row-actions-none">View only</span>
+      </div>
+    )
+  }
+  return (
+    <div className="role-actions-group">
+      {showEdit && (
+        <button type="button" className="row-btn" onClick={onEdit}>Edit</button>
+      )}
+      {showDelete && (
+        <button type="button" className="row-btn danger" onClick={onDelete}>Delete</button>
+      )}
+    </div>
+  )
+}
+
 function Field({ label, error, children, full, required }) {
   return (
     <label className={'form-field' + (full ? ' full' : '') + (error ? ' has-error' : '')}>

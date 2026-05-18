@@ -104,6 +104,34 @@ export const auth = {
   },
   getRememberedId: () => localStorage.getItem(REMEMBER_KEY) || '',
   hasRememberFlag: () => localStorage.getItem(REMEMBER_FLAG) === '1',
+
+  /**
+   * Permission helpers — backed by the user.roles[].permissions[] tree that
+   * the login + /me/ endpoints return. The backend is the source of truth;
+   * these are only used to hide / disable UI controls the user couldn't act
+   * on anyway. A user who has *any* role granting the named permission
+   * passes the check.
+   *
+   *   auth.hasPerm('camera_create')
+   *   auth.hasAnyPerm(['user_update', 'user_delete'])
+   *   auth.permSet()  // Set of all short_names the current user holds
+   */
+  permSet: () => {
+    const user = (() => { try { return JSON.parse(readFromBoth(USER_KEY) || 'null') } catch { return null } })()
+    const set = new Set()
+    if (!user || !Array.isArray(user.roles)) return set
+    for (const role of user.roles) {
+      for (const p of (role?.permissions || [])) {
+        if (p?.short_name) set.add(p.short_name)
+      }
+    }
+    return set
+  },
+  hasPerm: (shortName) => auth.permSet().has(shortName),
+  hasAnyPerm: (shortNames) => {
+    const s = auth.permSet()
+    return shortNames.some((n) => s.has(n))
+  },
 }
 
 /* ============================================================

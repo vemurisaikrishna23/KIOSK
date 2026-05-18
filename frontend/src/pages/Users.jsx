@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
+import { PermissionDenied } from './Cameras.jsx'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MOBILE_RE = /^\+?[0-9]{6,15}$/
@@ -31,6 +32,13 @@ export default function Users() {
   const navigate = useNavigate()
   const me = auth.getUser()
   if (!me) { navigate('/signin', { replace: true }); return null }
+
+  // Permission gates — mirror the backend's HasCustomPermission rules.
+  const canView    = auth.hasPerm('user_view')
+  const canCreate  = auth.hasPerm('user_create')
+  const canUpdate  = auth.hasPerm('user_update')
+  const canDelete  = auth.hasPerm('user_delete')
+  const canRestore = auth.hasPerm('user_restore')
 
   // Paginated server-side.
   //  - `results`     → visible page rows.
@@ -95,6 +103,7 @@ export default function Users() {
   // Subsequent fetches use the lightweight `searching` flag so the table
   // doesn't blank out on every keystroke.
   const loadList = useCallback(async () => {
+    if (!canView) { setLoading(false); return }
     const myReqId = ++reqIdRef.current
     setError(null)
     if (!firstLoadDoneRef.current) setLoading(true)
@@ -126,7 +135,7 @@ export default function Users() {
         setViewSwitching(false)
       }
     }
-  }, [showDeleted, page, pageSize, debouncedQuery])
+  }, [showDeleted, page, pageSize, debouncedQuery, canView])
 
   useEffect(() => { loadList() }, [loadList])
 
@@ -417,7 +426,9 @@ export default function Users() {
               <span>Show deleted</span>
               {viewSwitching && <span className="admin-spinner sm" aria-hidden="true" />}
             </label>
-            <button type="button" className="btn-primary" onClick={openCreate}>+ Add User</button>
+            {canCreate && (
+              <button type="button" className="btn-primary" onClick={openCreate}>+ Add User</button>
+            )}
           </div>
         </header>
 
@@ -439,7 +450,9 @@ export default function Users() {
           </div>
 
           <div className="list-scroll">
-          {loading || viewSwitching ? (
+          {!canView ? (
+            <PermissionDenied resource="users" />
+          ) : loading || viewSwitching ? (
             <div className="admin-empty admin-loading">
               <span className="admin-spinner" aria-hidden="true" />
               <span>
@@ -489,11 +502,20 @@ export default function Users() {
                   <div className="user-sub" data-col="Created">{formatDate(u.created_at)}</div>
                   <div className="user-actions" data-col="Actions">
                     {isDeleted ? (
-                      <button type="button" className="row-btn" onClick={() => onRestore(u)}>Restore</button>
+                      canRestore
+                        ? <button type="button" className="row-btn" onClick={() => onRestore(u)}>Restore</button>
+                        : <span className="row-actions-none">View only</span>
                     ) : (
                       <>
-                        <button type="button" className="row-btn" onClick={() => openEdit(u)}>Edit</button>
-                        <button type="button" className="row-btn danger" onClick={() => onDelete(u)}>Delete</button>
+                        {canUpdate && (
+                          <button type="button" className="row-btn" onClick={() => openEdit(u)}>Edit</button>
+                        )}
+                        {canDelete && (
+                          <button type="button" className="row-btn danger" onClick={() => onDelete(u)}>Delete</button>
+                        )}
+                        {!canUpdate && !canDelete && (
+                          <span className="row-actions-none">View only</span>
+                        )}
                       </>
                     )}
                   </div>
