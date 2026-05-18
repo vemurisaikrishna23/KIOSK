@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "PowerShell($src = \"C:\\\\Users\\\\saikrishna\\\\.claude\\\\projects\\\\d--KIOSK\\\\8497b6f0-c978-43d9-ac5c-369fa496f4b4\\\\tool-results\\\\webfetch-1778826284346-dwrnxn.bin\"; $dst = \"C:\\\\Users\\\\saikrishna\\\\.claude\\\\projects\\\\d--KIOSK\\\\design-extract\"; if \\(-not \\(Test-Path $dst\\)\\) { New-Item -ItemType Directory -Path $dst | Out-Null }; Get-ChildItem $src | Format-List Name, Length)",
+      "PowerShell($src = \"C:\\\\Users\\\\saikrishna\\\\.claude\\\\projects\\\\d--KIOSK\\\\8497b6f0-c978-43d9-ac5c-369fa496f4b4\\\\tool-results\\\\webfetch-1778826284346-dwrnxn.bin\"; $dst = \"C:\\\\Users\\\\saikrishna\\\\.claude\\\\projects\\\\d--KIOSK\\\\design-extract\"; $bytes = [System.IO.File]::ReadAllBytes\\($src\\); \"First bytes \\(hex\\): $\\($bytes[0..15] | ForEach-Object { $_.ToString\\('X2'\\) }\\)\")"
+    ]
+  }
+}
