@@ -1,14 +1,13 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, mixins
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated, AllowAny
 import os
+from django.db import transaction
 from .models import *
 from .serializers import *
 from Cameras.models import *
-from rest_framework.permissions import IsAuthenticated
 from kiosk_backend.permissions import HasCustomPermission
-from rest_framework import viewsets, mixins
-from rest_framework.permissions import AllowAny
 
 class ApplicationViewSet(viewsets.ModelViewSet):
     """
@@ -34,7 +33,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             app = serializer.save(created_by=request.user if request.user.is_authenticated else None)
             return Response({
                 "message": "Application created successfully",
-                "application": ApplicationSerializer(app).data
+                "application": ApplicationSerializer(app, context={"request": request}).data
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -47,7 +46,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             app = serializer.save()
             return Response({
                 "message": "Application updated successfully",
-                "application": ApplicationSerializer(app).data
+                "application": ApplicationSerializer(app, context={"request": request}).data
             }, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -73,86 +72,145 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 class ApplicationHasCameraViewSet(viewsets.ModelViewSet):
     """
     API to assign cameras to applications and view linked cameras.
+
+    Gated by the same permission set as the parent application. CRUD
+    enforces:
+      • application + camera exist (clean 400 on bad ids),
+      • the (application, camera) pair is unique (clean 400 on dup),
+      • is_primary is unique per application (assigning a new primary
+        demotes the previous one in the same transaction).
     """
-    queryset = ApplicationHasCamera.objects.all().order_by('-created_at')
+    queryset = ApplicationHasCamera.objects.select_related(
+        "application", "camera"
+    ).order_by("-created_at")
     serializer_class = ApplicationHasCameraSerializer
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {
+        "list":           "application_view",
+        "retrieve":       "application_view",
+        "create":         "application_update",
+        "update":         "application_update",
+        "partial_update": "application_update",
+        "destroy":        "application_update",
+    }
 
     # ---------- CREATE ----------
     def create(self, request, *args, **kwargs):
         data = request.data
         application_id = data.get("application")
-        camera_id = data.get("camera")
-        description = data.get("description")
-        is_primary = data.get("is_primary", False)
+        camera_id      = data.get("camera")
+        description    = data.get("description")
+        is_primary     = bool(data.get("is_primary", False))
 
-        # (No validation for now)
+        if not application_id:
+            return Response({"application": ["This field is required."]}, status=400)
+        if not camera_id:
+            return Response({"camera": ["This field is required."]}, status=400)
+
         try:
             app = Application.objects.get(id=application_id)
+        except Application.DoesNotExist:
+            return Response({"application": ["Application not found."]}, status=400)
+        try:
             cam = Camera.objects.get(id=camera_id)
-        except Exception as e:
-            return Response({"error": f"Invalid application or camera ID. {str(e)}"}, status=400)
+        except Camera.DoesNotExist:
+            return Response({"camera": ["Camera not found."]}, status=400)
 
-        link = ApplicationHasCamera.objects.create(
-            application=app,
-            camera=cam,
-            description=description,
-            is_primary=is_primary,
-            added_by=request.user if request.user.is_authenticated else None
-        )
+        # Duplicate guard — surface a field-level error instead of an IntegrityError.
+        if ApplicationHasCamera.objects.filter(application=app, camera=cam).exists():
+            return Response(
+                {"camera": ["This camera is already linked to the application."]},
+                status=400,
+            )
+
+        with transaction.atomic():
+            # If the new link is primary, demote any existing primary so we
+            # never have two primaries for the same application.
+            if is_primary:
+                ApplicationHasCamera.objects.filter(
+                    application=app, is_primary=True
+                ).update(is_primary=False)
+
+            link = ApplicationHasCamera.objects.create(
+                application=app,
+                camera=cam,
+                description=description,
+                is_primary=is_primary,
+                added_by=request.user if request.user.is_authenticated else None,
+            )
 
         return Response({
             "message": "Camera assigned to application successfully",
-            "data": ApplicationHasCameraSerializer(link).data
+            "data": ApplicationHasCameraSerializer(link, context={"request": request}).data,
         }, status=status.HTTP_201_CREATED)
 
     # ---------- LIST ----------
     def list(self, request, *args, **kwargs):
         """
-        List all linked cameras with optional filters:
-        - ?application=<id>
-        - ?camera=<id>
+        List linked cameras with optional filters:
+          ?application=<id>
+          ?camera=<id>
+          ?is_primary=true|false
         """
         app_id = request.query_params.get("application")
         cam_id = request.query_params.get("camera")
+        primary = request.query_params.get("is_primary")
 
         queryset = self.get_queryset()
-
-        # Apply filters if provided
         if app_id:
             queryset = queryset.filter(application_id=app_id)
         if cam_id:
             queryset = queryset.filter(camera_id=cam_id)
+        if primary is not None:
+            if primary.lower() == "true":
+                queryset = queryset.filter(is_primary=True)
+            elif primary.lower() == "false":
+                queryset = queryset.filter(is_primary=False)
 
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(queryset, many=True, context={"request": request})
         return Response({
             "count": queryset.count(),
-            "links": serializer.data
+            "links": serializer.data,
         }, status=status.HTTP_200_OK)
 
     # ---------- UPDATE ----------
     def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
+        partial = kwargs.pop("partial", False)
         instance = self.get_object()
-        serializer = self.get_serializer(instance, data=request.data, partial=partial)
-        if serializer.is_valid():
+        new_is_primary = request.data.get("is_primary")
+
+        serializer = self.get_serializer(
+            instance, data=request.data, partial=partial, context={"request": request}
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        with transaction.atomic():
+            # If we're promoting this row to primary, demote everyone else
+            # on the same application atomically.
+            if new_is_primary is True or new_is_primary == "true":
+                ApplicationHasCamera.objects.filter(
+                    application=instance.application, is_primary=True,
+                ).exclude(pk=instance.pk).update(is_primary=False)
+
             serializer.save()
-            return Response({
-                "message": "Camera–Application link updated successfully",
-                "data": serializer.data
-            }, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-   
+
+        return Response({
+            "message": "Camera–Application link updated successfully",
+            "data": serializer.data,
+        }, status=status.HTTP_200_OK)
+
     # ---------- DELETE ----------
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-                # 🔹 Delete image file if exists
-        if instance.application_image:
-            image_path = instance.application_image.path
-            if os.path.isfile(image_path):
-                os.remove(image_path)
+        # NOTE: ApplicationHasCamera has NO application_image field — the
+        # previous version of this method tried to delete one and crashed
+        # the request. There is nothing on disk to clean up here.
+        cam_name = instance.camera.camera_name if instance.camera else "Camera"
+        app_name = instance.application.name if instance.application else "application"
         instance.delete()
         return Response({
-            "message": f"Camera link for application '{instance.application.name}' deleted successfully."
+            "message": f"Unlinked '{cam_name}' from application '{app_name}'."
         }, status=status.HTTP_200_OK)
 
 
@@ -239,6 +297,73 @@ class PublicApplicationHasCameraViewSet(
             "count": queryset.count(),
             "links": serializer.data
         }, status=status.HTTP_200_OK)
+
+
+class DeviceEventViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only paginated view of POSTed device events.
+
+    Filters:
+      ?device=<id>     — required for listing
+      ?path=<segment>  — exact-match parent path (e.g. "logs")
+      ?since=<iso>     — only events created strictly after this timestamp
+    Cursor pagination via ?cursor=<id> + ?limit=<int> (max 200).
+    """
+    queryset = DeviceEvent.objects.all()
+    serializer_class = DeviceEventSerializer
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request, *args, **kwargs):
+        device_id = request.query_params.get("device")
+        if not device_id:
+            return Response({"detail": "Missing required ?device= filter."}, status=400)
+        try:
+            device_id = int(device_id)
+        except ValueError:
+            return Response({"detail": "?device= must be an integer."}, status=400)
+
+        qs = DeviceEvent.objects.filter(device_id=device_id).only(
+            "id", "device_id", "path", "key", "data", "created_at"
+        )
+
+        path = request.query_params.get("path")
+        if path is not None:
+            qs = qs.filter(path=path.strip("/"))
+
+        since = request.query_params.get("since")
+        if since:
+            try:
+                qs = qs.filter(created_at__gt=since)
+            except Exception:
+                return Response({"detail": "Invalid ?since= timestamp."}, status=400)
+
+        # Cursor: paginate by descending id so newest-first survives even if
+        # two events land in the same millisecond.
+        cursor = request.query_params.get("cursor")
+        if cursor:
+            try:
+                qs = qs.filter(id__lt=int(cursor))
+            except ValueError:
+                return Response({"detail": "?cursor= must be an integer."}, status=400)
+
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except ValueError:
+            limit = 50
+        limit = max(1, min(200, limit))
+
+        # +1 trick so we know whether there's another page without a count(*).
+        rows = list(qs.order_by("-id")[:limit + 1])
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+
+        next_cursor = rows[-1].id if (has_more and rows) else None
+        return Response({
+            "count_returned": len(rows),
+            "has_more": has_more,
+            "next_cursor": next_cursor,
+            "events": DeviceEventSerializer(rows, many=True).data,
+        }, status=200)
 
 
 class DeviceViewSet(viewsets.ModelViewSet):

@@ -1,11 +1,32 @@
 import json
 import uuid
 import traceback
+import logging
 from urllib.parse import parse_qs
+from django.db import models, IntegrityError
 from django.utils.timezone import now
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-from .models import Device
+from .models import Device, DeviceEvent
+
+log = logging.getLogger(__name__)
+
+
+def _truncate_depth(data, depth):
+    """
+    Truncate a nested dict to at most `depth` levels.
+    Leaves ({type, value}) are kept in full at any level so a shallow
+    response is still actionable. Branches deeper than `depth` are
+    returned as empty {} placeholders — the client knows to lazy-fetch
+    them by sending a `get` for that path on expand.
+    """
+    if not isinstance(data, dict):
+        return data
+    if "type" in data and "value" in data:
+        return data
+    if depth <= 0:
+        return {}
+    return {k: _truncate_depth(v, depth - 1) for k, v in data.items()}
 
 
 class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
@@ -14,7 +35,13 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
     # 🔹 VALIDATION
     # ===============================================================
     def _validate_payload_types(self, payload):
-        """Validate recursively that fields follow {type,value} rules."""
+        """Validate recursively that fields follow {type,value} rules.
+
+        Accepts three shapes at the top level so PUT-at-path works:
+          • an empty/missing payload (an empty branch — valid),
+          • a bare leaf  {"type": "...", "value": ...}  (PUT a single field), or
+          • a container dict whose keys are either nested containers or leaves.
+        """
         allowed_types = {"string", "int", "float", "boolean", "dict", "list"}
 
         def validate_item(key, item):
@@ -51,6 +78,16 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
             if t == "list" and not isinstance(v, list):
                 raise ValueError(f"Field '{key}' expects list")
 
+        # Empty dict / non-dict — treat as a no-op container (e.g. an empty
+        # branch being created by PUT). Lets callers create scaffolding.
+        if not isinstance(payload, dict) or not payload:
+            return
+
+        # NEW: a bare leaf at the top level (PUT-at-path semantics).
+        if "type" in payload and "value" in payload:
+            validate_item("(value)", payload)
+            return
+
         for key, value in payload.items():
             if isinstance(value, dict) and "type" not in value:
                 self._validate_payload_types(value)
@@ -85,7 +122,14 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
             await self.channel_layer.group_add(self.web_group, self.channel_name)
 
         await self.accept()
-        await self._set_device_connected(True)
+
+        # ONLY a hardware client coming online should mark the device as
+        # connected. Web dashboards opening the page must NOT flip the
+        # device to online — they're just observers. Status reflects the
+        # state of the physical device, not whether anyone is watching it.
+        if self.client_type == "hardware":
+            await self._set_device_connected(True)
+            await self._broadcast_status(True)
 
         self.subscribed_paths = set()
 
@@ -94,7 +138,8 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
 
         await self._send_ok("connected", {
             "device_uid": self.device.device_uid,
-            "client_type": self.client_type
+            "client_type": self.client_type,
+            "is_connected": self.device.is_connected,
         })
 
     # ===============================================================
@@ -108,8 +153,12 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
 
         self.subscribed_paths.clear()
 
-        if self.device:
+        # Symmetric with connect — only a hardware client dropping flips
+        # the device to offline. Web tabs closing should leave the device's
+        # online state untouched.
+        if self.device and self.client_type == "hardware":
             await self._set_device_connected(False)
+            await self._broadcast_status(False)
 
     # ===============================================================
     # 🔹 RECEIVE
@@ -138,7 +187,7 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
                 await self._handle_unsubscribe(data)
 
             elif action == "get":
-                await self._handle_get(path)
+                await self._handle_get(path, data.get("depth"))
 
             elif action == "put":
                 self._validate_payload_types(payload)
@@ -159,15 +208,32 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
 
         except ValueError as e:
             await self._send_error(str(e))
+        except IntegrityError as e:
+            # Most common cause: POST with a custom `key` that already
+            # exists at (device, path). Surface the cause so the user
+            # gets a useful toast instead of a generic 500.
+            msg = str(e)
+            if "devevt_unique_dev_path_key" in msg:
+                await self._send_error(
+                    "An entry with this key already exists at this path."
+                )
+            else:
+                await self._send_error("Database constraint violation.")
         except Exception:
-            print("❌ SERVER ERROR:", traceback.format_exc())
+            log.exception("WebSocket receive failed (action=%r path=%r)", action, path)
             await self._send_error("Internal server error")
 
     # ===============================================================
     # 🔹 SUBSCRIBE
     # ===============================================================
     async def _handle_subscribe(self, data):
-
+        """
+        Subscribe to one or more paths and return the current snapshot for
+        each. Pass `depth: <N>` to lazy-load — N=1 returns only the
+        immediate children at each path (branches further down are
+        replaced with empty {} placeholders). Omit `depth` (or pass null)
+        for the legacy full-tree behaviour.
+        """
         paths = data.get("paths")
         if paths is None:
             paths = ["/"]
@@ -179,19 +245,25 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
         if len(paths) == 0:
             paths = ["/"]
 
-        snapshots = []
+        depth = data.get("depth")
+        if depth is not None:
+            try:
+                depth = int(depth)
+                if depth < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                await self._send_error("'depth' must be a non-negative integer")
+                return
 
+        snapshots = []
         for p in paths:
             clean = p.strip("/") or "/"
-
-            already = clean in self.subscribed_paths
             self.subscribed_paths.add(clean)
-
-            if not already:
-                payload = await self._get_payload_for_path("" if clean == "/" else clean)
-                snapshots.append({"path": clean, "payload": payload})
-            else:
-                snapshots.append({"path": clean, "payload": "already_subscribed"})
+            payload = await self._get_payload_for_path(
+                "" if clean == "/" else clean,
+                max_depth=depth,
+            )
+            snapshots.append({"path": clean, "payload": payload})
 
         await self._send_json({
             "status": "ok",
@@ -314,9 +386,17 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
     # ===============================================================
     # 🔹 GET / PUT / PATCH / POST / DELETE
     # ===============================================================
-    async def _handle_get(self, path):
-        payload = await self._get_payload_for_path(path)
-        await self._send_ok("get", {"path": path or "/", "payload": payload})
+    async def _handle_get(self, path, depth=None):
+        if depth is not None:
+            try:
+                depth = int(depth)
+                if depth < 0:
+                    raise ValueError
+            except (TypeError, ValueError):
+                await self._send_error("'depth' must be a non-negative integer")
+                return
+        payload = await self._get_payload_for_path(path, max_depth=depth)
+        await self._send_ok("get", {"path": path or "/", "payload": payload, "depth": depth})
 
     async def _handle_put(self, path, payload):
         await self._replace_payload_async(path, payload)
@@ -327,14 +407,24 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
         await self._broadcast("patch", path, payload)
 
     async def _handle_post(self, path, payload):
+        """
+        Firebase-RTDB-style POST: appends a new keyed child under `path`.
 
+        Instead of growing the device's main JSON payload (which would force
+        a full re-write of the column on every event), each POST is stored
+        as a row in the DeviceEvent table. Reading the latest N entries at
+        a path is then a btree-indexed range scan, not a JSON walk over a
+        ballooning blob. Subscribers still receive a live "post" event over
+        the WebSocket so the client UI updates instantly.
+        """
         new_key = payload.pop("key", None) or f"-{uuid.uuid4().hex[:10]}"
         body = payload.get("data", payload)
 
         self._validate_payload_types({new_key: body})
 
-        await self._append_payload_async(path, new_key, body)
-        await self._broadcast("post", f"{path}/{new_key}", body)
+        clean_path = path.strip("/") if path else ""
+        await self._insert_event_async(clean_path, new_key, body)
+        await self._broadcast("post", f"{clean_path}/{new_key}".strip("/"), body)
 
     async def _handle_delete(self, path):
         await self._delete_path_async(path)
@@ -356,53 +446,239 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
         self.device.last_payload_update = now()
         self.device.save(update_fields=["is_connected", "last_payload_update"])
 
+    async def _broadcast_status(self, is_connected):
+        """Push a connection-state event to every web subscriber on this
+        device so dashboards / detail pages flip Online/Offline live."""
+        msg = {
+            "type": "device_event",
+            "event": "device_status",
+            "action": "status",
+            "source": "hardware",
+            "path": "",
+            "payload": {"is_connected": bool(is_connected)},
+            "timestamp": now().isoformat(),
+        }
+        await self.channel_layer.group_send(self.web_group, msg)
+
     @database_sync_to_async
-    def _get_payload_for_path(self, path):
+    def _get_payload_for_path(self, path, max_depth=None):
+        """
+        Returns the payload subtree at `path` MERGED with the device's
+        DeviceEvent rows, then UNIFORMLY truncated to `max_depth`.
+
+        Both JSONField branches and POSTed-entry branches obey the same
+        depth rule: at depth 1, the client gets the keys-and-leaves at
+        the immediate level; anything deeper becomes an empty {}
+        placeholder the client lazy-fetches on expand.
+
+        Leaves ({type, value}) are NEVER truncated — they always come
+        back with their value, even at depth 0.
+
+        Capped at 200 events to keep the response bounded.
+        """
         self.device.refresh_from_db(fields=["payload"])
         data = self.device.payload or {}
 
-        for p in path.strip("/").split("/") if path else []:
-            data = data.get(p, {})
-        return data
+        clean = path.strip("/") if path else ""
+        parts = clean.split("/") if clean else []
+
+        # Walk the JSONField subtree to the requested path.
+        for p in parts:
+            if isinstance(data, dict):
+                data = data.get(p, {})
+            else:
+                data = {}
+                break
+
+        if not isinstance(data, dict):
+            return data
+
+        merged = dict(data)
+
+        # An event's logical location in the tree is its (path, key) pair
+        # joined by "/". If the request is for a path that lives INSIDE a
+        # POSTed entry, the JSONField walk alone returns nothing — the
+        # entry's data isn't in the JSONField, it's in DeviceEvent.data.
+        # So we scan every (path, key) split of the request and pick the
+        # deepest match; the remainder of the request walks into that
+        # event's data tree.
+        if parts:
+            q = models.Q()
+            for i in range(len(parts)):
+                q |= models.Q(path="/".join(parts[:i]), key=parts[i])
+            candidates = list(
+                DeviceEvent.objects.filter(device=self.device).filter(q)
+                .only("id", "path", "key", "data")
+            )
+            best_event = None
+            best_i = -1
+            for ev in candidates:
+                for i in range(len(parts)):
+                    if ev.path == "/".join(parts[:i]) and ev.key == parts[i]:
+                        if i > best_i:
+                            best_i = i
+                            best_event = ev
+                        break
+            if best_event is not None:
+                # Walk remaining segments inside the event's data tree.
+                walk = best_event.data
+                for seg in parts[best_i + 1:]:
+                    if isinstance(walk, dict):
+                        walk = walk.get(seg, {})
+                    else:
+                        walk = {}
+                        break
+                # If we landed on a leaf, the response IS the leaf
+                # (truncation skips leaves, so return now).
+                if isinstance(walk, dict) and "type" in walk and "value" in walk:
+                    return walk
+                # If it's a non-dict (string/number/etc), return verbatim.
+                if not isinstance(walk, dict):
+                    return walk
+                # Branch — merge into `merged`. JSONField data usually
+                # has nothing here, but if it does, JSONField wins (it
+                # was a deliberate PUT).
+                for k, v in walk.items():
+                    if k not in merged:
+                        merged[k] = v
+
+        # Overlay ALL events (at-path and descendants) — both contribute
+        # to the merged tree with their full data. Truncation below
+        # then enforces the depth limit uniformly.
+        if clean:
+            events_qs = DeviceEvent.objects.filter(
+                device=self.device,
+            ).filter(
+                models.Q(path=clean) | models.Q(path__startswith=clean + "/")
+            )
+        else:
+            events_qs = DeviceEvent.objects.filter(device=self.device)
+        events_qs = events_qs.order_by("-id")[:200]
+
+        for ev in events_qs:
+            if clean:
+                rel = ev.path[len(clean):].strip("/")
+            else:
+                rel = ev.path
+
+            target = merged
+            for seg in (rel.split("/") if rel else []):
+                existing = target.get(seg)
+                if not isinstance(existing, dict):
+                    target[seg] = {}
+                target = target[seg]
+
+            if ev.key not in target:
+                target[ev.key] = ev.data
+
+        # Single, uniform depth cut — same rule for JSONField data and
+        # POST-derived data. POSTed-entry keys appear as collapsed
+        # placeholders too, so the client lazy-loads each level on click.
+        if max_depth is not None:
+            merged = _truncate_depth(merged, max_depth)
+        return merged
+
+    @database_sync_to_async
+    def _insert_event_async(self, path, key, body):
+        DeviceEvent.objects.create(
+            device=self.device,
+            path=path or "",
+            key=key,
+            data=body,
+        )
+        self.device.last_payload_update = now()
+        self.device.save(update_fields=["last_payload_update"])
 
     @database_sync_to_async
     def _replace_payload_async(self, path, payload):
-        data = self.device.payload or {}
+        """
+        PUT — replace the subtree at `path` with `payload`.
+
+        Uses PostgreSQL's jsonb_set so the database does the structural
+        update in-place instead of us reading the whole JSONField into
+        Python, mutating it, and writing it all back. For a large payload
+        this is the difference between O(blob_size) per write and
+        O(path_depth).
+        """
+        from django.db import connection
         parts = [p for p in path.split("/") if p]
-        ref = data
-
-        for p in parts[:-1]:
-            ref.setdefault(p, {})
-            ref = ref[p]
-
         if parts:
-            ref[parts[-1]] = payload
+            # jsonb_set(target, path_array, new_value, create_missing := true)
+            with connection.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE "Applications_device"
+                       SET payload = jsonb_set(
+                               COALESCE(payload, '{}'::jsonb),
+                               %s::text[],
+                               %s::jsonb,
+                               TRUE
+                           ),
+                           last_payload_update = NOW()
+                     WHERE id = %s
+                    """,
+                    [parts, json.dumps(payload), self.device.id],
+                )
         else:
-            data = payload
-
-        self.device.payload = self._clean(data)
-        self.device.last_payload_update = now()
-        self.device.save(update_fields=["payload", "last_payload_update"])
+            # Replacing root — single column write is unavoidable.
+            self.device.payload = payload or {}
+            self.device.last_payload_update = now()
+            self.device.save(update_fields=["payload", "last_payload_update"])
 
     @database_sync_to_async
     def _merge_payload_async(self, path, payload):
-        data = self.device.payload or {}
+        """
+        PATCH — shallow-merge `payload` into the dict at `path`.
+
+        Implemented as a single SQL `jsonb || jsonb` op when the path is a
+        dict, falling back to a Python round-trip only when the target is
+        absent or non-dict.
+        """
+        from django.db import connection
         parts = [p for p in path.split("/") if p]
-        ref = data
-
-        for p in parts[:-1]:
-            ref.setdefault(p, {})
-            ref = ref[p]
-
-        key = parts[-1] if parts else None
-        if key:
-            ref[key] = {**ref.get(key, {}), **payload}
+        if parts:
+            with connection.cursor() as cur:
+                # If the target at `path` is already a JSON object, concat
+                # merges the keys; otherwise we set it to the patch value.
+                cur.execute(
+                    """
+                    WITH cur AS (
+                      SELECT COALESCE(payload, '{}'::jsonb) AS p
+                        FROM "Applications_device"
+                       WHERE id = %s
+                       FOR UPDATE
+                    )
+                    UPDATE "Applications_device" d
+                       SET payload = CASE
+                             WHEN jsonb_typeof(cur.p #> %s) = 'object'
+                               THEN jsonb_set(cur.p, %s::text[],
+                                              (cur.p #> %s) || %s::jsonb, TRUE)
+                             ELSE jsonb_set(cur.p, %s::text[],
+                                            %s::jsonb, TRUE)
+                           END,
+                           last_payload_update = NOW()
+                      FROM cur
+                     WHERE d.id = %s
+                    """,
+                    [
+                        self.device.id,
+                        parts, parts, parts, json.dumps(payload),
+                        parts, json.dumps(payload),
+                        self.device.id,
+                    ],
+                )
         else:
-            data.update(payload)
-
-        self.device.payload = self._clean(data)
-        self.device.last_payload_update = now()
-        self.device.save(update_fields=["payload", "last_payload_update"])
+            # Root-level merge.
+            with connection.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE "Applications_device"
+                       SET payload = COALESCE(payload, '{}'::jsonb) || %s::jsonb,
+                           last_payload_update = NOW()
+                     WHERE id = %s
+                    """,
+                    [json.dumps(payload), self.device.id],
+                )
 
     @database_sync_to_async
     def _append_payload_async(self, path, key, body):
@@ -421,27 +697,40 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _delete_path_async(self, path):
-        data = self.device.payload or {}
+        """
+        DELETE — drop the key at `path` and any DeviceEvent rows POSTed
+        under that path. Uses `#-` (jsonb minus-path) so PostgreSQL does
+        the structural delete; an event sweep then removes the matching
+        time-series rows. Both are indexed/native operations.
+        """
+        from django.db import connection
         parts = [p for p in path.split("/") if p]
-
-        def delete_nested(obj, parts):
-            if len(parts) == 1:
-                obj.pop(parts[0], None)
-            else:
-                head = parts[0]
-                if head in obj and isinstance(obj[head], dict):
-                    delete_nested(obj[head], parts[1:])
-                    if not obj[head]:
-                        obj.pop(head, None)
-
         if parts:
-            delete_nested(data, parts)
+            with connection.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE "Applications_device"
+                       SET payload = COALESCE(payload, '{}'::jsonb) #- %s::text[],
+                           last_payload_update = NOW()
+                     WHERE id = %s
+                    """,
+                    [parts, self.device.id],
+                )
         else:
-            data = {}
+            self.device.payload = {}
+            self.device.last_payload_update = now()
+            self.device.save(update_fields=["payload", "last_payload_update"])
 
-        self.device.payload = self._clean(data)
-        self.device.last_payload_update = now()
-        self.device.save(update_fields=["payload", "last_payload_update"])
+        # Clean associated events under this path (indexed range delete).
+        clean = path.strip("/") if path else ""
+        if clean:
+            DeviceEvent.objects.filter(
+                device=self.device,
+            ).filter(
+                models.Q(path=clean) | models.Q(path__startswith=clean + "/")
+            ).delete()
+        else:
+            DeviceEvent.objects.filter(device=self.device).delete()
 
     # ===============================================================
     # 🔹 CLEAN
@@ -472,7 +761,7 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
         try:
             await self.send(text_data=json.dumps(data))
         except Exception as e:
-            print("⚠️ Send Error:", e)
+            log.warning("WebSocket send failed: %s", e)
 
 import json
 import uuid
@@ -669,7 +958,7 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
         except ValueError as e:
             return await self._send_error(str(e))
         except Exception:
-            print("❌ DASHBOARD RECEIVE ERROR\n", traceback.format_exc())
+            log.exception("Dashboard WebSocket receive failed")
             return await self._send_error("Internal server error")
 
     # ===============================================================
@@ -709,7 +998,7 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
             })
 
         except Exception:
-            print("❌ DASHBOARD device_event ERROR\n", traceback.format_exc())
+            log.exception("Dashboard device_event handler failed")
 
     def _infer_device_id_from_event_path(self, event_path: str):
         """
@@ -963,7 +1252,7 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
         try:
             await self.send(text_data=json.dumps(data))
         except Exception as e:
-            print("⚠️ DASHBOARD SEND ERROR:", e)
+            log.warning("Dashboard WebSocket send failed: %s", e)
 
 
 

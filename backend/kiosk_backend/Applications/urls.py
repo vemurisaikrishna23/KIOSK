@@ -8,6 +8,7 @@ router = DefaultRouter()
 router.register(r'applications', ApplicationViewSet, basename='application')
 router.register(r'application-cameras', ApplicationHasCameraViewSet, basename='application-camera')
 router.register(r'devices', DeviceViewSet, basename='device')
+router.register(r'device-events', DeviceEventViewSet, basename='device-event')
 router.register(r'dashboards',DashboardViewSet,basename='dashboard')
 router.register(r"dashboard-components", DashboardComponentViewSet, basename="dashboard-components")
 router.register(

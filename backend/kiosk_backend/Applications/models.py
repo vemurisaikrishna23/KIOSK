@@ -149,7 +149,61 @@ class Device(models.Model):
 
     def __str__(self):
         return f"{self.application.name} → {self.device_name}"
-    
+
+
+class DeviceEvent(models.Model):
+    """
+    Append-only event store for device POSTs.
+
+    The existing Device.payload JSONField holds the device's *current state*
+    (PUT/PATCH targets — bounded in size). POST'd data — typically rolling
+    time-series like sensor readings, logs, alerts — used to bloat that
+    same JSONField over time, forcing the whole blob to be re-read and
+    re-written on every event.
+
+    This table is the Firebase-RTDB "child node" equivalent: every POST
+    becomes one cheap INSERT keyed by (device, path, key), with a btree
+    index on (device, path, -created_at) so paginating most-recent-first
+    is O(log N) regardless of how many events the device has produced.
+
+    The main payload tree never grows; aged events can be pruned by a
+    background task without touching live device state.
+    """
+    device = models.ForeignKey(
+        Device,
+        on_delete=models.CASCADE,
+        related_name='events',
+    )
+    path = models.CharField(
+        max_length=512,
+        help_text="Parent path the entry was POSTed under, e.g. 'logs/error'",
+    )
+    key = models.CharField(
+        max_length=64,
+        help_text="Auto-generated child key (-XXXX...) or client-supplied id.",
+    )
+    data = models.JSONField(
+        help_text="The full body of the POSTed entry (excluding the auto-key).",
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        # Paginating newest-first per (device, path) is the hot path.
+        indexes = [
+            models.Index(fields=['device', 'path', '-created_at'], name='devevt_dev_path_ctime_idx'),
+            models.Index(fields=['device', '-created_at'], name='devevt_dev_ctime_idx'),
+        ]
+        ordering = ['-created_at', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['device', 'path', 'key'],
+                name='devevt_unique_dev_path_key',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.device.device_uid}@{self.path}/{self.key}"
+
 
 class Dashboard(models.Model):
     """

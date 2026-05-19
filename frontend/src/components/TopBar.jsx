@@ -8,7 +8,7 @@ const NAV = [
   { label: 'Users',     to: '/users'     },
   { label: 'Roles',     to: '/roles'     },
   { label: 'Cameras',      to: '/cameras' },
-  { label: 'Applications', to: '#' },
+  { label: 'Applications', to: '/applications' },
 ]
 
 /**

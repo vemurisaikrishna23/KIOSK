@@ -30,6 +30,8 @@ const API_BASE = resolveApiBase()
 // but on the same host/port. Compute it from API_BASE so it tracks the
 // runtime host (localhost vs LAN IP).
 const CAMERAS_BASE = API_BASE.replace(/\/api\/?$/, '/cameraapi')
+// Applications are mounted at /applications/ on the same host.
+const APPS_BASE = API_BASE.replace(/\/api\/?$/, '/applications')
 
 const ACCESS_KEY = 'kiosk_access'
 const REFRESH_KEY = 'kiosk_refresh'
@@ -320,6 +322,83 @@ export const api = {
   /* -------- Permissions (read-only catalog) -------- */
   listPermissions: () =>
     request('/permissions/', { withAuth: true }),
+
+  /* -------- Applications (mounted at /applications/ — not /api/) --------
+     Application image upload uses multipart/form-data, so the helpers accept
+     either a plain object (JSON body) or a FormData instance (multipart).
+     The request() wrapper leaves Content-Type unset for FormData so the
+     browser sets the right multipart boundary. */
+  listApplications: ({ isActive } = {}) => {
+    const params = new URLSearchParams()
+    if (isActive === true)  params.set('is_active', 'true')
+    if (isActive === false) params.set('is_active', 'false')
+    const qs = params.toString()
+    return request(`${APPS_BASE}/applications/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+  getApplication: (id) =>
+    request(`${APPS_BASE}/applications/${id}/`, { withAuth: true }),
+  createApplication: (body) => {
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+    return request(`${APPS_BASE}/applications/`, {
+      method: 'POST',
+      withAuth: true,
+      ...(isForm ? { body } : { json: body }),
+    })
+  },
+  updateApplication: (id, body) => {
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+    return request(`${APPS_BASE}/applications/${id}/`, {
+      method: 'PATCH',
+      withAuth: true,
+      ...(isForm ? { body } : { json: body }),
+    })
+  },
+  deleteApplication: (id) =>
+    request(`${APPS_BASE}/applications/${id}/`, { method: 'DELETE', withAuth: true }),
+
+  /* -------- Devices (under an Application) -------- */
+  listDevices: ({ application } = {}) => {
+    const params = new URLSearchParams()
+    if (application != null) params.set('application', application)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/devices/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+  getDevice: (id) =>
+    request(`${APPS_BASE}/devices/${id}/`, { withAuth: true }),
+  createDevice: (data) =>
+    request(`${APPS_BASE}/devices/`, { method: 'POST', json: data, withAuth: true }),
+  updateDevice: (id, data) =>
+    request(`${APPS_BASE}/devices/${id}/`, { method: 'PATCH', json: data, withAuth: true }),
+  deleteDevice: (id) =>
+    request(`${APPS_BASE}/devices/${id}/`, { method: 'DELETE', withAuth: true }),
+
+  /** Paginated POST history for a device (the Firebase-RTDB "child node"
+   *  store). Cursor-based — pass `cursor` from the previous response's
+   *  next_cursor to walk older pages. */
+  listDeviceEvents: ({ device, path, limit, cursor, since } = {}) => {
+    const params = new URLSearchParams()
+    if (device != null) params.set('device', device)
+    if (path != null)   params.set('path', path)
+    if (limit != null)  params.set('limit', limit)
+    if (cursor != null) params.set('cursor', cursor)
+    if (since != null)  params.set('since', since)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/device-events/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+
+  /* -------- Application ↔ Camera links -------- */
+  listAppCameras: ({ application } = {}) => {
+    const params = new URLSearchParams()
+    if (application != null) params.set('application', application)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/application-cameras/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+  createAppCamera: (data) =>
+    request(`${APPS_BASE}/application-cameras/`, { method: 'POST', json: data, withAuth: true }),
+  updateAppCamera: (id, data) =>
+    request(`${APPS_BASE}/application-cameras/${id}/`, { method: 'PATCH', json: data, withAuth: true }),
+  deleteAppCamera: (id) =>
+    request(`${APPS_BASE}/application-cameras/${id}/`, { method: 'DELETE', withAuth: true }),
 
   /* -------- Cameras (mounted at /cameraapi/ — not /api/) -------- */
   listCameras: ({ isActive } = {}) => {

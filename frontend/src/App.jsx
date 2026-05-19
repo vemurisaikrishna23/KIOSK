@@ -6,6 +6,9 @@ import Users from './pages/Users.jsx'
 import Roles from './pages/Roles.jsx'
 import Profile from './pages/Profile.jsx'
 import Cameras from './pages/Cameras.jsx'
+import Applications from './pages/Applications.jsx'
+import ApplicationDetail from './pages/ApplicationDetail.jsx'
+import DeviceDetail from './pages/DeviceDetail.jsx'
 import { auth } from './lib/api.js'
 
 function RequireAuth({ children }) {
@@ -43,6 +46,18 @@ export default function App() {
       <Route
         path="/cameras"
         element={<RequireAuth><Cameras /></RequireAuth>}
+      />
+      <Route
+        path="/applications"
+        element={<RequireAuth><Applications /></RequireAuth>}
+      />
+      <Route
+        path="/applications/:id"
+        element={<RequireAuth><ApplicationDetail /></RequireAuth>}
+      />
+      <Route
+        path="/applications/:appId/devices/:deviceId"
+        element={<RequireAuth><DeviceDetail /></RequireAuth>}
       />
       <Route path="*" element={<Navigate to="/signin" replace />} />
     </Routes>

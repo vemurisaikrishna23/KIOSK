@@ -3779,6 +3779,1755 @@ button { font-family: inherit; }
   flex-shrink: 0;
 }
 
+/* ------------------- Applications page ------------------- */
+/* New, app-store-style card. Lives in the same .camera-grid as the camera
+   cards (auto-fill 320px columns + 14px gap) but has its own visual shell.
+   Cards in the same grid row stretch to the same height via grid stretch;
+   the body grows so the action row pins to the bottom of every card. */
+.app-card-v2 {
+  /* Card height is natural — the hero locks to 16:9 (matching the crop
+     aspect) so heroes within a row are identical, and the body grows to
+     fill slack so meta + actions still pin to the bottom across the row. */
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  border-radius: 18px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  box-shadow: 0 6px 18px -14px rgba(20, 22, 28, 0.18);
+}
+.app-card-v2:focus-visible {
+  outline: none;
+  border-color: #F36A1E;
+  box-shadow: 0 0 0 4px rgba(243, 106, 30, 0.18);
+}
+.app-card-v2:hover {
+  border-color: rgba(243, 106, 30, 0.30);
+  transform: translateY(-2px);
+  box-shadow: 0 22px 36px -22px rgba(243, 106, 30, 0.32);
+}
+.app-card-v2.is-inactive { opacity: 0.78; filter: grayscale(0.15); }
+.app-card-v2.is-inactive:hover {
+  border-color: rgba(20, 22, 28, 0.06);
+  transform: none;
+  box-shadow: 0 6px 18px -14px rgba(20, 22, 28, 0.18);
+}
+
+/* Hero — locked to 16:9 so the cropped image (also 16:9) fills the entire
+   hero edge-to-edge. Cards within the same grid column share a width, so
+   their heroes are identical heights too. */
+.app-hero {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  flex-shrink: 0;
+  background: linear-gradient(135deg, #FFE9D5 0%, #FCD9C2 100%);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.app-hero-img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  /* contain so a portrait / unusual ratio image is never cropped */
+  object-fit: contain;
+  display: block;
+}
+/* Blurred clone behind the contained image — fills the hero with a
+   soft-focus version of the same colours so the box doesn't show
+   letterboxing for portrait / square images. */
+.app-hero-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(20px) brightness(0.92) saturate(1.05);
+  transform: scale(1.15);
+  z-index: 0;
+}
+/* Big single-letter mark on the no-image hero, softened so it sits behind
+   the foreground pills without competing for attention. */
+.app-hero-initial {
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 6px 18px rgba(20, 22, 28, 0.20);
+  user-select: none;
+}
+
+/* Publish pill — floats top-right of the hero with a frosted-glass look so
+   it reads cleanly against either a photo or a gradient. */
+.app-publish-pill {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  box-shadow: 0 4px 10px -4px rgba(20, 22, 28, 0.18);
+}
+.app-publish-pill.is-pub    { color: #15814B; }
+.app-publish-pill.is-draft  { color: #6B6258; }
+.app-publish-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.app-publish-pill.is-pub .app-publish-dot   { box-shadow: 0 0 0 3px rgba(21, 129, 75, 0.18); }
+.app-publish-pill.is-draft .app-publish-dot { box-shadow: 0 0 0 3px rgba(107, 98, 88, 0.16); }
+
+/* Disabled tag — floats top-left of the hero when the app is inactive. */
+.app-disabled-pill {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #B5500F;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(243, 106, 30, 0.30);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 10px -4px rgba(20, 22, 28, 0.18);
+}
+
+/* Body — name + 3-line clamped description + reserved Read more slot.
+   Heights of every part are deterministic so cards in the same grid row
+   line up at the bottom (meta + actions) without needing flex-grow. */
+.app-body {
+  flex: 1 1 auto;
+  padding: 14px 16px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.app-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  /* Clamp to one line so card heights line up across the grid row. */
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  /* Don't let flex shrinking compress the title when the description's
+     natural content height blows past the available body space. */
+  flex-shrink: 0;
+}
+.app-desc {
+  /* Clamp to a single line — anything that would wrap to a 2nd line is
+     hidden, and the JS overflow check surfaces a "Read more" link below. */
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+  color: #5A6172;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  flex-shrink: 0;
+}
+/* Inline markdown styling inside the card preview — keeps the formatting
+   subtle so a long **bold** name doesn't visually shout against the
+   already-bold title. */
+.app-desc strong { font-weight: 700; color: var(--ink); }
+.app-desc em     { font-style: italic; }
+.app-desc del    { text-decoration: line-through; opacity: 0.85; }
+.app-desc code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: rgba(20, 22, 28, 0.06);
+  padding: 0 5px;
+  border-radius: 4px;
+}
+.app-desc .muted { font-weight: 500; color: rgba(107, 98, 88, 0.55); }
+
+/* "Read more" trigger — small inline link with a sliding arrow on hover. */
+.app-readmore {
+  align-self: flex-start;
+  background: none;
+  border: 0;
+  padding: 2px 0 0;
+  margin: 0;
+  color: #B5500F;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s;
+  /* Stay at natural height when the description tries to shrink siblings. */
+  flex-shrink: 0;
+}
+.app-readmore:hover { color: #F36A1E; }
+.app-readmore-arrow {
+  transition: transform 0.18s ease;
+}
+.app-readmore:hover .app-readmore-arrow { transform: translateX(3px); }
+/* Reserved slot so every card body is the same height whether the text
+   overflowed and needed a Read more or not. */
+.app-readmore.is-empty {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ------------------- Application Detail page ------------------- */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink-3);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  margin-bottom: 14px;
+  transition: color 0.15s, transform 0.15s;
+}
+.back-link:hover { color: #F36A1E; transform: translateX(-2px); }
+.back-link svg { transition: transform 0.15s; }
+.back-link:hover svg { transform: translateX(-2px); }
+
+.app-detail-title {
+  margin: 4px 0 14px;
+}
+.app-detail-title h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  word-break: break-word;
+}
+
+.app-detail-hero {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #FFE9D5 0%, #FCD9C2 100%);
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+  box-shadow: 0 12px 28px -20px rgba(20, 22, 28, 0.30);
+}
+.app-detail-img {
+  position: relative;
+  z-index: 1;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.app-detail-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: blur(24px) brightness(0.85) saturate(1.05);
+  transform: scale(1.15);
+  z-index: 0;
+}
+.app-detail-initial {
+  font-size: 128px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 6px 22px rgba(20, 22, 28, 0.25);
+}
+.app-detail-fade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 35%, rgba(20, 22, 28, 0.65) 100%);
+  pointer-events: none;
+}
+.app-detail-headtext {
+  position: absolute;
+  left: 26px;
+  right: 26px;
+  bottom: 22px;
+  color: #fff;
+  z-index: 1;
+}
+.app-detail-headtext h1 {
+  margin: 6px 0 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  text-shadow: 0 2px 10px rgba(20, 22, 28, 0.45);
+}
+.app-detail-pills {
+  display: flex;
+  gap: 6px;
+}
+.app-detail-desc {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.92);
+  max-width: 720px;
+  text-shadow: 0 1px 6px rgba(20, 22, 28, 0.30);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.app-detail-foot {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.app-detail-foot strong { color: #fff; }
+
+/* The Detail page sections (Devices, Cameras) reuse list-card styling but
+   need a touch more breathing room and a header-actions slot. */
+.detail-section { margin-top: 14px; padding: 0; overflow: hidden; }
+.detail-section .card-head {
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(20, 22, 28, 0.06);
+}
+.card-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.btn-primary.btn-sm {
+  padding: 7px 14px;
+  font-size: 12.5px;
+}
+
+/* Rows in Devices / Cameras lists. */
+.detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.detail-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(20, 22, 28, 0.05);
+}
+.detail-row:last-child { border-bottom: 0; }
+.detail-row.is-inactive { opacity: 0.7; }
+.detail-row.is-viewing {
+  background: rgba(31, 174, 107, 0.06);
+  box-shadow: inset 3px 0 0 0 rgba(31, 174, 107, 0.55);
+}
+.detail-row.is-clickable { cursor: pointer; transition: background-color 0.12s; }
+.detail-row.is-clickable:hover {
+  background: rgba(243, 106, 30, 0.05);
+}
+.detail-row.is-clickable:focus-visible {
+  outline: none;
+  background: rgba(243, 106, 30, 0.06);
+  box-shadow: inset 3px 0 0 0 #F36A1E;
+}
+.detail-row-id {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.detail-row-text { min-width: 0; }
+.detail-row-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-row-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.detail-row-sub code {
+  background: rgba(20, 22, 28, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+.detail-row-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--ink-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.detail-row-pills { display: flex; gap: 6px; flex-shrink: 0; }
+.detail-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.connection-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 6px;
+  background: rgba(107, 98, 88, 0.35);
+  flex-shrink: 0;
+}
+.connection-dot.is-on {
+  background: #15814B;
+  box-shadow: 0 0 0 3px rgba(31, 174, 107, 0.20);
+}
+.cam-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #FFE9D5 0%, #FCD9C2 100%);
+  border: 1px solid rgba(243, 106, 30, 0.25);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+/* Tiny soft pills for status states inside detail rows. */
+.soft-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+.soft-pill.is-pos {
+  color: #15814B;
+  background: rgba(21, 129, 75, 0.10);
+  border-color: rgba(21, 129, 75, 0.25);
+}
+.soft-pill.is-neutral {
+  color: var(--ink-3);
+  background: rgba(107, 98, 88, 0.08);
+  border-color: rgba(107, 98, 88, 0.18);
+}
+.soft-pill.is-warn {
+  color: #B5500F;
+  background: rgba(243, 106, 30, 0.10);
+  border-color: rgba(243, 106, 30, 0.25);
+}
+
+.muted-strong {
+  font-weight: 700;
+  color: #B5500F;
+  text-transform: uppercase;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+}
+
+/* ------------------- Device detail page ------------------- */
+.device-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 4px 0 14px;
+}
+.device-page-head-id {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.device-page-head-id h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--ink);
+}
+.device-page-head-sub {
+  margin-top: 4px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.device-page-head-sub code {
+  background: rgba(20, 22, 28, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.device-page-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-danger.btn-sm { padding: 7px 14px; font-size: 12.5px; }
+.device-detail-body { padding: 14px 18px 18px; }
+@media (max-width: 720px) {
+  .device-page-head-id h1 { font-size: 20px; }
+  .device-page-head-actions { width: 100%; }
+  .device-page-head-actions .btn-sm { flex: 1; }
+  .device-detail-body { padding: 12px 14px 14px; }
+}
+
+/* ============================================================
+   Payload tree editor (Firebase-RTDB-style inline view)
+   ============================================================ */
+.tree-root {
+  font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+/* ----- Toolbar (hint on the left, "+ Add root key" on the right) ----- */
+.tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px 12px;
+  border-bottom: 1px solid rgba(20, 22, 28, 0.06);
+  margin-bottom: 12px;
+}
+.tree-toolbar-hint {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.tree-toolbar-hint kbd {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  background: rgba(20, 22, 28, 0.06);
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  border-bottom-width: 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--ink);
+}
+.tree-add-btn {
+  background: #F36A1E;
+  color: #fff;
+  border: 0;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  box-shadow: 0 6px 14px -10px rgba(243, 106, 30, 0.50);
+}
+.tree-add-btn:hover:not(:disabled) { background: #d65a14; transform: translateY(-1px); }
+.tree-add-btn:disabled { background: rgba(20, 22, 28, 0.10); color: var(--ink-3); cursor: not-allowed; box-shadow: none; }
+
+/* ----- Tree as nested BLOCKS — each leaf and branch is its own card ----- */
+.tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Every node — leaf or branch — is a self-contained block. */
+.tree-leaf,
+.tree-branch {
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  border-radius: 9px;
+  overflow: hidden;
+  transition:
+    border-color 0.18s ease,
+    box-shadow  0.18s ease;
+}
+.tree-leaf:hover,
+.tree-branch:hover {
+  border-color: rgba(243, 106, 30, 0.25);
+  box-shadow: 0 4px 10px -8px rgba(243, 106, 30, 0.25);
+}
+
+/* Branches get a subtle peach left edge so they read as containers. */
+.tree-branch {
+  border-left-width: 3px;
+  border-left-color: rgba(243, 106, 30, 0.40);
+}
+
+/* The block's content row (header for branches, body for leaves).
+   Lighter padding so blocks don't dominate the surrounding card. */
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-height: 32px;
+}
+
+/* Branch's child blocks live in a soft inner well, visually nested. */
+.tree-branch > .tree-children {
+  background: #FBFAF7;
+  border-top: 1px solid rgba(20, 22, 28, 0.05);
+  padding: 8px 10px 10px;
+  margin: 0;
+}
+
+/* Caret rotates smoothly with a soft easing curve. */
+.tree-caret {
+  background: none;
+  border: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: 10px;
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), color 0.18s ease;
+  transform: rotate(0deg);
+  border-radius: 4px;
+}
+.tree-caret:hover { color: #F36A1E; background: rgba(243, 106, 30, 0.08); }
+.tree-caret.is-open { transform: rotate(90deg); }
+.tree-caret-spacer { display: inline-block; width: 18px; flex-shrink: 0; }
+
+/* Key — same family as the rest of the admin pages, weight 600. */
+.tree-key {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.tree-key-branch {
+  color: #B5500F;
+  font-weight: 800;
+  font-size: 14.5px;
+}
+
+/* Value — typography only at rest; subtle peach surface on hover. Uses
+   the same sans-serif as form inputs across the app. */
+.tree-value {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 3px 10px;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    color 0.18s ease;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: tree-flash 0.7s ease-out;
+}
+.tree-value:hover:not(:disabled) {
+  background: rgba(243, 106, 30, 0.06);
+  border-color: rgba(243, 106, 30, 0.22);
+}
+.tree-value:disabled { cursor: default; opacity: 0.9; }
+.tree-value-boolean { color: #B5500F; }
+.tree-value-int, .tree-value-float { color: #15814B; }
+.tree-value-string { color: #1f4eb5; }
+/* Only dict/list values keep monospace — they're literal JSON so
+   monospace makes the structure scannable. */
+.tree-value-dict, .tree-value-list {
+  color: #5A6172;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@keyframes tree-flash {
+  0%   { background: rgba(31, 174, 107, 0.28); border-color: rgba(31, 174, 107, 0.35); }
+  100% { background: transparent; border-color: transparent; }
+}
+
+/* Type chip — small, soft, fades in/out gently. Matches the other
+   meta pills used across the admin pages. */
+.tree-type {
+  font-family: inherit;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: rgba(107, 98, 88, 0.85);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.04);
+  opacity: 0.7;
+  transition: opacity 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+.tree-row:hover .tree-type { opacity: 1; }
+
+.tree-row-actions {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.tree-row:hover .tree-row-actions,
+.tree-row:focus-within .tree-row-actions {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.tree-mini-btn {
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  border-radius: 7px;
+  padding: 5px 12px;
+  font: inherit;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.1s ease;
+}
+.tree-mini-btn:active:not(:disabled) { transform: scale(0.97); }
+
+/* Icon-only ghost button for tree row actions (+ and trash). Sits flush
+   with the row — no card-y border, just colour-shifted on hover. */
+.tree-icon-btn {
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.1s ease;
+}
+.tree-icon-btn:hover:not(:disabled) {
+  background: rgba(243, 106, 30, 0.10);
+  color: #B5500F;
+}
+.tree-icon-btn:active:not(:disabled) { transform: scale(0.92); }
+.tree-icon-btn.is-danger:hover:not(:disabled) {
+  background: rgba(224, 70, 61, 0.12);
+  color: #B23A33;
+}
+.tree-icon-btn:disabled { opacity: 0.40; cursor: not-allowed; }
+.tree-icon-btn svg { display: block; }
+.tree-mini-btn:hover:not(:disabled) {
+  background: rgba(243, 106, 30, 0.08);
+  color: var(--ink);
+  border-color: rgba(243, 106, 30, 0.35);
+}
+.tree-mini-btn.is-primary {
+  background: #F36A1E;
+  color: #fff;
+  border-color: #F36A1E;
+}
+.tree-mini-btn.is-primary:hover:not(:disabled) { background: #d65a14; border-color: #d65a14; }
+.tree-mini-btn.is-danger {
+  color: #B23A33;
+  border-color: rgba(224, 70, 61, 0.25);
+}
+.tree-mini-btn.is-danger:hover:not(:disabled) {
+  background: rgba(224, 70, 61, 0.10);
+  color: #8c2a25;
+}
+.tree-mini-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.tree-input {
+  font: inherit;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 7px 11px;
+  border: 1px solid rgba(20, 22, 28, 0.12);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  min-width: 0;
+  width: 100%;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.tree-input:focus {
+  outline: none;
+  border-color: #F36A1E;
+  box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.15);
+}
+
+/* Inline validation error displayed under the failing field. */
+.tree-inline-err {
+  display: block;
+  margin-top: 4px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #B23A33;
+  line-height: 1.4;
+}
+.tree-edit-cluster { display: inline-flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tree-edit-cluster.has-error .tree-input,
+.tree-add-field.has-error .tree-input {
+  border-color: rgba(224, 70, 61, 0.55);
+  box-shadow: 0 0 0 3px rgba(224, 70, 61, 0.12);
+}
+
+.tree-empty {
+  padding: 22px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ink-3);
+  background: #FAF8F4;
+  border: 1px dashed rgba(20, 22, 28, 0.10);
+  border-radius: 10px;
+}
+
+/* Subtle entrance — new rows fade and slide in slightly when added. */
+.tree-list > li {
+  animation: tree-row-in 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes tree-row-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.tree-children {
+  animation: tree-row-in 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ----- "Add node" inline form (clean, labeled, two-column) ----- */
+.tree-add-form {
+  margin: 8px 0 12px;
+  padding: 16px 18px;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px -16px rgba(20, 22, 28, 0.20);
+}
+.tree-children > .tree-add-form { margin-left: 0; }
+
+.tree-add-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(20, 22, 28, 0.06);
+}
+.tree-add-title {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -0.005em;
+}
+.tree-add-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  background: rgba(20, 22, 28, 0.04);
+  padding: 3px 9px;
+  border-radius: 6px;
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tree-add-path-prefix { color: var(--ink); font-weight: 600; }
+
+.tree-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.tree-add-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tree-add-field-full { grid-column: 1 / -1; }
+.tree-add-label {
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.tree-add-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(20, 22, 28, 0.06);
+}
+
+@media (max-width: 560px) {
+  .tree-row { gap: 8px; padding: 6px 4px; flex-wrap: wrap; }
+  .tree-row-actions { opacity: 1; margin-left: auto; }
+  .tree-add-grid { grid-template-columns: 1fr; }
+  .tree-add-form { padding: 14px; }
+}
+
+/* Quick-edit panel (PUT / PATCH / POST / DELETE over the device WebSocket). */
+.editor-form { display: flex; flex-direction: column; gap: 14px; }
+.editor-action-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.action-pill {
+  flex: 1 1 80px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  background: #fff;
+  color: var(--ink-3);
+  font: inherit;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.action-pill:hover { border-color: rgba(243, 106, 30, 0.40); color: var(--ink); }
+.action-pill.is-active {
+  background: rgba(243, 106, 30, 0.10);
+  color: #B5500F;
+  border-color: rgba(243, 106, 30, 0.45);
+}
+.action-pill.is-danger.is-active {
+  background: rgba(224, 70, 61, 0.10);
+  color: #B23A33;
+  border-color: rgba(224, 70, 61, 0.45);
+}
+.editor-json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace !important;
+  font-size: 12.5px !important;
+  line-height: 1.55;
+}
+.editor-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.editor-foot .form-hint { flex: 1; min-width: 220px; }
+.editor-foot .btn-primary.is-danger {
+  background: #E0463D;
+}
+.editor-foot .btn-primary.is-danger:hover { background: #C53B33; }
+
+/* Manual POST form inside the Recent posts card. */
+.post-form {
+  background: #FAF8F4;
+  border-bottom: 1px solid rgba(20, 22, 28, 0.06);
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.post-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+.post-form-json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  resize: vertical;
+  min-height: 100px;
+}
+.post-form-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.post-form-foot .form-hint { flex: 1; min-width: 220px; }
+.post-form-foot .form-hint code {
+  background: rgba(20, 22, 28, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+/* Live status chip in the "Recent posts" card head. */
+.ws-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.ws-status.ws-live          { background: rgba(21, 129, 75, 0.10);  color: #15814B; border: 1px solid rgba(21, 129, 75, 0.25); }
+.ws-status.ws-connecting,
+.ws-status.ws-reconnecting  { background: rgba(243, 106, 30, 0.10); color: #B5500F; border: 1px solid rgba(243, 106, 30, 0.25); }
+.ws-status.ws-offline,
+.ws-status.ws-idle          { background: rgba(107, 98, 88, 0.08);  color: var(--ink-3); border: 1px solid rgba(107, 98, 88, 0.18); }
+.ws-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ws-status.ws-live .ws-dot          { box-shadow: 0 0 0 3px rgba(31, 174, 107, 0.18); animation: ws-pulse 1.6s ease-in-out infinite; }
+.ws-status.ws-connecting .ws-dot,
+.ws-status.ws-reconnecting .ws-dot  { box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.18); animation: ws-pulse 1s ease-in-out infinite; }
+@keyframes ws-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+/* Event log (Firebase-style POST history). */
+.event-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.event-row {
+  background: #FAF8F4;
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  border-radius: 10px;
+  padding: 10px 12px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.event-row.is-live {
+  background: rgba(31, 174, 107, 0.06);
+  border-color: rgba(31, 174, 107, 0.30);
+  animation: event-flash 1.2s ease-out;
+}
+@keyframes event-flash {
+  from { background: rgba(31, 174, 107, 0.18); }
+  to   { background: rgba(31, 174, 107, 0.06); }
+}
+.event-row-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.event-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(243, 106, 30, 0.10);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.event-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.event-time { margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
+.event-body {
+  margin: 0;
+  padding: 8px 10px;
+  background: #14181F;
+  color: #E5E7EB;
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.event-loadmore { display: flex; justify-content: center; margin-top: 12px; }
+
+/* ------------------- Device details modal (legacy — still used by
+   the create flow's auto-popup if re-enabled in the future) ------------------- */
+.device-details-modal { max-width: 640px; }
+.device-details-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.device-details-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px 18px;
+  margin: 0 0 14px;
+  padding: 14px;
+  background: #FAF3EA;
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  border-radius: 12px;
+}
+.device-meta-grid > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.device-meta-grid dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0;
+}
+.device-meta-grid dd {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--ink);
+  word-break: break-word;
+}
+.device-meta-grid code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  background: rgba(20, 22, 28, 0.05);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.device-desc {
+  margin: 6px 0 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+
+.device-section-title {
+  margin: 18px 0 8px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Copy-able URL / token rows */
+.copy-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+.copy-row-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.copy-row-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.copy-row-value > code {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(20, 22, 28, 0.04);
+  padding: 4px 8px;
+  border-radius: 6px;
+  min-width: 0;
+}
+.copy-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.row-btn.ghost {
+  background: transparent;
+  color: var(--ink-3);
+}
+.row-btn.is-success {
+  background: rgba(21, 129, 75, 0.10);
+  color: #15814B;
+  border-color: rgba(21, 129, 75, 0.25);
+}
+
+.device-payload {
+  margin: 0;
+  padding: 14px;
+  background: #14181F;
+  color: #E5E7EB;
+  border-radius: 10px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  max-height: 260px;
+  overflow-y: auto;
+  white-space: pre;
+}
+.device-payload-empty {
+  padding: 14px;
+  font-size: 13px;
+  color: var(--ink-3);
+  background: #FAF8F4;
+  border: 1px dashed rgba(20, 22, 28, 0.12);
+  border-radius: 10px;
+  text-align: center;
+}
+
+@media (max-width: 560px) {
+  .device-meta-grid { grid-template-columns: 1fr; }
+  .copy-row-value { flex-wrap: wrap; }
+  .copy-row-value > code { width: 100%; flex: 1 1 100%; }
+}
+
+/* Tablet / small-desktop tweak — keep the row 3-column but tighten so
+   "View Live" + Edit + Unlink all fit without wrapping. */
+@media (max-width: 900px) {
+  .detail-row { gap: 10px; padding: 12px 14px; }
+  .detail-row-actions .row-btn { padding: 6px 10px; font-size: 12px; }
+}
+
+/* Phone — stack everything; the action buttons span full width as a
+   horizontal row so they're touch-target friendly. */
+@media (max-width: 720px) {
+  .app-detail-title h1 { font-size: 22px; }
+
+  .detail-section .card-head {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .card-head-actions { width: 100%; justify-content: space-between; }
+
+  .detail-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 14px 14px 12px;
+  }
+  /* Identity block: connection dot + text + (on small screens, pills
+     wrap underneath the name). */
+  .detail-row-id { gap: 10px; }
+  .detail-row-sub {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    line-height: 1.45;
+  }
+  .detail-row-sub code {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Status / Disabled pills go on their own row, left-aligned. */
+  .detail-row-pills {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin-top: -4px;
+  }
+  /* Edit + Delete take full-width 50/50 — comfortable thumb targets. */
+  .detail-row-actions {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 8px;
+    width: 100%;
+  }
+  .detail-row-actions .row-btn {
+    padding: 11px 12px;
+    font-size: 13px;
+    min-height: 42px;
+  }
+
+  /* Make the hover affordance more obvious on tap-only devices. */
+  .detail-row.is-clickable:active {
+    background: rgba(243, 106, 30, 0.10);
+  }
+
+  /* Device details modal — single-column meta + the copy rows wrap. */
+  .device-details-modal .modal-body { padding: 12px 14px 16px; }
+  .device-details-head { gap: 8px; }
+  .device-details-head h2 { font-size: 16px; flex: 1 1 100%; order: 2; }
+  .device-details-head .connection-dot { order: 1; }
+  .device-details-head .soft-pill { order: 3; }
+  .device-meta-grid { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
+  .copy-row { padding: 8px 10px; }
+  .copy-row-value { flex-wrap: wrap; }
+  .copy-row-value > code { width: 100%; min-width: 0; }
+  .copy-row-actions { width: 100%; justify-content: flex-end; }
+  .device-payload { max-height: 200px; font-size: 12px; }
+}
+
+/* Small phone — even tighter padding + smaller meta grid font. */
+@media (max-width: 420px) {
+  .detail-row { padding: 12px; }
+  .detail-row-name { font-size: 13.5px; }
+  .detail-row-sub { font-size: 11.5px; gap: 6px; }
+  .detail-row-sub code { font-size: 10.5px; }
+  .device-meta-grid dd { font-size: 12.5px; }
+  .device-section-title { font-size: 11px; }
+  .device-details-head h2 { font-size: 15px; }
+}
+
+/* ------------------- Image cropper ------------------- */
+/* Compound selector beats the bare ".modal-overlay" rule below in the
+   cascade — without this, z-index gets reset to 100 and the cropper
+   hides behind the edit modal it's supposed to overlay. */
+.modal-overlay.crop-overlay { z-index: 200; }
+.crop-modal {
+  width: 100%;
+  max-width: 560px;
+  padding: 0;
+  background: #fff;
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -20px rgba(20, 22, 28, 0.40);
+}
+.crop-hint {
+  margin: 0 0 14px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.crop-stage {
+  position: relative;
+  margin: 0 auto;
+  background: #1a1a1a;
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  /* Subtle checker pattern just outside the image, in case the user has
+     zoomed out (defensive — clamp keeps the image covering, but this
+     avoids weirdness on first paint). */
+  background-image:
+    linear-gradient(45deg, #222 25%, transparent 25%),
+    linear-gradient(-45deg, #222 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #222 75%),
+    linear-gradient(-45deg, transparent 75%, #222 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+.crop-stage:active { cursor: grabbing; }
+.crop-img {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  user-select: none;
+  max-width: none;
+  max-height: none;
+}
+/* The crop frame sits over the stage edge. Since the stage IS the crop
+   area, this is just a subtle outline that confirms the boundary. */
+.crop-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  border-radius: inherit;
+}
+.crop-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 600;
+  background: rgba(20, 22, 28, 0.55);
+  pointer-events: none;
+}
+.crop-error { color: #FFCFC9; font-weight: 700; }
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 4px;
+}
+.crop-zoom-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+.crop-zoom-slider {
+  flex: 1;
+  accent-color: #F36A1E;
+  cursor: pointer;
+}
+
+/* ------------------- Description popup ------------------- */
+.app-desc-modal {
+  /* Fixed window size, never expands with content. Internal body scrolls. */
+  width: 100%;
+  max-width: 520px;
+  height: min(460px, 88vh);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 30px 60px -20px rgba(20, 22, 28, 0.40);
+}
+.app-desc-head { flex-shrink: 0; }
+.app-desc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid rgba(20, 22, 28, 0.07);
+}
+.app-desc-head h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  word-break: break-word;
+  min-width: 0;
+  flex: 1;
+}
+/* In the modal header the publish/disabled pills are inline, not floating
+   over a hero, so neutralise the absolute positioning + frosted-glass and
+   give them a clean solid look. */
+.app-publish-pill.is-static,
+.app-disabled-pill.is-static {
+  position: static;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+.app-publish-pill.is-static.is-pub {
+  background: rgba(21, 129, 75, 0.10);
+  border-color: rgba(21, 129, 75, 0.25);
+}
+.app-publish-pill.is-static.is-draft {
+  background: rgba(107, 98, 88, 0.08);
+  border-color: rgba(107, 98, 88, 0.18);
+}
+.app-disabled-pill.is-static {
+  background: rgba(243, 106, 30, 0.10);
+}
+
+.app-desc-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 22px 24px 24px;
+  /* Subtle scrollbar that doesn't dominate on Windows. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(20, 22, 28, 0.20) transparent;
+}
+.app-desc-body::-webkit-scrollbar { width: 8px; }
+.app-desc-body::-webkit-scrollbar-track { background: transparent; }
+.app-desc-body::-webkit-scrollbar-thumb {
+  background: rgba(20, 22, 28, 0.18);
+  border-radius: 4px;
+}
+.app-desc-body::-webkit-scrollbar-thumb:hover { background: rgba(20, 22, 28, 0.32); }
+.app-desc-full {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0.005em;
+  color: #2D3340;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.app-desc-empty { white-space: pre-wrap; color: #6B7180; font-style: italic; }
+
+/* ----- Markdown rendering inside the description popup ----- */
+.md-body > :first-child { margin-top: 0; }
+.md-body > :last-child  { margin-bottom: 0; }
+.md-body p {
+  margin: 0 0 12px;
+  line-height: 1.7;
+}
+.md-body h1, .md-body h2, .md-body h3, .md-body h4 {
+  margin: 18px 0 8px;
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.md-body h1 { font-size: 22px; }
+.md-body h2 { font-size: 19px; }
+.md-body h3 { font-size: 16.5px; }
+.md-body h4 { font-size: 15px; }
+.md-body ul, .md-body ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+}
+.md-body li { margin: 4px 0; line-height: 1.6; }
+.md-body li > p { margin: 0; }
+.md-body a {
+  color: #F36A1E;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.md-body a:hover { color: #B5500F; }
+.md-body strong { font-weight: 700; color: var(--ink); }
+.md-body em { font-style: italic; }
+.md-body del { text-decoration: line-through; color: var(--ink-3); }
+.md-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.92em;
+  background: rgba(20, 22, 28, 0.06);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.md-body pre {
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  background: #14181F;
+  color: #E5E7EB;
+  border-radius: 10px;
+  overflow-x: auto;
+  line-height: 1.55;
+  font-size: 13px;
+}
+.md-body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 13px;
+  color: inherit;
+}
+.md-body blockquote {
+  margin: 0 0 12px;
+  padding: 4px 14px;
+  border-left: 3px solid #F36A1E;
+  background: rgba(243, 106, 30, 0.06);
+  color: var(--ink);
+  font-style: italic;
+  border-radius: 0 8px 8px 0;
+}
+.md-body blockquote > :last-child { margin-bottom: 0; }
+.md-body hr {
+  border: 0;
+  border-top: 1px solid rgba(20, 22, 28, 0.10);
+  margin: 18px 0;
+}
+.md-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 13.5px;
+}
+.md-body th, .md-body td {
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+.md-body th {
+  background: #FAF3EA;
+  font-weight: 700;
+  color: var(--ink);
+}
+.md-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 0 0 12px;
+}
+.md-body input[type="checkbox"] { margin-right: 4px; }
+
+/* Meta row — small creator + date strip above the actions. */
+.app-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 8px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.app-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.app-meta-label {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-meta-date { color: var(--ink-3); font-weight: 600; }
+.app-avatar-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FFE9D5 0%, #FCD9C2 100%);
+  border: 1px solid rgba(243, 106, 30, 0.25);
+  display: grid;
+  place-items: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  color: #B5500F;
+  flex-shrink: 0;
+}
+
+/* Action row — Edit + Delete, full width, hairline separator above. */
+.app-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(20, 22, 28, 0.06);
+  background: #FBFAF7;
+}
+.app-actions .row-btn { flex: 1; }
+.app-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #FFE9D5 0%, #FCD9C2 100%);
+  border: 1px solid rgba(243, 106, 30, 0.25);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.app-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.app-image-picker {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.app-image-preview {
+  /* Match the crop output aspect (16:9) so the preview fills edge-to-edge,
+     just like it will in the card hero — no peach letterbox. */
+  width: 176px;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #FFE9D5 0%, #FCD9C2 100%);
+  border: 1px solid rgba(243, 106, 30, 0.25);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.app-image-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.app-image-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.btn-secondary.file-pick {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.btn-link.danger { color: #B5500F; }
+.btn-link:hover { text-decoration: underline; }
+.form-hint {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
 /* Live status pill */
 .camera-status {
   display: inline-flex;
@@ -4730,14 +6479,53 @@ button { font-family: inherit; }
   bottom: 28px;
   right: 28px;
   z-index: 200;
-  padding: 12px 18px;
+  max-width: min(520px, calc(100vw - 56px));
+  padding: 12px 16px;
   border-radius: 14px;
-  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
   font-size: 13.5px;
   letter-spacing: 0.1px;
   box-shadow: 0 18px 36px -12px rgba(20, 22, 28, 0.30);
   animation: toast-slide 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
+.toast-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, 0.22);
+  font-weight: 800;
+  font-size: 13px;
+}
+.toast-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.45;
+}
+.toast-x {
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.85;
+  transition: background 0.12s, opacity 0.12s;
+}
+.toast-x:hover { background: rgba(255, 255, 255, 0.20); opacity: 1; }
+
 @keyframes toast-slide {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -4747,8 +6535,20 @@ button { font-family: inherit; }
   color: #fff;
 }
 .toast.toast-error {
-  background: #E0463D;
+  background: #B23A33;
   color: #fff;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 22px 44px -14px rgba(178, 58, 51, 0.55);
+}
+
+@media (max-width: 560px) {
+  .toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+  }
 }
 
 /* ============================================================================

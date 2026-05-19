@@ -156,6 +156,13 @@ class DeviceSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         return Device.objects.create(**validated_data)
 
+class DeviceEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DeviceEvent
+        fields = ["id", "device", "path", "key", "data", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+
 class DashboardSerializer(serializers.ModelSerializer):
     application_name = serializers.CharField(
         source="application.name", read_only=True

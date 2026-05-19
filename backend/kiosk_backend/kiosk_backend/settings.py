@@ -164,7 +164,10 @@ STATIC_URL = 'static/'
 STATIC_ROOT = "/root/projects/kiosk_backend/backend/kiosk_backend/staticfiles"
 
 MEDIA_URL = "/media/"
-MEDIA_ROOT = "/app/media"
+# Resolve under BASE_DIR so the same setting works on Windows dev + Linux
+# deployment without manual tweaking. Override via env if a different
+# mount-point is needed in production.
+MEDIA_ROOT = os.environ.get("DJANGO_MEDIA_ROOT") or (BASE_DIR / "media")
 
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024

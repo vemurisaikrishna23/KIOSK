@@ -707,7 +707,7 @@ function CameraCard({ camera, isViewing, canUpdate, canDelete, onOpen, onEdit, o
 }
 
 /* ----------------------- live-stream modal ----------------------- */
-function LiveStreamModal({ camera, onClose }) {
+export function LiveStreamModal({ camera, onClose }) {
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
