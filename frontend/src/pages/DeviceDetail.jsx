@@ -51,6 +51,12 @@ export default function DeviceDetail() {
   // enough context for the modal copy: { name, path, kind: 'leaf'|'branch' }
   const [confirmNode, setConfirmNode] = useState(null)
 
+  // Fatal WebSocket auth/lookup error from the server (e.g. token doesn't
+  // match a device, or device is disabled). Persists at the top of the
+  // page until the underlying problem is fixed. Cleared on successful
+  // (re)connect.
+  const [wsError, setWsError] = useState(null)
+
   // Paths whose children have been fetched (depth=1) at least once.
   // Ref instead of state — we don't need to re-render on changes, the
   // tree re-renders via setDevice when the fetched data arrives.
@@ -162,6 +168,7 @@ export default function DeviceDetail() {
         if (cancelled) { try { ws.close() } catch {} ; return }
         attempt = 0
         setWsStatus('live')
+        setWsError(null)   // a successful connect clears any old auth error banner
         // Subscribe shallow — only the root's immediate children.
         // Branches lazy-load when the user expands them.
         try { ws.send(JSON.stringify({ action: 'subscribe', paths: ['/'], depth: 1 })) } catch {}
@@ -176,10 +183,13 @@ export default function DeviceDetail() {
         currentWs = null
         if (cancelled) return
         setWsStatus('offline')
-        // 4001 = invalid token. The server told us our credential is bad —
-        // looping reconnect would just fail forever, burn CPU, and spam
-        // the access log. Stop the loop in that case.
-        if (event && event.code === 4001) return
+        // Auth-style close codes from the consumer:
+        //   4001 — device not found / token invalid
+        //   4002 — device disabled
+        // Both are user-fixable but reconnect would just loop forever.
+        // The persistent banner (wsError) was already set from the
+        // preceding error message frame, so the user knows what to do.
+        if (event && (event.code === 4001 || event.code === 4002)) return
         scheduleReconnect()
       }
 
@@ -191,11 +201,21 @@ export default function DeviceDetail() {
       let msg
       try { msg = JSON.parse(e.data) } catch { return }
 
-      // Server-side validation / processing errors — surface them as a
-      // toast so the user sees WHY their click did nothing. Includes the
-      // action + path of the most recent command so the message is
-      // self-explanatory ("PATCH /Device1 — Field 'x' expects boolean").
       if (msg?.status === 'error') {
+        // Connection-fatal errors carry a 4xxx close code and a `reason`
+        // tag. Pin them as a banner so the user sees them even after
+        // the WS has closed — toasts auto-dismiss after 8 s.
+        if (typeof msg.code === 'number' && msg.code >= 4000) {
+          setWsError({
+            code: msg.code,
+            reason: msg.reason || null,
+            message: msg.message || 'WebSocket connection rejected by the server.',
+          })
+          return
+        }
+        // Otherwise it's an action-level error (validation, etc.) —
+        // toast with the action + path of the most recent command so
+        // the message is self-explanatory.
         const last = lastCommandRef.current
         const prefix = last ? `${last.action.toUpperCase()} /${last.path || ''} — ` : ''
         setToast({
@@ -339,6 +359,19 @@ export default function DeviceDetail() {
           </svg>
           Back to Application
         </Link>
+
+        {wsError && (
+          <div className="admin-banner error ws-fatal-banner" role="alert" aria-live="assertive">
+            <span className="ws-fatal-icon" aria-hidden="true">⚠</span>
+            <div className="ws-fatal-text">
+              <div className="ws-fatal-title">
+                Live connection rejected
+                {wsError.code ? <span className="ws-fatal-code">code {wsError.code}</span> : null}
+              </div>
+              <div className="ws-fatal-msg">{wsError.message}</div>
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <div className="admin-empty admin-loading">
@@ -897,24 +930,41 @@ function BranchNode({ name, value, path, canUpdate, wsLive, onCommand, onError, 
 
   return (
     <li className="tree-branch">
-      <div className="tree-row">
-        <button
-          type="button"
+      <div
+        className="tree-row tree-row-branch"
+        role="button"
+        tabIndex={0}
+        onClick={toggleOpen}
+        onKeyDown={(e) => {
+          // Only react when the row itself is focused — not bubbling
+          // up from a child button (Add / Delete).
+          if (e.target !== e.currentTarget) return
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleOpen() }
+        }}
+        aria-expanded={open}
+      >
+        <span
           className={'tree-caret' + (open ? ' is-open' : '')}
-          onClick={toggleOpen}
-          aria-label={open ? 'Collapse' : 'Expand'}
-        >▸</button>
+          aria-hidden="true"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="m9 6 6 6-6 6" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
         <span className="tree-key tree-key-branch">{name}</span>
-        {canUpdate && (
-          <span className="tree-row-actions">
-            <button type="button" className="tree-icon-btn" onClick={() => setAdding(true)} disabled={!wsLive} aria-label="Add child" title="Add child">
-              <IconPlus />
-            </button>
-            <button type="button" className="tree-icon-btn is-danger" onClick={deleteSelf} disabled={!wsLive} aria-label="Delete branch" title="Delete branch">
-              <IconTrash />
-            </button>
-          </span>
-        )}
+        <span className="tree-row-actions" onClick={(e) => e.stopPropagation()}>
+          <CopyPathButton path={path} />
+          {canUpdate && (
+            <>
+              <button type="button" className="tree-icon-btn" onClick={() => setAdding(true)} disabled={!wsLive} aria-label="Add child" title="Add child">
+                <IconPlus />
+              </button>
+              <button type="button" className="tree-icon-btn is-danger" onClick={deleteSelf} disabled={!wsLive} aria-label="Delete branch" title="Delete branch">
+                <IconTrash />
+              </button>
+            </>
+          )}
+        </span>
       </div>
 
       {adding && (
@@ -1016,13 +1066,14 @@ function LeafNode({ name, node, path, canUpdate, wsLive, onCommand, onError, onR
               {renderLeafValue(node.value, node.type)}
             </button>
             <span className="tree-type">{node.type}</span>
-            {canUpdate && (
-              <span className="tree-row-actions">
+            <span className="tree-row-actions">
+              <CopyPathButton path={path} />
+              {canUpdate && (
                 <button type="button" className="tree-icon-btn is-danger" onClick={deleteSelf} disabled={!wsLive} aria-label="Delete" title="Delete">
                   <IconTrash />
                 </button>
-              </span>
-            )}
+              )}
+            </span>
           </>
         )}
       </div>
@@ -1222,6 +1273,64 @@ function IconTrash() {
         strokeLinejoin="round"
       />
     </svg>
+  )
+}
+function IconCopy() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+function IconCheck() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="m5 12 5 5L20 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/* Tiny "copy path" affordance shared by every tree row. `path` is the full
+   slash-joined location from the payload root — same string the user would
+   type into the WS payload-path field on a dashboard widget. */
+function CopyPathButton({ path }) {
+  const [copied, setCopied] = useState(false)
+  const clean = String(path || '').replace(/^\/+|\/+$/g, '')
+  const display = '/' + clean
+
+  async function doCopy(e) {
+    e.stopPropagation()
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(display)
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = display
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.select()
+        document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    } catch {
+      setCopied(false)
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className={'tree-icon-btn' + (copied ? ' is-copied' : '')}
+      onClick={doCopy}
+      aria-label={`Copy path ${display}`}
+      title={copied ? 'Copied!' : `Copy ${display}`}
+    >
+      {copied ? <IconCheck /> : <IconCopy />}
+    </button>
   )
 }
 

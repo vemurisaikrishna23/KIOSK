@@ -126,29 +126,23 @@ def validate_types(payload):
 def broadcast_ws(device, action, path, payload):
     try:
         channel = get_channel_layer()
+        msg = {
+            "type": "device_event",
+            "event": "value_changed",
+            "action": action,
+            "source": "http",
+            # Stamp the device_id so DashboardRealtimeConsumer can
+            # attribute the event without re-inferring it from the path.
+            "device_id": device.id,
+            "path": path,
+            "payload": payload,
+            "timestamp": now().isoformat()
+        }
         async_to_sync(channel.group_send)(
-            f"device_{device.device_uid}_web",
-            {
-                "type": "device_event",
-                "event": "value_changed",
-                "action": action,
-                "source": "http",
-                "path": path,
-                "payload": payload,
-                "timestamp": now().isoformat()
-            }
+            f"device_{device.device_uid}_web", msg
         )
         async_to_sync(channel.group_send)(
-            f"device_{device.device_uid}_hardware",
-            {
-                "type": "device_event",
-                "event": "value_changed",
-                "action": action,
-                "source": "http",
-                "path": path,
-                "payload": payload,
-                "timestamp": now().isoformat()
-            }
+            f"device_{device.device_uid}_hardware", msg
         )
     except Exception as e:
         print("❌ WS Broadcast Error:", e)

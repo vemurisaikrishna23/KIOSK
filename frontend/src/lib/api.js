@@ -386,6 +386,59 @@ export const api = {
     return request(`${APPS_BASE}/device-events/${qs ? '?' + qs : ''}`, { withAuth: true })
   },
 
+  /* -------- Dashboards (per Application) -------- */
+  listDashboards: ({ application } = {}) => {
+    const params = new URLSearchParams()
+    if (application != null) params.set('application', application)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/dashboards/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+  getDashboard: (id) =>
+    request(`${APPS_BASE}/dashboards/${id}/`, { withAuth: true }),
+  createDashboard: (body) => {
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+    return request(`${APPS_BASE}/dashboards/`, {
+      method: 'POST',
+      withAuth: true,
+      ...(isForm ? { body } : { json: body }),
+    })
+  },
+  updateDashboard: (id, body) => {
+    const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+    return request(`${APPS_BASE}/dashboards/${id}/`, {
+      method: 'PATCH',
+      withAuth: true,
+      ...(isForm ? { body } : { json: body }),
+    })
+  },
+  deleteDashboard: (id) =>
+    request(`${APPS_BASE}/dashboards/${id}/`, { method: 'DELETE', withAuth: true }),
+
+  /* -------- Dashboard widgets (DashboardComponent rows) --------
+     A widget's `config` is a free-form JSON blob shaped like:
+       {
+         "title": "…",
+         "bindings": [{ "device_id": 12, "payload_path": "sensors/temp" }, …],
+         "static":   { "unit": "°C", "min": 0, "max": 100, "write_value": true, … },
+         "ui":       { "icon": "thermometer", "color": "orange" }
+       }
+     Each widget binds to one or more devices/payload paths — the renderer
+     subscribes to each device's WebSocket and reads / writes the path. */
+  listDashboardComponents: ({ dashboard } = {}) => {
+    const params = new URLSearchParams()
+    if (dashboard != null) params.set('dashboard', dashboard)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/dashboard-components/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+  getDashboardComponent: (id) =>
+    request(`${APPS_BASE}/dashboard-components/${id}/`, { withAuth: true }),
+  createDashboardComponent: (data) =>
+    request(`${APPS_BASE}/dashboard-components/`, { method: 'POST', json: data, withAuth: true }),
+  updateDashboardComponent: (id, data) =>
+    request(`${APPS_BASE}/dashboard-components/${id}/`, { method: 'PATCH', json: data, withAuth: true }),
+  deleteDashboardComponent: (id) =>
+    request(`${APPS_BASE}/dashboard-components/${id}/`, { method: 'DELETE', withAuth: true }),
+
   /* -------- Application ↔ Camera links -------- */
   listAppCameras: ({ application } = {}) => {
     const params = new URLSearchParams()

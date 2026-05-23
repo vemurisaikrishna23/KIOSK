@@ -4416,25 +4416,38 @@ button { font-family: inherit; }
   margin: 0;
 }
 
-/* Caret rotates smoothly with a soft easing curve. */
+/* Caret — large enough to be an obvious dropdown affordance. It's now
+   a non-interactive <span> (the whole row is clickable), so no hover /
+   focus styling — the row's hover does the work. */
 .tree-caret {
-  background: none;
-  border: 0;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  color: var(--ink-3);
-  font-size: 10px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #B5500F;
+  flex-shrink: 0;
   transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), color 0.18s ease;
   transform: rotate(0deg);
-  border-radius: 4px;
 }
-.tree-caret:hover { color: #F36A1E; background: rgba(243, 106, 30, 0.08); }
+.tree-caret svg { display: block; }
 .tree-caret.is-open { transform: rotate(90deg); }
-.tree-caret-spacer { display: inline-block; width: 18px; flex-shrink: 0; }
+/* Leaf rows reserve the same horizontal slot for visual alignment. */
+.tree-caret-spacer { display: inline-block; width: 28px; flex-shrink: 0; }
+
+/* Whole branch row is clickable — clear visual affordance for the
+   dropdown. Actions inside (Add / Delete) stop click propagation so
+   they don't accidentally toggle. */
+.tree-row-branch {
+  cursor: pointer;
+  user-select: none;
+}
+.tree-row-branch:hover .tree-caret { color: #F36A1E; }
+.tree-row-branch:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.18);
+  border-radius: 8px;
+}
 
 /* Key — same family as the rest of the admin pages, weight 600. */
 .tree-key {
@@ -4574,6 +4587,11 @@ button { font-family: inherit; }
 }
 .tree-icon-btn:disabled { opacity: 0.40; cursor: not-allowed; }
 .tree-icon-btn svg { display: block; }
+/* Brief green flash after a successful path copy. */
+.tree-icon-btn.is-copied {
+  background: rgba(31, 174, 107, 0.14);
+  color: #1FAE6B;
+}
 .tree-mini-btn:hover:not(:disabled) {
   background: rgba(243, 106, 30, 0.08);
   color: var(--ink);
@@ -4731,6 +4749,59 @@ button { font-family: inherit; }
   .tree-row-actions { opacity: 1; margin-left: auto; }
   .tree-add-grid { grid-template-columns: 1fr; }
   .tree-add-form { padding: 14px; }
+}
+
+/* Persistent banner for fatal WS connection errors (token / auth /
+   disabled-device). Sits above the device content until the underlying
+   cause is fixed and the next reconnect succeeds. */
+.ws-fatal-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(224, 70, 61, 0.40);
+  background: rgba(224, 70, 61, 0.10);
+  color: #8c2a25;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.ws-fatal-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(224, 70, 61, 0.22);
+  color: #8c2a25;
+  font-weight: 800;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+}
+.ws-fatal-text { flex: 1 1 auto; min-width: 0; }
+.ws-fatal-title {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ws-fatal-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(224, 70, 61, 0.18);
+  color: #6e231f;
+}
+.ws-fatal-msg {
+  margin-top: 4px;
+  font-weight: 500;
+  color: #6e231f;
 }
 
 /* Quick-edit panel (PUT / PATCH / POST / DELETE over the device WebSocket). */
@@ -5119,10 +5190,33 @@ button { font-family: inherit; }
   .device-details-head .connection-dot { order: 1; }
   .device-details-head .soft-pill { order: 3; }
   .device-meta-grid { grid-template-columns: 1fr; padding: 12px; gap: 10px; }
-  .copy-row { padding: 8px 10px; }
-  .copy-row-value { flex-wrap: wrap; }
-  .copy-row-value > code { width: 100%; min-width: 0; }
-  .copy-row-actions { width: 100%; justify-content: flex-end; }
+
+  /* Integration endpoints (Copy rows on the device detail page).
+     Stack: label, full-width value, full-width action bar where the
+     Copy / Show buttons stretch to fill — easier thumb targets and
+     no awkward right-aligned tiny button sitting in white space. */
+  .copy-row { padding: 12px 12px 10px; gap: 6px; }
+  .copy-row-label { font-size: 10.5px; }
+  .copy-row-value { flex-wrap: wrap; gap: 8px; }
+  .copy-row-value > code {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+  .copy-row-actions {
+    width: 100%;
+    gap: 8px;
+  }
+  .copy-row-actions .row-btn {
+    flex: 1;                /* single button fills, pair splits 50/50 */
+    padding: 10px 12px;
+    font-size: 12.5px;
+    font-weight: 700;
+    min-height: 40px;       /* touch-friendly */
+    border-radius: 8px;
+  }
+
   .device-payload { max-height: 200px; font-size: 12px; }
 }
 
@@ -6390,6 +6484,7 @@ button { font-family: inherit; }
   animation: modal-pop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.1);
 }
 .modal-wide { max-width: 720px; }
+.modal-xwide { max-width: 1100px; }
 @keyframes modal-pop {
   from { opacity: 0; transform: translateY(12px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0)    scale(1); }
@@ -6925,7 +7020,7 @@ body { overflow-x: hidden; }
   .admin-toggle { align-self: flex-start; }
   .admin-page-actions .btn-primary { width: 100%; padding: 12px 16px; }
 
-  .admin-stats { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 8px; }
+  .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
   .dash-stat { padding: 12px 10px; border-radius: 14px; }
   .dash-stat .n { font-size: 19px; }
   .dash-stat .l { font-size: 10.5px; line-height: 1.25; }
@@ -7161,10 +7256,3224 @@ body { overflow-x: hidden; }
   /* Small phone top bar ≈ 52 px (padding 10+10 + burger 32). */
   .kiosk-nav-backdrop { top: 52px; }
   .admin-stats { grid-template-columns: 1fr 1fr !important; }
-  .admin-stats > .dash-stat:nth-child(3) { grid-column: 1 / -1; }
+  /* When there are exactly 3 stats, let the third span the row so it
+     doesn't sit alone half-width; with 4 stats they tile naturally as 2×2. */
+  .admin-stats > .dash-stat:nth-child(3):last-child { grid-column: 1 / -1; }
   .dash-stat .n { font-size: 18px; }
   .trending-row { grid-template-columns: 1fr !important; }
   .role-card-stats .row-btn { min-width: 90px; padding: 6px 8px; font-size: 11.5px; }
   .modal-head h2 { font-size: 15px; }
   .form-field input { padding: 9px 11px; font-size: 13.5px; }
 }
+
+/* =====================================================================
+   Dashboards — per-application widget grid (DashboardDetail.jsx)
+   ===================================================================== */
+
+/* Row icon on ApplicationDetail's Dashboards section. */
+.dash-thumb {
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: #FFF1E4;
+  border: 1px solid #F8D7B7;
+}
+
+/* ---------- Page header ---------- */
+.dash-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 6px 0 18px;
+}
+.dash-page-head h1 {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: #14161C;
+}
+.dash-page-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #6b6258;
+}
+.dash-page-desc {
+  margin: 8px 0 0;
+  color: #4e463d;
+  font-size: 13.5px;
+  max-width: 720px;
+}
+.dash-page-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.btn-secondary.is-on {
+  background: #F36A1E;
+  color: #fff;
+  border-color: #F36A1E;
+}
+
+/* Live status pill */
+.dash-ws-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+.dash-ws-pill .dash-ws-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.dash-ws-pill.is-live       { background: #E6F7EE; color: #1FAE6B; }
+.dash-ws-pill.is-live .dash-ws-dot { animation: dash-pulse 1.4s infinite; }
+.dash-ws-pill.is-connecting { background: #FFF2DC; color: #C77A14; }
+.dash-ws-pill.is-offline    { background: #FCE6E5; color: #C03A30; }
+.dash-ws-pill.is-error      { background: #FCE6E5; color: #C03A30; }
+@keyframes dash-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+/* Legacy split-layout classes are kept as no-ops in case any older
+   markup still references them. The current page lays everything out
+   inside one ResponsiveGrid (.dash-rgl). */
+.dash-layout { display: block; }
+.dash-layout.is-stacked { display: block; }
+/* Smart-CCTV style camera card — lives as one (locked) cell in the
+   unified grid. The cell controls its size, so the camera fills it and
+   the player flexes to take the remaining vertical space above the meta
+   row. */
+.dash-rgl-cam {
+  display: flex;
+}
+.dash-rgl-cam > .dash-cam-stage-inner,
+.dash-cam-stage-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: linear-gradient(180deg, #FFF6EE 0%, #FBE5D2 100%);
+  border: 1px solid #F4D9C2;
+  border-radius: 22px;
+  padding: 14px;
+  box-shadow: 0 18px 36px -22px rgba(20, 22, 28, 0.18);
+  min-height: 0;
+}
+.dash-cam-player {
+  position: relative;
+  width: 100%;
+  flex: 1;             /* fill remaining cell height */
+  min-height: 160px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #14161C;
+  box-shadow: 0 8px 22px -10px rgba(20, 22, 28, 0.35);
+}
+.dash-cam-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  border: 0;
+}
+.dash-cam-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #cbb89e;
+  background: #1f1c19;
+}
+
+/* Overlays on the player */
+.dash-cam-overlay-tl {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 2;
+}
+.dash-cam-overlay-tr {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(20, 22, 28, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 4px;
+  border-radius: 999px;
+  color: #fff;
+}
+.dash-cam-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.dash-cam-live-pill .dash-cam-live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #F36A1E;
+}
+.dash-cam-live-pill.is-on .dash-cam-live-dot { animation: dash-pulse 1.4s infinite; }
+.dash-cam-live-pill.is-off .dash-cam-live-dot { background: #9c9389; }
+
+/* Selector chrome on the player */
+.dash-cam-chev {
+  width: 24px; height: 24px;
+  display: inline-grid; place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.dash-cam-chev:hover { background: rgba(255,255,255,0.12); opacity: 1; }
+.dash-cam-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+}
+.dash-cam-select-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-cam-select-caret {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.dash-cam-select.is-open .dash-cam-select-caret { transform: rotate(180deg); }
+
+/* Popover list shown when the selector is open */
+.dash-cam-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  max-width: 240px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 16px 28px -14px rgba(20, 22, 28, 0.30);
+  z-index: 4;
+}
+.dash-cam-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 13px;
+  color: #14161C;
+  cursor: pointer;
+}
+.dash-cam-menu-item:hover { background: #FFF1E4; }
+.dash-cam-menu-item.is-active {
+  background: rgba(243, 106, 30, 0.12);
+  color: #C95812;
+  font-weight: 600;
+}
+.dash-cam-menu-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dash-cam-tab-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #9c9389;
+  flex-shrink: 0;
+}
+.dash-cam-tab-dot.is-on  { background: #1FAE6B; }
+.dash-cam-tab-dot.is-off { background: #C03A30; }
+.dash-cam-tab-dot.is-disabled { background: #cbb89e; }
+.dash-cam-tab-badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(243, 106, 30, 0.12);
+  color: #C95812;
+}
+
+/* Below-player meta — kept compact since the camera name now lives on the player */
+.dash-cam-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 4px;
+}
+.dash-cam-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #6b6258;
+}
+.dash-cam-meta-row code {
+  background: rgba(255,255,255,0.6);
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.dash-cam-meta-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6b6258;
+}
+.dash-widget-col {
+  display: contents;   /* legacy — no longer used by the unified grid */
+}
+
+/* ---------- Preview mode ----------
+   Strips admin chrome so the page reads as the end-user view. The top
+   bar stays visible (users see it too); only edit / back / debug chrome
+   inside the dashboard page hides. */
+.dash-page.is-preview .back-link,
+.dash-page.is-preview .dash-page-head,
+.dash-page.is-preview .dash-widget-actions {
+  display: none !important;
+}
+.dash-page.is-preview { padding-top: 14px; }
+.dash-preview-exit {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  background: #14161C;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 18px 30px -12px rgba(20, 22, 28, 0.45);
+}
+.dash-preview-exit:hover { background: #2a2c34; }
+
+/* ---------- Widget grid ---------- */
+.dash-widget-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+/* Wider tiles when the camera rail isn't taking half the page. */
+.dash-layout.is-stacked .dash-widget-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+/* ---------- Widget card ----------
+   Peach-cream is the canonical Smart-CCTV look — every widget shares
+   this base treatment so the dashboard reads as one consistent surface.
+   The grid cell controls width and height; the card flexes to fill.
+   `container-type: inline-size` lets us reflow the contents based on
+   the card's own width (independent of viewport), so values, labels and
+   bindings stay readable when the widget is shrunk to a tiny cell. */
+.dash-widget {
+  background: linear-gradient(180deg, #FFF6EE 0%, #FBE5D2 100%);
+  border: 1px solid #F4D9C2;
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 26px -16px rgba(20, 22, 28, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  container-type: inline-size;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.dash-widget:hover {
+  box-shadow: 0 16px 30px -18px rgba(20, 22, 28, 0.20);
+}
+/* Mid-sized — hide the "device · /path" subtext to free up vertical space. */
+@container (max-width: 240px) {
+  .dash-widget-bindings { display: none; }
+  .dash-widget { padding: 12px 14px; gap: 8px; }
+  .dash-widget-title { font-size: 12.5px; }
+  .dash-metric-value { font-size: 22px; }
+  .dash-simple-value { font-size: 18px; }
+  .dash-gauge-value { font-size: 16px; }
+  .dash-switch-toggle { width: 50px; height: 28px; }
+  .dash-switch-knob { width: 22px; height: 22px; }
+  .dash-switch-toggle.is-on .dash-switch-knob { left: 26px; }
+}
+/* Very small — drop unit chips, switch label, etc. Keep just the value. */
+@container (max-width: 160px) {
+  .dash-widget { padding: 10px 12px; gap: 6px; }
+  .dash-metric-value { font-size: 18px; }
+  .dash-simple-value { font-size: 16px; }
+  .dash-metric-unit, .dash-gauge-range { display: none; }
+  .dash-switch-state { display: none; }
+  .dash-button-meta { display: none; }
+}
+.dash-widget-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dash-widget-titles {
+  min-width: 0;
+  flex: 1;
+}
+.dash-widget-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #14161C;
+  letter-spacing: 0.1px;
+}
+.dash-widget-bindings {
+  margin-top: 5px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 11px;
+  color: #8c8377;
+}
+.dash-widget-binding {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.dash-widget-binding-dev {
+  color: #4e463d;
+  font-weight: 600;
+}
+.dash-widget-binding code {
+  background: #F7F3EE;
+  padding: 1px 6px;
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+.dash-widget-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+/* Inline resize cluster on each widget header (edit mode). Lets users
+   shrink/grow the card by one snap cell in either direction. */
+.dash-widget-resize {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid #ECE2D3;
+  border-radius: 999px;
+  padding: 2px 6px;
+  font-size: 11px;
+  color: #4e463d;
+}
+.dash-widget-resize-label {
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: #8c8377;
+  margin-left: 2px;
+}
+.dash-widget-resize-val {
+  min-width: 26px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: #14161C;
+}
+.dash-widget-resize-btn {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: #C95812;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.dash-widget-resize-btn:hover:not(:disabled) {
+  background: rgba(243, 106, 30, 0.14);
+}
+.dash-widget-resize-btn:disabled {
+  color: #cbb89e;
+  cursor: not-allowed;
+}
+.dash-widget-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Optional accent colour per widget */
+.dash-color-orange { border-top: 3px solid #F36A1E; }
+.dash-color-green  { border-top: 3px solid #1FAE6B; }
+.dash-color-blue   { border-top: 3px solid #4A7BFF; }
+.dash-color-red    { border-top: 3px solid #E0463D; }
+.dash-color-purple { border-top: 3px solid #A65EB8; }
+
+/* ---------- Metric widget ---------- */
+.dash-metric-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(95px, 1fr));
+  gap: 12px;
+}
+.dash-metric-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.dash-metric-label {
+  font-size: 11px;
+  color: #8c8377;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.dash-metric-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #14161C;
+  line-height: 1.1;
+}
+.dash-metric-unit {
+  font-size: 13px;
+  color: #8c8377;
+  font-weight: 500;
+}
+
+/* ---------- Simple card ---------- */
+.dash-simple {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dash-simple-label {
+  font-size: 11px;
+  color: #8c8377;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.dash-simple-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #14161C;
+}
+
+/* ---------- Gauge ---------- */
+.dash-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-gauge-track {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #F1E6D6;
+  overflow: hidden;
+}
+.dash-gauge-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #F36A1E, #FFB082);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+.dash-gauge-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dash-gauge-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #14161C;
+}
+.dash-gauge-range {
+  font-size: 11px;
+}
+
+/* ---------- Switch (toggle) ----------
+   Larger, more tactile pill — matches the Smart-CCTV mockup style. */
+.dash-switch {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.dash-switch-toggle {
+  width: 62px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid #ddd2c2;
+  background: #F1E6D6;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.dash-switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(20, 22, 28, 0.20);
+  transition: left 0.20s ease;
+}
+.dash-switch-toggle.is-on {
+  background: #F36A1E;
+  border-color: #F36A1E;
+  box-shadow: 0 6px 14px -6px rgba(243, 106, 30, 0.55);
+}
+.dash-switch-toggle.is-on .dash-switch-knob {
+  left: 32px;
+}
+.dash-switch-toggle:focus-visible {
+  outline: 2px solid #F36A1E;
+  outline-offset: 2px;
+}
+.dash-switch-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.dash-switch-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #14161C;
+}
+.dash-switch-state {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+/* ---------- Button widget ---------- */
+.dash-button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.dash-button-fire {
+  font-size: 13px;
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+.dash-button-meta {
+  font-size: 11px;
+  color: #8c8377;
+}
+.dash-button-meta code {
+  background: #F7F3EE;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 10.5px;
+}
+
+/* ---------- Input widget ---------- */
+.dash-input {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.dash-input input {
+  flex: 1;
+  padding: 9px 12px;
+  border: 1px solid #E0DAD0;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 13px;
+}
+.dash-input input:focus {
+  outline: 2px solid #F36A1E33;
+  border-color: #F36A1E;
+}
+
+/* ---------- JSON widget ---------- */
+.dash-json {
+  margin: 0;
+  background: #14161C;
+  color: #E8E2D6;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  max-height: 220px;
+  overflow: auto;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* ---------- Builder modal bindings ---------- */
+.dash-form-hint {
+  margin: 4px 0 14px;
+  font-size: 12px;
+}
+.dash-binding-list {
+  border: 1px dashed #E0DAD0;
+  border-radius: 12px;
+  padding: 12px 14px 6px;
+  margin: 8px 0 14px;
+  background: #FBF7F1;
+}
+.dash-binding-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: #4e463d;
+}
+.dash-binding-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1.2fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+.dash-binding-remove {
+  margin-bottom: 6px;
+}
+
+/* ---------- Mobile tweaks ---------- */
+@media (max-width: 640px) {
+  .dash-page-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dash-page-actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+  .dash-metric-value { font-size: 22px; }
+  .dash-simple-value { font-size: 19px; }
+  .dash-binding-row {
+    grid-template-columns: 1fr;
+  }
+  .dash-binding-remove {
+    margin-bottom: 0;
+    justify-self: end;
+  }
+  .dash-cam-stage-inner { padding: 10px; border-radius: 14px; }
+  .dash-preview-exit { right: 12px; bottom: 12px; }
+}
+
+/* =====================================================================
+   React-Grid-Layout overrides — Zoho-IoT style drag/drop dashboard grid.
+   ===================================================================== */
+.dash-rgl {
+  position: relative;
+  border-radius: 16px;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ---------- Dashboard builder shell — left palette + 3-section board ----------
+   When not editing the palette is hidden and the board takes the full
+   width. The board itself is a fixed-height CSS grid laid out exactly
+   like the Smart-CCTV reference: camera top-left, vertical-scroll widget
+   stack top-right, horizontal-scroll strip across the bottom. */
+.dash-builder-shell {
+  display: block;
+  margin-top: 14px;
+  min-height: 0;
+}
+.dash-builder-shell.is-editing {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+/* Left palette — Zoho-style category buttons. */
+.dash-palette {
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.07);
+  border-radius: 14px;
+  padding: 14px 12px;
+  position: sticky;
+  top: 14px;
+  align-self: start;
+  box-shadow: 0 10px 24px -18px rgba(20, 22, 28, 0.18);
+}
+.dash-palette-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #8c8377;
+  padding: 4px 6px 10px;
+}
+.dash-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #FBF7F1;
+  border: 1px solid #ECE2D3;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #14161C;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  text-align: left;
+}
+.dash-palette-item:hover {
+  background: #FFF1E4;
+  border-color: #F8D7B7;
+  transform: translateX(2px);
+}
+.dash-palette-item:active { transform: translateX(2px) scale(0.99); }
+.dash-palette-icon {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  background: #fff;
+  border: 1px solid #F4D9C2;
+  border-radius: 8px;
+  color: #C95812;
+  flex-shrink: 0;
+}
+
+/* Canvas wrapper kept as a no-op for any leftover references. */
+.dash-canvas { min-width: 0; }
+.dash-rgl-wrap { position: relative; }
+.dash-builder-shell.is-editing .dash-rgl-wrap {
+  background: #FBFAF6;
+  border: 1px dashed rgba(243, 106, 30, 0.30);
+  border-radius: 10px;
+  overflow: hidden;       /* mask cells against the dashed border */
+}
+
+/* ============================================================
+   .dash-board — the 3-section grid
+   ============================================================ */
+.dash-board {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.05fr) minmax(0, 1fr);
+  grid-template-areas:
+    "cam   stack"
+    "strip strip";
+  gap: 14px;
+  height: calc(100vh - 200px);
+  min-height: 560px;
+}
+.dash-board.is-no-cam {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "stack" "strip";
+}
+.dash-board-cam   { grid-area: cam;   display: flex; min-height: 0; min-width: 0; }
+.dash-board-stack { grid-area: stack; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.dash-board-strip { grid-area: strip; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+
+/* Section chrome — same look across sections so the page reads as one
+   surface. Each section is a card with its own header + body. */
+.dash-board-stack,
+.dash-board-strip {
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.07);
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 12px 26px -18px rgba(20, 22, 28, 0.12);
+  overflow: hidden;
+}
+.dash-board-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+.dash-board-section-title {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: #8c8377;
+}
+.dash-board-section-body {
+  flex: 1;
+  min-height: 0;
+}
+.dash-board-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 100px;
+  text-align: center;
+  font-size: 12px;
+  color: #8c8377;
+  padding: 16px;
+}
+
+/* Section 2 — 4-column CSS grid. Widgets carry inline grid-column/row
+   spans driven by config.size, so a widget of size {cols:4, rows:2}
+   spans the full row and stacks two rows tall. Scrolls vertically when
+   widgets overflow the section's fixed height. */
+.dash-stack-body {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 110px;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 6px;
+  scrollbar-gutter: stable;
+}
+
+/* Section 3 — single tall grid row, horizontal scroll. The grid has a
+   wide implicit column track so widgets keep their authored col-spans
+   and overflow horizontally instead of wrapping. */
+.dash-strip-body {
+  display: grid;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(160px, 220px);
+  gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 6px 10px;
+  scroll-snap-type: x proximity;
+}
+.dash-strip-body > .dash-widget {
+  scroll-snap-align: start;
+}
+
+/* Visible cell-square grid behind each section while editing — the
+   user can see the snap units their widgets fill. Cells are pale
+   peach to match the overall theme. */
+.dash-board.is-editing .dash-board-stack > .dash-board-section-body,
+.dash-board.is-editing .dash-board-strip > .dash-board-section-body {
+  background-color: #FBF7F1;
+  background-image:
+    linear-gradient(to right,  rgba(243, 106, 30, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(243, 106, 30, 0.12) 1px, transparent 1px);
+  background-position: 6px 6px;
+  border-radius: 12px;
+  outline: 1px dashed rgba(243, 106, 30, 0.22);
+}
+/* Vertical (4-col) grid background */
+.dash-board.is-editing .dash-stack-body {
+  background-size: calc((100% - 12px) / 4) 122px;   /* (cell + gap) */
+}
+/* Horizontal strip — 2 rows tall, cells track the auto-column size */
+.dash-board.is-editing .dash-strip-body {
+  background-size: 232px calc((100% - 12px) / 2);   /* col-width + gap */
+}
+
+/* Re-emphasise that this is a draggable surface — the wrapper above
+   itself shows a soft tint so users see the live editing region. */
+.dash-board.is-editing .dash-board-stack,
+.dash-board.is-editing .dash-board-strip {
+  border-color: rgba(243, 106, 30, 0.35);
+  box-shadow: 0 14px 30px -20px rgba(243, 106, 30, 0.30);
+}
+
+/* Camera section reuses the peach-gradient inner card but no longer
+   gets the outer card chrome (no double border). */
+.dash-board-cam > .dash-cam-stage-inner {
+  flex: 1;
+  min-height: 0;
+}
+/* Cell-square grid background — cells sit *underneath* the RGL widgets
+   so widget edges visually rest on cell edges. The CSS grid uses the
+   same column count, gap, and (row + gap) height as the RGL config, and
+   shares the wrap's containerPadding [0,0] so the first cell starts at
+   the exact same position as RGL's first item. */
+.dash-rgl-bg {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 6px;
+  pointer-events: none;
+  z-index: 0;
+}
+.dash-bg-cell {
+  display: block;
+  height: 44px;
+  background: #F8EDDC;
+  border: 1px solid #EDDDBE;
+  border-radius: 5px;
+}
+/* Column count tracks the RGL breakpoint map so the visible cells sit
+   on the exact snap grid users are dragging against. */
+@media (max-width: 1199.98px) {
+  .dash-rgl-bg { grid-template-columns: repeat(20, 1fr); }
+}
+@media (max-width: 995.98px) {
+  .dash-rgl-bg { grid-template-columns: repeat(14, 1fr); }
+}
+@media (max-width: 767.98px) {
+  .dash-rgl-bg { grid-template-columns: repeat(10, 1fr); }
+}
+@media (max-width: 479.98px) {
+  .dash-rgl-bg { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* Builder shell collapses on tablet/phone — palette sits above canvas. */
+@media (max-width: 900px) {
+  .dash-builder-shell.is-editing {
+    grid-template-columns: 1fr;
+  }
+  .dash-palette {
+    position: static;
+  }
+  .dash-palette-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .dash-palette-item {
+    flex: 1 1 140px;
+  }
+  /* On smaller screens the three sections stack vertically instead of
+     trying to share a single viewport. Heights become content-driven
+     so the page scrolls normally — each section keeps its own internal
+     scroll though, so a long stack or wide strip stays usable. */
+  .dash-board {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "cam"
+      "stack"
+      "strip";
+    height: auto;
+    max-height: none;
+    min-height: 0;
+  }
+  .dash-board-cam   { min-height: 240px; }
+  .dash-board-stack { min-height: 320px; max-height: 60vh; }
+  .dash-board-strip { min-height: 220px; }
+}
+.dash-rgl .dash-rgl-item {
+  height: 100%;
+  display: flex;
+}
+.dash-rgl .dash-rgl-item > .dash-widget {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+/* RGL adds .react-grid-item; we keep the default placeholder styling but
+   tint it to the brand. */
+.dash-rgl .react-grid-item.react-grid-placeholder {
+  background: rgba(243, 106, 30, 0.18);
+  border: 1.5px dashed #F36A1E;
+  border-radius: 16px;
+  opacity: 0.9;
+  transition-duration: 100ms;
+  z-index: 2;
+  user-select: none;
+}
+.dash-rgl .react-grid-item.react-draggable-dragging {
+  z-index: 10;
+  cursor: grabbing !important;
+  transition: none;
+}
+.dash-rgl .react-grid-item.resizing {
+  z-index: 10;
+  opacity: 0.92;
+}
+/* All 8 RGL resize handles are hidden by default and become visible —
+   styled as small peach square handles, one at each corner and one at
+   the midpoint of each edge — when the canvas is in edit mode. The
+   default RGL background-image is suppressed so we can render our own
+   dots via ::after pseudo elements. */
+.dash-rgl .react-resizable-handle {
+  display: none;
+  background-image: none;
+}
+.dash-rgl.is-editing .react-resizable-handle {
+  display: block;
+  background: transparent;
+  opacity: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  z-index: 5;
+}
+.dash-rgl.is-editing .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #F36A1E;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(20, 22, 28, 0.25);
+}
+/* Corner handles */
+.dash-rgl.is-editing .react-resizable-handle-nw { top: -9px;    left: -9px;   cursor: nwse-resize; }
+.dash-rgl.is-editing .react-resizable-handle-ne { top: -9px;    right: -9px;  cursor: nesw-resize; }
+.dash-rgl.is-editing .react-resizable-handle-sw { bottom: -9px; left: -9px;   cursor: nesw-resize; }
+.dash-rgl.is-editing .react-resizable-handle-se { bottom: -9px; right: -9px;  cursor: nwse-resize; }
+.dash-rgl.is-editing .react-resizable-handle-nw::after { top: 4px;  left: 4px;  }
+.dash-rgl.is-editing .react-resizable-handle-ne::after { top: 4px;  right: 4px; }
+.dash-rgl.is-editing .react-resizable-handle-sw::after { bottom: 4px; left: 4px;  }
+.dash-rgl.is-editing .react-resizable-handle-se::after { bottom: 4px; right: 4px; }
+/* Edge handles — midpoints */
+.dash-rgl.is-editing .react-resizable-handle-n { top: -9px;    left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.dash-rgl.is-editing .react-resizable-handle-s { bottom: -9px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.dash-rgl.is-editing .react-resizable-handle-w { top: 50%; left: -9px;   transform: translateY(-50%); cursor: ew-resize; }
+.dash-rgl.is-editing .react-resizable-handle-e { top: 50%; right: -9px;  transform: translateY(-50%); cursor: ew-resize; }
+.dash-rgl.is-editing .react-resizable-handle-n::after,
+.dash-rgl.is-editing .react-resizable-handle-s::after,
+.dash-rgl.is-editing .react-resizable-handle-w::after,
+.dash-rgl.is-editing .react-resizable-handle-e::after { top: 4px; left: 4px; }
+.dash-rgl.is-editing .react-resizable-handle:hover::after {
+  background: #C95812;
+  transform: scale(1.15);
+}
+.dash-rgl.is-editing .dash-widget {
+  outline: 1px dashed rgba(243, 106, 30, 0.0);
+  transition: outline-color 0.15s ease, box-shadow 0.15s ease;
+}
+.dash-rgl.is-editing .dash-widget:hover {
+  outline-color: rgba(243, 106, 30, 0.35);
+  box-shadow: 0 16px 30px -18px rgba(20, 22, 28, 0.18);
+}
+
+/* Drag-handle: only the header is grabbable when editing. */
+.dash-widget-drag-handle { cursor: grab; }
+.dash-widget-drag-handle:active { cursor: grabbing; }
+.dash-widget-grip {
+  display: inline-flex;
+  margin-right: 6px;
+  color: #cbb89e;
+  vertical-align: -1px;
+}
+.dash-widget-drag-handle:hover .dash-widget-grip { color: #F36A1E; }
+
+/* =====================================================================
+   Builder modal — two-pane (form + live preview)
+   ===================================================================== */
+.dash-builder-card .modal-body { padding-top: 0; }
+.dash-builder-body { padding-right: 0; }   /* let the preview reach the edge */
+.dash-builder-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+.dash-builder-form {
+  min-width: 0;
+}
+.dash-builder-foot {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #F1E6D6;
+}
+.dash-builder-preview {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-left: 1px solid #F1E6D6;
+  padding: 4px 0 4px 22px;
+  min-height: 220px;
+}
+.dash-builder-preview-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.dash-builder-preview-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.45px;
+  color: #C95812;
+}
+.dash-builder-preview-frame {
+  background: #FBF7F1;
+  border: 1px dashed #ECE2D3;
+  border-radius: 14px;
+  padding: 14px;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+/* Inside the preview frame the widget always claims full available
+   width and a comfortable preview height. */
+.dash-builder-preview-frame .dash-widget {
+  width: 100%;
+  min-height: 150px;
+  box-shadow: 0 12px 22px -16px rgba(20, 22, 28, 0.18);
+}
+
+/* Accent colour swatch picker in the builder */
+.dash-accent-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dash-accent-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(20, 22, 28, 0.10);
+  cursor: pointer;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: #8c8377;
+  font-size: 12px;
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+.dash-accent-swatch:hover { transform: scale(1.08); }
+.dash-accent-swatch.is-active {
+  border-color: #14161C;
+  transform: scale(1.05);
+}
+.dash-accent-x { font-size: 14px; line-height: 1; }
+
+@media (max-width: 900px) {
+  .dash-builder-cols {
+    grid-template-columns: 1fr;
+  }
+  .dash-builder-preview {
+    position: static;
+    border-left: 0;
+    border-top: 1px solid #F1E6D6;
+    padding: 14px 0 0 0;
+  }
+}
+
+/* =====================================================================
+   Static "Smart CCTV" dashboard mockup (DashboardDetail.jsx)
+   ---------------------------------------------------------------------
+   Pure CSS grid layout with fr-tracks so cards shrink with the viewport
+   but never reflow. min-width on the shell keeps the original column
+   structure intact down to tablet sizes; very narrow viewports gain a
+   horizontal scrollbar rather than collapsing the grid.
+   ===================================================================== */
+.db-page {
+  background: #FBF7F1;
+}
+.db-page-actions-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.db-preview-btn {
+  padding: 6px 14px;
+}
+/* Preview mode strips admin chrome — page reads as the end-user view. */
+/* Preview mode — pure full-page dashboard view.
+     • TopBar, back-link, page header, and footer all hidden.
+     • Page fills 100 vh exactly; no body scroll.
+     • Inherits the .admin-page padding (24px 36px) and max-width
+       (1480px) so cards render at IDENTICAL widths in normal vs
+       preview — alignment never shifts between modes.
+     • The two scroll containers inside keep working normally. */
+.kiosk-app.is-db-preview .kiosk-topbar { display: none !important; }
+.kiosk-app.is-db-preview .kiosk-foot   { display: none !important; }
+.kiosk-app.is-db-preview {
+  background: #FBF7F1;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+}
+.db-page.is-preview {
+  background: #FBF7F1;
+  /* In preview the entire page is the viewport; the shell is pinned
+     center and scaled by JS via transform. */
+  padding: 0;
+  margin: 0;
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.db-page.is-preview .db-shell {
+  /* Natural authored size — JS applies transform: scale(...) on resize
+     to shrink-to-fit. The translate keeps it centered in the viewport.
+     The base width/height are reference dimensions; choose values that
+     give the dashboard generous breathing room at native scale. */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1480px;
+  /* Let height grow with content; the JS scale uses 760 as the
+     reference height. */
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  transform-origin: center center;
+  /* Default transform (before JS runs) so the layout is at least visible. */
+  transform: translate(-50%, -50%) scale(0.55);
+  padding: 14px 0;
+}
+.db-page.is-preview .db-group,
+.db-page.is-preview .db-group-right,
+.db-page.is-preview .db-group-bottom {
+  flex: 0 0 auto;
+}
+/* Exit-preview chip — pinned to the very top-right of the viewport so
+   it sits in the page's outer padding and never overlaps a card. Esc
+   also exits. */
+.db-preview-exit {
+  position: fixed;
+  right: 14px;
+  top: 14px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.86);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 10px 22px -10px rgba(20, 22, 28, 0.45);
+}
+.db-preview-exit:hover { background: #14161C; }
+.db-head {
+  margin: 4px 0 16px;
+}
+.db-head h1 {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #14161C;
+  margin: 0;
+}
+.db-head-desc {
+  margin: 4px 0 0;
+  color: #6b6258;
+  font-size: 13.5px;
+}
+
+.db-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 720px;
+}
+.db-top {
+  display: grid;
+  grid-template-columns: 1.08fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+/* Group panels — wrap a cluster of cards in a single peach surface so
+   the dashboard reads as three distinct containers (camera, media+sensors,
+   controls), mirroring the mockup's section grouping. The peach tint is
+   very light — closer to cream than orange — to match the reference. */
+.db-group {
+  background: linear-gradient(180deg, #FFF9F2 0%, #FCEEDC 100%);
+  border: 1px solid #F6E4D0;
+  border-radius: 22px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  box-shadow: 0 14px 28px -22px rgba(20, 22, 28, 0.14);
+}
+.db-group-right {
+  display: grid;
+  grid-template-rows: 1fr;
+  /* Match the original height when widgets were inside, even when the
+     panel is empty. Container 2 also stretches via .db-top's
+     align-items: stretch so it tracks the camera card's height. */
+  min-height: 420px;
+}
+/* Visible cell grid surface — pale lavender cells with thin borders.
+   Uses 1fr × 1fr tracks with a fixed col/row count so the grid ALWAYS
+   fills its container exactly — no partial rows, no extra whitespace.
+   Each cell stretches to (container_width / cols) × (container_height
+   / rows); same proportions on mobile and desktop. */
+/* CSS cells use the SAME column geometry as RGL — N `1fr` columns with
+   a 6 px gutter — so cell column width exactly matches RGL's column
+   width. Rows are a fixed 50 px so RGL's `rowHeight=50` also matches.
+   The grid fills the parent (width: 100%, height: 100%); extras are
+   clipped by the parent's `overflow: hidden`. */
+.db-cell-grid {
+  display: grid;
+  /* grid-template-columns set inline via the cols prop (repeat(N, 1fr)) */
+  grid-auto-rows: 50px;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  align-content: start;
+}
+.db-cell {
+  background: #E7EAF4;
+  border: 1px solid #D9DEEC;
+  border-radius: 4px;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Container 2 — the cell grid fills the entire panel. A floating +
+   button sits in the top-right corner; saved widgets render as an
+   overlay on top of the cells. No header takes vertical space. */
+.db-c2 {
+  position: relative;
+}
+/* Stage = scroll viewport. Sits inside the peach panel's padding.
+   Positioned ABSOLUTELY so it doesn't contribute to the panel's
+   auto-size — the panel's height is fixed by .db-top + min-height,
+   and no matter how tall the stage's inner content gets, the panel
+   itself never grows. The stage clips and scrolls internally. */
+.db-c2-stage {
+  position: absolute;
+  inset: 14px;             /* respect the panel's own 14 px padding */
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+.db-c2-stage::-webkit-scrollbar { width: 6px; }
+.db-c2-stage::-webkit-scrollbar-thumb { background: rgba(20, 22, 28, 0.18); border-radius: 999px; }
+
+/* Stage content — defaults to height: 100% so the cell grid (1fr rows
+   inside) fills the stage exactly. When the user pushes widgets past
+   the default 7 rows the component overrides height inline with a
+   computed pixel value and the stage scrolls. */
+/* The stage-content height is set inline (= c2StageH). min-height: 100%
+   keeps it at least as tall as the visible stage so the cell grid
+   fills the panel by default. When c2StageH grows past the stage
+   height, the explicit height wins and the stage scrolls. */
+.db-c2-stage-content {
+  position: relative;
+  width: 100%;
+  min-height: 100%;
+}
+.db-c2-stage-content > .db-cell-grid {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 0;
+  overflow: hidden;     /* clip extras that don't fit the panel */
+}
+.db-c2-add {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #F36A1E;
+  color: #fff;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 18px -6px rgba(243, 106, 30, 0.55);
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.db-c2-add:hover { background: #C95812; transform: scale(1.05); }
+/* RGL wrapper sits inside .db-c2-stage-content at inset:0, sharing the
+   exact box with the cell grid so widget edges align with cell edges. */
+.db-c2-rgl-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;   /* clicks pass through to the + button etc. */
+}
+.db-c2-rgl,
+.db-c2-rgl .react-grid-item { pointer-events: auto; }
+
+.db-c2-rgl .react-grid-item.react-grid-placeholder {
+  background: rgba(243, 106, 30, 0.18);
+  border: 1.5px dashed #F36A1E;
+  border-radius: 12px;
+  opacity: 0.9;
+}
+.db-c2-rgl-item {
+  height: 100%;
+  display: flex;
+}
+.db-c2-rgl-item > .db-saved-widget {
+  flex: 1;
+  margin: 0;
+  height: 100%;
+  /* container query target — internal content reflows based on the
+     widget's actual width so resizing changes layout, not crop. */
+  container-type: inline-size;
+}
+.db-c2-widget-drag { cursor: grab; }
+.db-c2-widget-drag:active { cursor: grabbing; }
+
+/* 8 RGL resize handles styled as small peach dots — same as the
+   builder. Only visible on hover/focus to keep the dashboard quiet. */
+.db-c2-rgl .react-resizable-handle {
+  background-image: none;
+  background: transparent;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.db-c2-rgl .react-grid-item:hover .react-resizable-handle,
+.db-c2-rgl .react-grid-item.react-draggable-dragging .react-resizable-handle,
+.db-c2-rgl .react-grid-item.resizing .react-resizable-handle { opacity: 1; }
+.db-c2-rgl .react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #F36A1E;
+  border: 2px solid #fff;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(20, 22, 28, 0.25);
+}
+.db-c2-rgl .react-resizable-handle-nw { top: -8px;    left: -8px;   cursor: nwse-resize; }
+.db-c2-rgl .react-resizable-handle-ne { top: -8px;    right: -8px;  cursor: nesw-resize; }
+.db-c2-rgl .react-resizable-handle-sw { bottom: -8px; left: -8px;   cursor: nesw-resize; }
+.db-c2-rgl .react-resizable-handle-se { bottom: -8px; right: -8px;  cursor: nwse-resize; }
+.db-c2-rgl .react-resizable-handle-nw::after { top: 3px;    left: 3px;  }
+.db-c2-rgl .react-resizable-handle-ne::after { top: 3px;    right: 3px; }
+.db-c2-rgl .react-resizable-handle-sw::after { bottom: 3px; left: 3px;  }
+.db-c2-rgl .react-resizable-handle-se::after { bottom: 3px; right: 3px; }
+.db-c2-rgl .react-resizable-handle-n { top: -8px;    left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.db-c2-rgl .react-resizable-handle-s { bottom: -8px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.db-c2-rgl .react-resizable-handle-w { top: 50%; left: -8px;   transform: translateY(-50%); cursor: ew-resize; }
+.db-c2-rgl .react-resizable-handle-e { top: 50%; right: -8px;  transform: translateY(-50%); cursor: ew-resize; }
+.db-c2-rgl .react-resizable-handle-n::after,
+.db-c2-rgl .react-resizable-handle-s::after,
+.db-c2-rgl .react-resizable-handle-w::after,
+.db-c2-rgl .react-resizable-handle-e::after { top: 3px; left: 3px; }
+
+/* Container queries — the saved widget's internal layout adapts to its
+   own width as the user resizes. Same design, scaled to fit. */
+@container (max-width: 260px) {
+  .db-saved-widget { padding: 8px 10px; gap: 4px; }
+  .db-saved-widget-title { font-size: 12.5px; }
+  .db-saved-widget-binding { font-size: 10px; }
+  .db-saved-widget-value { font-size: 15px; }
+  .db-saved-widget-actions .row-btn { padding: 3px 6px; font-size: 10.5px; }
+}
+@container (max-width: 180px) {
+  .db-saved-widget { padding: 6px 8px; gap: 2px; }
+  .db-saved-widget-binding { display: none; }
+  .db-saved-widget-value { font-size: 13.5px; }
+  .db-saved-widget-actions { gap: 2px; }
+  .db-saved-widget-actions .row-btn { padding: 2px 5px; font-size: 10px; }
+  .db-saved-widget-type { font-size: 8.5px; padding: 0 4px; }
+}
+/* Card layout — header row at top (title + binding meta + actions),
+   value pushed to the bottom-left so the card scales to its grid cell
+   gracefully. flex: 1 on the value's wrapper ensures it claims the
+   remaining vertical space at any card height. */
+.db-saved-widget {
+  background: linear-gradient(180deg, #FFF6EE 0%, #FBE5D2 100%);
+  border: 1px solid #F4D9C2;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  box-shadow: 0 6px 14px -10px rgba(20, 22, 28, 0.18);
+  overflow: hidden;
+}
+.db-saved-widget-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+.db-saved-widget-titles { min-width: 0; flex: 1 1 auto; }
+.db-saved-widget-title {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #14161C;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.db-saved-widget-binding {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #8c8377;
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-saved-widget-type {
+  display: inline-block;
+  background: rgba(243, 106, 30, 0.12);
+  color: #C95812;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  font-size: 9.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.db-saved-widget-binding code {
+  background: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.db-saved-widget-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.db-saved-widget-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #14161C;
+  margin-top: auto;     /* pushes the value to the bottom of the card */
+  line-height: 1.1;
+}
+.db-group-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  background: linear-gradient(180deg, #FFFDF7 0%, #FCF2E2 100%);   /* a touch lighter than the right panel */
+  /* Keep the bottom strip the same height it had with three control
+     cards inside, so an empty container looks like a placeholder of the
+     same size rather than collapsing to just its padding. */
+  min-height: 260px;
+}
+.db-sensors {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ----- base card -----
+   Top-row cards use the saturated peach gradient (Smart-CCTV + Music
+   sections), bottom-row cards (Light/Speaker/AC) sit on a much paler
+   off-white to match the mockup's flatter bottom strip. */
+.db-card {
+  background: linear-gradient(180deg, #FFF6EE 0%, #FBE5D2 100%);
+  border: 1px solid #F4D9C2;
+  border-radius: 22px;
+  padding: 14px 16px;
+  box-shadow: 0 16px 32px -22px rgba(20, 22, 28, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  min-width: 0;
+  container-type: inline-size;
+}
+.db-group-bottom .db-card {
+  background: #FFFCF6;
+  border-color: #F1E7D6;
+  box-shadow: 0 6px 14px -10px rgba(20, 22, 28, 0.14);
+}
+/* Cards inside any group panel use a softer inner shadow so the group's
+   own shadow is the only one — preserves the "single surface" feel. */
+.db-group > .db-card,
+.db-group .db-sensors > .db-card {
+  box-shadow: 0 6px 14px -10px rgba(20, 22, 28, 0.14);
+}
+.db-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.db-card-head-id {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.db-card h3 {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #14161C;
+  margin: 0;
+}
+.db-card-sub {
+  font-size: 11.5px;
+  color: #8c8377;
+  margin-top: 1px;
+}
+.db-tile-icon {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.db-mini-icon {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  background: #fff;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ----- shared toggle pill ----- */
+.db-toggle {
+  width: 44px; height: 26px;
+  border-radius: 999px;
+  border: 1px solid #ddd2c2;
+  background: #F1E6D6;
+  position: relative;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.db-toggle-knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(20, 22, 28, 0.20);
+  transition: left 0.18s ease;
+}
+.db-toggle.is-on { background: #F36A1E; border-color: #F36A1E; box-shadow: 0 6px 14px -6px rgba(243, 106, 30, 0.50); }
+.db-toggle.is-on .db-toggle-knob { left: 20px; }
+
+/* ----- shared chip row ----- */
+.db-chip-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 8px;
+}
+.db-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #fff;
+  border: 1px solid #F4E1C7;
+  border-radius: 999px;
+  font-size: 11.5px;
+  color: #4e463d;
+}
+.db-chip-ic {
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  background: #FFE9D5;
+  color: #C95812;
+  border-radius: 50%;
+}
+
+/* =====================================================================
+   Camera card
+   ===================================================================== */
+.db-cam-card {
+  padding: 14px 14px 14px 14px;
+}
+.db-cam-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.db-cam-head-title h2 {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: #14161C;
+}
+.db-cam-head-sub {
+  font-size: 11.5px;
+  color: #8c8377;
+}
+.db-power-btn {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: #F36A1E;
+  border: 0;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 6px 14px -6px rgba(243, 106, 30, 0.55);
+}
+
+.db-cam-player {
+  position: relative;
+  flex: 1;
+  min-height: 220px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #14161C;
+}
+.db-cam-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  border: 0;
+}
+.db-cam-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #cbb89e;
+  text-align: center;
+  padding: 12px;
+  background: #1f1c19;
+}
+
+/* LIVE pill over the player */
+.db-cam-live {
+  position: absolute;
+  top: 10px; left: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(20, 22, 28, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border-radius: 999px;
+  z-index: 2;
+}
+.db-cam-live-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #F36A1E;
+}
+.db-cam-live-dot.is-on  { animation: dash-pulse 1.4s infinite; }
+.db-cam-live-dot.is-off { background: #9c9389; }
+
+/* Camera switcher over the player */
+.db-cam-switcher {
+  position: absolute;
+  top: 10px; right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(20, 22, 28, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 3px 4px;
+  border-radius: 999px;
+  color: #fff;
+  z-index: 3;
+}
+.db-cam-chev {
+  width: 24px; height: 24px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  display: grid; place-items: center;
+  cursor: pointer;
+  opacity: 0.85;
+}
+.db-cam-chev:hover { background: rgba(255, 255, 255, 0.14); opacity: 1; }
+.db-cam-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.db-cam-select-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.db-cam-select-caret {
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+.db-cam-select.is-open .db-cam-select-caret { transform: rotate(180deg); }
+
+.db-cam-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  max-width: 260px;
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 18px 30px -14px rgba(20, 22, 28, 0.30);
+  z-index: 5;
+}
+.db-cam-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 13px;
+  color: #14161C;
+  cursor: pointer;
+}
+.db-cam-menu-item:hover { background: #FFF1E4; }
+.db-cam-menu-item.is-active {
+  background: rgba(243, 106, 30, 0.12);
+  color: #C95812;
+  font-weight: 600;
+}
+.db-cam-menu-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.db-cam-menu-dot { width: 7px; height: 7px; border-radius: 50%; background: #9c9389; flex-shrink: 0; }
+.db-cam-menu-dot.is-on  { background: #1FAE6B; }
+.db-cam-menu-dot.is-off { background: #C03A30; }
+.db-cam-menu-dot.is-disabled { background: #cbb89e; }
+.db-cam-menu-badge {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(243, 106, 30, 0.12);
+  color: #C95812;
+}
+
+/* Player control bar */
+.db-cam-controls {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  gap: 6px;
+  z-index: 2;
+}
+.db-cam-ctrl {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: rgba(20, 22, 28, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 0;
+  color: #fff;
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.db-cam-ctrl:hover { background: rgba(20, 22, 28, 0.75); }
+.db-cam-ctrl.is-power {
+  background: #F36A1E;
+  box-shadow: 0 6px 14px -6px rgba(243, 106, 30, 0.55);
+}
+.db-cam-ctrl.is-power:hover { background: #C95812; }
+
+/* =====================================================================
+   Music card
+   ===================================================================== */
+.db-music-card {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+.db-music-art {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #2a2a2a;
+}
+.db-music-art svg { display: block; width: 100%; height: 100%; }
+.db-music-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.db-music-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.db-music-title {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #14161C;
+}
+.db-music-artist {
+  font-size: 12.5px;
+  color: #8c8377;
+  margin-top: 1px;
+}
+.db-music-menu {
+  width: 28px; height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  display: grid; place-items: center;
+  cursor: pointer;
+  color: #4e463d;
+}
+.db-music-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #8c8377;
+}
+.db-music-bar {
+  flex: 1;
+  height: 4px;
+  background: #F1E6D6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.db-music-bar > span {
+  display: block;
+  height: 100%;
+  background: #F36A1E;
+  border-radius: 999px;
+}
+.db-music-transport {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+.db-music-btn {
+  width: 36px; height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #4e463d;
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.db-music-btn:hover { color: #14161C; }
+.db-music-play {
+  width: 44px; height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #F36A1E;
+  color: #fff;
+  cursor: pointer;
+  display: grid; place-items: center;
+  box-shadow: 0 8px 16px -6px rgba(243, 106, 30, 0.55);
+}
+
+/* =====================================================================
+   Temperature card
+   ===================================================================== */
+.db-temp-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+}
+.db-temp-value {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 38px;
+  font-weight: 700;
+  color: #14161C;
+  line-height: 1;
+}
+.db-temp-unit {
+  font-size: 16px;
+  font-weight: 600;
+  margin-left: 4px;
+  color: #4e463d;
+}
+.db-temp-deco {
+  position: absolute;
+  right: 10px;
+  bottom: 60px;
+  width: 64px;
+  height: 64px;
+  pointer-events: none;
+}
+.db-temp-deco svg { width: 100%; height: 100%; }
+.db-temp-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  font-size: 11.5px;
+}
+.db-meta-label { color: #8c8377; font-size: 10.5px; }
+.db-meta-value { color: #14161C; font-weight: 600; font-size: 12.5px; margin-top: 1px; }
+
+/* =====================================================================
+   Wi-Fi card  —  green-tinted
+   ===================================================================== */
+.db-wifi-card {
+  background: linear-gradient(180deg, #E9F8EF 0%, #C8EBD6 100%);
+  border-color: #BFE3CC;
+}
+.db-wifi-signal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+.db-wifi-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(31, 174, 107, 0.18);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.db-wifi-track > span {
+  display: block;
+  height: 100%;
+  background: #1FAE6B;
+  border-radius: 999px;
+}
+.db-wifi-pct {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #14161C;
+}
+.db-wifi-deco {
+  height: 56px;
+  display: grid;
+  place-items: center;
+  margin: 4px 0;
+}
+.db-wifi-deco svg { width: 80px; height: 56px; }
+.db-wifi-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+/* =====================================================================
+   Light card
+   ===================================================================== */
+.db-light-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+}
+.db-light-bulb {
+  display: grid;
+  place-items: center;
+  height: 90px;
+}
+.db-light-bulb svg { width: 130px; height: 90px; }
+
+/* =====================================================================
+   Speaker card
+   ===================================================================== */
+.db-speaker-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+}
+.db-speaker-mid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.db-speaker-pct {
+  font-family: 'Manrope', system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  color: #14161C;
+}
+.db-speaker-deco {
+  width: 70px; height: 70px;
+}
+.db-speaker-deco svg { width: 100%; height: 100%; }
+
+/* =====================================================================
+   AC card
+   ===================================================================== */
+.db-ac-card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 6px;
+}
+.db-ac-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.db-ac-gauge svg { width: 100%; max-width: 200px; height: auto; }
+.db-ac-range {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 200px;
+  font-size: 10.5px;
+  color: #8c8377;
+}
+.db-ac-range sup { font-size: 8px; }
+
+/* =====================================================================
+   Container-query reflow — keep alignment, shrink contents
+   ===================================================================== */
+@container (max-width: 230px) {
+  .db-card h3 { font-size: 13px; }
+  .db-card-sub { font-size: 10.5px; }
+  .db-temp-value { font-size: 30px; }
+  .db-speaker-pct { font-size: 24px; }
+  .db-music-card { grid-template-columns: 80px 1fr; }
+  .db-music-title { font-size: 14px; }
+}
+@container (max-width: 180px) {
+  .db-card { padding: 12px 12px; }
+  .db-temp-value { font-size: 26px; }
+  .db-chip-label { display: none; }
+  .db-chip { padding: 6px; }
+}
+
+/* =====================================================================
+   Responsive — viewport-level fallback so the page degrades on phones
+   ===================================================================== */
+@media (max-width: 720px) {
+  .db-shell {
+    min-width: 0;
+  }
+  .db-top {
+    grid-template-columns: 1fr;
+  }
+  .db-group-right {
+    grid-template-rows: auto auto;
+  }
+  .db-group-bottom {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =====================================================================
+   Widget Picker Modal — popup opened from the dashboard "+" button.
+   Side panel lists widget-component categories (Cards / Charts /
+   Custom Fill / Dials / Image Cards / Tables / Calendar). The main
+   area is reserved for each category's builder; right now only Cards
+   is wired and the rest show a "Coming soon" hint.
+   ===================================================================== */
+.widget-picker {
+  max-width: 1040px;
+  width: 100%;
+  /* Cap the whole modal so the body has a fixed envelope; the inner
+     columns then own their own overflow. Without this, a tall gallery
+     pushes the modal off-screen instead of triggering an inner scroll. */
+  max-height: 86vh;
+}
+.widget-picker-body {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 0;        /* allow children to actually scroll inside */
+  flex: 1;              /* fill the modal-card column under the header */
+  overflow: hidden;
+}
+.widget-picker-side {
+  background: #FBF3EA;                 /* warm peach panel — same family as .db-group */
+  border-right: 1px solid #F1E6D6;
+  padding: 18px 16px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.widget-picker-side-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #8C6A4A;                      /* muted peach-brown title */
+  text-align: center;
+  letter-spacing: 0.2px;
+  margin-bottom: 18px;
+}
+.widget-picker-side-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.widget-picker-cat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #F1E6D6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink, #14161C);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+}
+.widget-picker-cat:hover {
+  border-color: var(--accent-soft);
+  background: #FFFBF5;
+}
+.widget-picker-cat:active { transform: translateY(1px); }
+.widget-picker-cat.is-active {
+  border-color: var(--accent);
+  background: #FFF6EE;
+  box-shadow: 0 0 0 2px rgba(243, 106, 30, 0.18);
+}
+.widget-picker-cat-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.widget-picker-cat.is-active .widget-picker-cat-ic {
+  background: var(--accent);
+  color: #fff;
+}
+.widget-picker-cat-ic svg { width: 18px; height: 18px; }
+.widget-picker-cat-label { line-height: 1; }
+.widget-picker-main {
+  padding: 24px 24px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: #FCFAF7;        /* very light cream so cards "lift" off it */
+  min-height: 0;              /* allows the inner scroll to actually engage */
+  scrollbar-gutter: stable;
+}
+/* Slim peach-themed scrollbars for the picker's main / side panels. */
+.widget-picker-main::-webkit-scrollbar,
+.widget-picker-side::-webkit-scrollbar { width: 10px; }
+.widget-picker-main::-webkit-scrollbar-track,
+.widget-picker-side::-webkit-scrollbar-track { background: transparent; }
+.widget-picker-main::-webkit-scrollbar-thumb,
+.widget-picker-side::-webkit-scrollbar-thumb {
+  background: #E7D9C6;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.widget-picker-main::-webkit-scrollbar-thumb:hover,
+.widget-picker-side::-webkit-scrollbar-thumb:hover { background: var(--accent-soft); background-clip: padding-box; }
+.widget-picker-main, .widget-picker-side {
+  scrollbar-width: thin;
+  scrollbar-color: #E7D9C6 transparent;
+}
+.widget-picker-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--ink-3, #8c8377);
+  max-width: 360px;
+}
+.widget-picker-empty-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  margin: 0 auto 14px;
+}
+.widget-picker-empty-ic svg { width: 32px; height: 32px; }
+.widget-picker-empty-title {
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink, #14161C);
+  margin-bottom: 6px;
+}
+.widget-picker-empty-sub {
+  font-size: 13px;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .widget-picker-body {
+    grid-template-columns: 1fr;
+    max-height: 80vh;
+  }
+  .widget-picker-side {
+    border-right: 0;
+    border-bottom: 1px solid #F1E6D6;
+    max-height: 240px;
+  }
+}
+
+/* ---------- Card variant gallery (rendered when Cards is selected) ---------- */
+.card-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 18px 18px;
+}
+.card-variant {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.card-variant-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #6B7A99;          /* muted slate, like the reference labels */
+  letter-spacing: 0.1px;
+  padding-left: 2px;
+}
+.card-variant-preview {
+  display: block;
+  border-radius: 12px;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.card-variant:hover .card-variant-preview {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 28px -18px rgba(20, 22, 28, 0.35);
+}
+.card-variant:focus-visible .card-variant-preview {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- preview "card" chrome — shared by every variant ----------
+   .cv-card is a flex column: title pinned at top, then a body region
+   that fills remaining vertical space and centers its children.
+   Every variant's body uses one of: .cv-center, .cv-inline, .cv-row-2,
+   .cv-row-3, .cv-grid-2x2 — all of which take flex: 1 so the card
+   internals are vertically centered regardless of content height. */
+.cv-card {
+  background: #fff;
+  border: 1px solid #ECECEC;
+  border-radius: 12px;
+  padding: 14px 18px 18px;
+  min-height: 184px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(20, 22, 28, 0.04);
+  position: relative;
+  overflow: hidden;          /* keep the decoration anchored inside */
+  /* Inter for the whole card — title, labels, units, values. Matches
+     the reference (modern UI sans, slightly heavy weights). */
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.cv-card > * { position: relative; z-index: 1; }
+.cv-pattern {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-repeat: repeat;
+  background-position: 0 0;
+  z-index: 0;
+  opacity: 0.22;        /* barely-there texture — visible but not loud */
+}
+.cv-title {
+  font-size: 14px;
+  font-weight: 800;        /* heavy title like the reference "Temperature" */
+  color: inherit;          /* follow the card palette's text color */
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* Simple Card 1 — value + label centered in the body */
+.cv-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Icon-row layouts — icon on left, content stack on right, horizontally
+   centered within the card and vertically centered against the icon */
+.cv-inline {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  justify-content: center;
+  min-height: 0;
+}
+.cv-inline-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.cv-row { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.cv-row-mini { margin-top: 6px; }
+
+/* Multivalue 3 (Assorted) — two icon+stat pairs centered side by side */
+.cv-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  flex: 1;
+  align-items: center;
+  justify-items: center;
+}
+.cv-row-2 .cv-inline {
+  justify-content: flex-start;
+  flex: 0 0 auto;
+  gap: 12px;
+}
+
+/* Multivalue 2 — three stacked stat columns, evenly distributed */
+.cv-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  flex: 1;
+  align-items: center;
+}
+
+.cv-big {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  color: inherit;
+  line-height: 1;
+  letter-spacing: -0.03em;        /* tight digits like the reference "20" */
+  font-variant-numeric: tabular-nums;
+}
+.cv-mid {
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 18px;
+  font-weight: 800;
+  color: inherit;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.cv-unit {
+  font-size: 12px;
+  color: #8C8C8C;
+  font-weight: 600;
+}
+.cv-sub {
+  font-size: 12.5px;
+  color: #9AA1AE;
+  line-height: 1.25;
+  font-weight: 500;        /* lighter than the bold title — matches "Living Room" */
+}
+.cv-delta {
+  font-size: 12px;
+  font-weight: 700;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+.cv-delta.up   { color: #1FAE6B; }
+.cv-delta.down { color: #DC4646; }
+
+/* circular icon chip — same family as accent-soft / accent */
+.cv-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.cv-ic-lg {
+  width: 50px;
+  height: 50px;
+}
+.cv-ic svg { width: 22px; height: 22px; }
+.cv-ic-lg svg { width: 26px; height: 26px; }
+
+/* 2×2 stat grid for multivalue-grid — slightly tighter so it stays
+   readable next to the large left-hand icon. */
+.cv-grid-2x2 {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 10px 22px;
+  align-content: center;
+}
+.cv-stat { display: flex; flex-direction: column; gap: 3px; }
+.cv-stat-label {
+  font-size: 11px;
+  color: #9AA1AE;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.cv-stat-line { display: flex; align-items: baseline; gap: 5px; }
+
+/* Stacked stat (multivalue-row) — icon top, label middle, value bottom.
+   Min-width 0 lets long labels wrap inside their grid track. */
+.cv-stat-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 2px 2px;
+  min-width: 0;
+}
+.cv-stat-stacked .cv-ic { width: 38px; height: 38px; }
+.cv-stat-stacked .cv-ic svg { width: 18px; height: 18px; }
+.cv-stat-label-center { line-height: 1.25; min-height: 26px; display: flex; align-items: center; justify-content: center; }
+
+/* sparkline for trend card */
+.cv-spark {
+  width: 100%;
+  height: 22px;
+  margin-top: 4px;
+}
+
+/* progress card — body fills card height + centers itself vertically */
+.cv-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+.cv-progress-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.cv-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: #F1ECE6;
+  overflow: hidden;
+}
+.cv-bar > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #F36A1E 0%, #FF8A47 100%);
+  border-radius: inherit;
+}
+.cv-progress-foot {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* status pill */
+.cv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  background: rgba(31, 174, 107, 0.12);
+  color: #1FAE6B;
+}
+.cv-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px rgba(31, 174, 107, 0.18);
+}
+.cv-pill.warn { background: rgba(243, 106, 30, 0.12); color: var(--accent); }
+.cv-pill.warn::before { box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.18); }
+
+/* =====================================================================
+   Card Configure view — second step of the picker. Two-column layout:
+   the large "Example" preview on the left, the field form on the right.
+   ===================================================================== */
+.card-config {
+  display: grid;
+  grid-template-columns: minmax(280px, 320px) 1fr;
+  gap: 28px;
+  align-items: start;
+}
+.card-config-preview-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+}
+.card-config-example-label {
+  font-size: 18px;
+  font-weight: 800;
+  color: #2D4170;
+  letter-spacing: 0.1px;
+}
+.card-config-preview-frame {
+  background: #fff;
+  border-radius: 14px;
+  padding: 6px;
+  box-shadow:
+    0 14px 36px -20px rgba(20, 22, 28, 0.30),
+    0 4px 10px -4px rgba(20, 22, 28, 0.10);
+}
+.card-config-preview-frame .cv-card {
+  min-height: 220px;
+  padding: 18px 22px 22px;
+}
+.card-config-preview-frame .cv-big  { font-size: 36px; }
+.card-config-preview-frame .cv-mid  { font-size: 20px; }
+.card-config-preview-frame .cv-title { font-size: 14px; }
+.card-config-change {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  color: #2D6EE0;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+.card-config-change:hover { background: rgba(45, 110, 224, 0.08); }
+.card-config-change svg { color: currentColor; }
+
+.card-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.card-config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card-config-section-head {
+  font-size: 13px;
+  font-weight: 800;
+  color: #5C6378;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+.card-config-binding {
+  border: 1px solid #F1E6D6;
+  border-radius: 10px;
+  background: #FFFBF5;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.card-config-binding + .card-config-binding { margin-top: 8px; }
+.card-config-binding-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+@media (max-width: 880px) {
+  .card-config {
+    grid-template-columns: 1fr;
+  }
+  .card-config-preview-col {
+    position: static;
+    align-items: center;
+  }
+  .card-config-preview-frame {
+    max-width: 360px;
+    width: 100%;
+  }
+}
+
+/* =====================================================================
+   Icon picker — popover that searches Iconify on each keystroke.
+   ===================================================================== */
+.icon-picker { position: relative; }
+.icon-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #E4E0D6;
+  border-radius: 8px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink, #14161C);
+  cursor: pointer;
+  text-align: left;
+}
+.icon-picker-trigger:hover:not(:disabled) { border-color: var(--accent-soft); }
+.icon-picker-trigger:disabled { opacity: 0.6; cursor: not-allowed; }
+.icon-picker-glyph {
+  width: 22px;
+  height: 22px;
+  display: block;
+  flex-shrink: 0;
+}
+.icon-picker-name {
+  flex: 1;
+  font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--ink-2, #4a4a4a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.icon-picker-placeholder {
+  flex: 1;
+  color: #9AA1AE;
+  font-size: 13px;
+}
+.icon-picker-caret { color: #8c8377; flex-shrink: 0; }
+
+.icon-picker-popover {
+  position: absolute;
+  z-index: 110;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 320px;
+  background: #fff;
+  border: 1px solid #ECECEC;
+  border-radius: 12px;
+  box-shadow:
+    0 24px 48px -16px rgba(20, 22, 28, 0.30),
+    0 8px 18px -6px rgba(20, 22, 28, 0.12);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: modal-pop 0.16s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.icon-picker-search {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #E4E0D6;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+.icon-picker-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.15);
+}
+.icon-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.icon-picker-hint {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: 12px;
+  color: #8c8377;
+  padding: 18px 8px;
+}
+.icon-picker-cell {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 6px;
+  background: #FAF6F0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.icon-picker-cell:hover { background: var(--accent-soft); border-color: var(--accent-soft); }
+.icon-picker-cell.is-active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.icon-picker-cell img { width: 22px; height: 22px; display: block; }
+.icon-picker-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: #8c8377;
+  border-top: 1px dashed #F1E6D6;
+  padding-top: 8px;
+}
+.icon-picker-foot a { color: var(--accent); font-weight: 700; text-decoration: none; }
+.icon-picker-foot a:hover { text-decoration: underline; }
+.icon-picker-clear {
+  background: transparent;
+  border: 0;
+  color: #C95812;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.icon-picker-clear:hover { background: #FFE9D5; }
+
+@media (max-width: 520px) {
+  .icon-picker-grid { grid-template-columns: repeat(6, 1fr); }
+}
+
+/* =====================================================================
+   Color swatches — preset palette buttons used for card_color and
+   icon_color in CardConfigure.
+   ===================================================================== */
+.color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.color-swatch:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px -6px rgba(20, 22, 28, 0.3);
+}
+.color-swatch.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(243, 106, 30, 0.25);
+}
+.color-swatch.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M5 12l4 4 10-10' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 14px 14px no-repeat;
+}
+.color-swatch-solid.is-active::after { /* white check still readable on solids */ }
+.color-swatch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* =====================================================================
+   Colored .cv-card — when a card background is applied via inline
+   style, the sub/label/unit text needs to follow a complementary color
+   read from CSS var --cv-sub-color (set in cardStyleFor()).
+   ===================================================================== */
+.cv-card .cv-sub,
+.cv-card .cv-unit,
+.cv-card .cv-stat-label {
+  color: var(--cv-sub-color, #9AA1AE);
+}
+
+/* =====================================================================
+   Dashboard saved-card wrapper — replaces .db-saved-widget for cards
+   that have a variant. The CardPreview already provides full chrome,
+   so we only need a relative wrapper and overlay action buttons.
+
+   Container queries: the wrapper declares container-type: size so
+   children can size themselves with cqmin units (1cqmin = 1% of the
+   smaller of the wrapper's width/height). This is what makes fonts +
+   icons + padding scale up smoothly when the user drags the widget
+   bigger on the grid — no JS measuring, no resize observers.
+   ===================================================================== */
+.db-card-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  container-type: size;
+  container-name: dbcard;
+}
+.db-card-wrap .cv-card {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: clamp(12px, 5cqmin, 22px) clamp(14px, 5.5cqmin, 26px) clamp(14px, 5.5cqmin, 24px);
+  gap: clamp(8px, 2.5cqmin, 14px);
+}
+/* Scoped scaling — these only fire when a .cv-card sits inside a
+   .db-card-wrap (i.e. on the dashboard). The picker preview keeps
+   its fixed sizes via .card-config-preview-frame overrides.
+   Multipliers tuned so a 3-cell card (~150px) hits the min and a
+   10-cell card (~500px) hits the max smoothly. */
+.db-card-wrap .cv-title {
+  font-size: clamp(12px, 4.2cqmin, 19px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-card-wrap .cv-big {
+  font-size: clamp(22px, 12cqmin, 52px);
+}
+.db-card-wrap .cv-mid {
+  font-size: clamp(15px, 7cqmin, 30px);
+}
+.db-card-wrap .cv-unit,
+.db-card-wrap .cv-sub,
+.db-card-wrap .cv-stat-label {
+  font-size: clamp(11px, 3.5cqmin, 16px);
+}
+.db-card-wrap .cv-delta {
+  font-size: clamp(11px, 4cqmin, 17px);
+}
+.db-card-wrap .cv-ic {
+  width: clamp(40px, 20cqmin, 110px);
+  height: clamp(40px, 20cqmin, 110px);
+}
+.db-card-wrap .cv-ic-lg {
+  width: clamp(56px, 26cqmin, 140px);
+  height: clamp(56px, 26cqmin, 140px);
+}
+.db-card-wrap .cv-ic svg,
+.db-card-wrap .cv-ic img {
+  width: 64%;
+  height: 64%;
+}
+.db-card-wrap .cv-inline { gap: clamp(12px, 4cqmin, 24px); }
+.db-card-wrap .cv-grid-2x2 { gap: clamp(8px, 3cqmin, 16px) clamp(14px, 5cqmin, 28px); }
+/* Progress card bar height tracks the card too */
+.db-card-wrap .cv-bar { height: clamp(7px, 2.5cqmin, 14px); }
+.db-card-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.db-card-wrap:hover .db-card-actions { opacity: 1; }
+.db-card-action {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 0;
+  background: rgba(255, 255, 255, 0.9);
+  color: #14161C;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+.db-card-action:hover { background: #fff; }
+.db-card-action.danger:hover { background: #FFE4E0; color: #C13D2A; }
+
+/* =====================================================================
+   PayloadPathField — dropdown of scalar leaves on the selected device.
+   ===================================================================== */
+.payload-path-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.payload-path-hint {
+  font-size: 11px;
+  color: #8c8377;
+  line-height: 1.3;
+}
+.payload-path-toggle {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  padding: 2px 0;
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.payload-path-toggle:hover:not(:disabled) { text-decoration: underline; }
+.payload-path-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Pattern swatches (repeating tile background presets) ---------- */
+.pattern-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+}
+.pattern-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+.pattern-swatch-tile {
+  display: block;
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid #E4E0D6;
+  background-color: #FBF5EA;
+  background-repeat: repeat;
+  background-position: 0 0;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.pattern-swatch:hover:not(:disabled) .pattern-swatch-tile {
+  border-color: var(--accent-soft);
+}
+.pattern-swatch.is-active .pattern-swatch-tile {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(243, 106, 30, 0.22);
+}
+.pattern-swatch-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5C6378;
+  text-align: center;
+}
+.pattern-swatch.is-active .pattern-swatch-label { color: var(--accent); }
+.pattern-swatch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---------- Pattern search (Iconify-powered, same UX as icon picker) ---------- */
+.pattern-search { margin-top: 10px; }
+.pattern-search-tile {
+  background-color: #FBF5EA;
+  background-repeat: repeat;
+  background-size: 18px 18px;
+  border: 1px solid #ECE2D2;
+  border-radius: 6px;
+}
+.pattern-search-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 0 2px;
+}
+.pattern-search-quick-head {
+  font-size: 11px;
+  color: #8c8377;
+  font-weight: 600;
+  margin-right: 2px;
+}
+.pattern-search-quick-btn {
+  background: #fff;
+  border: 1px solid #ECE2D2;
+  color: #5C6378;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pattern-search-quick-btn:hover {
+  border-color: var(--accent-soft);
+  color: var(--accent);
+  background: #FFFBF5;
+}
+

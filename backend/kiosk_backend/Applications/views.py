@@ -463,6 +463,11 @@ class DeviceViewSet(viewsets.ModelViewSet):
         payload_update = request.data.get("payload")
         if payload_update:
             instance.merge_payload(payload_update)
+            # 🔹 Broadcast over WebSocket so dashboards / device pages
+            # subscribed to this device get the live update. Without this
+            # the REST PATCH path silently bypasses every WS subscriber.
+            from .views_realtime import broadcast_ws
+            broadcast_ws(instance, "patch", "", payload_update)
 
         serializer.save()
         return Response({
@@ -480,8 +485,24 @@ class DeviceViewSet(viewsets.ModelViewSet):
 
 
 class DashboardViewSet(viewsets.ModelViewSet):
-    queryset = Dashboard.objects.all().order_by("-created_at")
+    """
+    CRUD for dashboards under an Application. Each Application can own many
+    Dashboards, and each Dashboard owns many DashboardComponents (widgets).
+
+    Gated by the same permission set as the parent Application — a user with
+    only `application_view` can browse dashboards but not mutate them.
+    """
+    queryset = Dashboard.objects.select_related("application").order_by("-created_at")
     serializer_class = DashboardSerializer
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {
+        "list":           "application_view",
+        "retrieve":       "application_view",
+        "create":         "application_update",
+        "update":         "application_update",
+        "partial_update": "application_update",
+        "destroy":        "application_delete",
+    }
 
     # ---------- CREATE ----------
     def create(self, request, *args, **kwargs):
@@ -496,7 +517,7 @@ class DashboardViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "message": "Dashboard created successfully",
-                    "dashboard": DashboardSerializer(dashboard).data,
+                    "dashboard": DashboardSerializer(dashboard, context={"request": request}).data,
                 },
                 status=status.HTTP_201_CREATED,
             )
@@ -519,12 +540,18 @@ class DashboardViewSet(viewsets.ModelViewSet):
             return Response(
                 {
                     "message": "Dashboard updated successfully",
-                    "dashboard": DashboardSerializer(dashboard).data,
+                    "dashboard": DashboardSerializer(dashboard, context={"request": request}).data,
                 },
                 status=status.HTTP_200_OK,
             )
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # ---------- RETRIEVE ----------
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, context={"request": request})
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     # ---------- LIST ----------
     def list(self, request, *args, **kwargs):
@@ -535,7 +562,7 @@ class DashboardViewSet(viewsets.ModelViewSet):
         if application_id:
             queryset = queryset.filter(application_id=application_id)
 
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(queryset, many=True, context={"request": request})
         return Response(
             {
                 "count": queryset.count(),
@@ -614,8 +641,23 @@ class PublicDashboardViewSet(
         return Response(serializer.data, status=status.HTTP_200_OK)
 
 class DashboardComponentViewSet(viewsets.ModelViewSet):
-    queryset = DashboardComponent.objects.all().order_by("order", "id")
+    """
+    CRUD for dashboard widgets (rows in DashboardComponent). The widget's
+    `config` JSONField holds the per-type configuration (bindings, ui,
+    static). Permissions are inherited from the parent application via
+    `application_view` / `application_update` / `application_delete`.
+    """
+    queryset = DashboardComponent.objects.select_related("dashboard").order_by("order", "id")
     serializer_class = DashboardComponentSerializer
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {
+        "list":           "application_view",
+        "retrieve":       "application_view",
+        "create":         "application_update",
+        "update":         "application_update",
+        "partial_update": "application_update",
+        "destroy":        "application_update",
+    }
 
     # -------------------------------------------------
     # CREATE (SINGLE OR BULK)

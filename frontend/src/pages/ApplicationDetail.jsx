@@ -47,6 +47,13 @@ const EMPTY_CAM_LINK = {
   is_primary: false,
 }
 
+const EMPTY_DASHBOARD = {
+  id: null,
+  name: '',
+  description: '',
+  publish: false,
+}
+
 export default function ApplicationDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -69,13 +76,17 @@ export default function ApplicationDetail() {
   const [appCameras, setAppCameras] = useState([])
   const [camerasLoading, setCamerasLoading] = useState(true)
 
+  const [dashboards, setDashboards] = useState([])
+  const [dashboardsLoading, setDashboardsLoading] = useState(true)
+
   // Full camera catalog (used by the "Assign Camera" picker).
   const [allCameras, setAllCameras] = useState([])
 
   // Modals
   const [deviceModal, setDeviceModal] = useState(null)   // { mode: 'create'|'edit', form }
   const [camLinkModal, setCamLinkModal] = useState(null) // { mode: 'create'|'edit', form }
-  const [confirmDelete, setConfirmDelete] = useState(null) // { kind: 'device'|'cameraLink', item }
+  const [dashboardModal, setDashboardModal] = useState(null) // { mode: 'create'|'edit', form }
+  const [confirmDelete, setConfirmDelete] = useState(null) // { kind: 'device'|'cameraLink'|'dashboard', item }
   const [liveCamera, setLiveCamera]   = useState(null)  // a Camera object to stream
   const [toast, setToast] = useState(null)
 
@@ -127,6 +138,20 @@ export default function ApplicationDetail() {
     }
   }, [id, canView])
 
+  const loadDashboards = useCallback(async () => {
+    if (!canView) { setDashboardsLoading(false); return }
+    setDashboardsLoading(true)
+    try {
+      const resp = await api.listDashboards({ application: id })
+      const list = resp?.dashboards ?? (Array.isArray(resp) ? resp : [])
+      setDashboards(list)
+    } catch {
+      setDashboards([])
+    } finally {
+      setDashboardsLoading(false)
+    }
+  }, [id, canView])
+
   const loadAllCameras = useCallback(async () => {
     try {
       const resp = await api.listCameras()
@@ -141,6 +166,7 @@ export default function ApplicationDetail() {
   useEffect(() => { loadDevices() }, [loadDevices])
   useEffect(() => { loadAppCameras() }, [loadAppCameras])
   useEffect(() => { loadAllCameras() }, [loadAllCameras])
+  useEffect(() => { loadDashboards() }, [loadDashboards])
 
   // Background poll — only the camera CATALOG, not the link list. The link
   // structure (which cameras are tied to which app) is changed via the
@@ -307,6 +333,63 @@ export default function ApplicationDetail() {
     }
   }
 
+  /* ---------------------- dashboard CRUD ---------------------- */
+  function openDashboardCreate() {
+    setDashboardModal({ mode: 'create', form: { ...EMPTY_DASHBOARD } })
+  }
+  function openDashboardEdit(d) {
+    setDashboardModal({
+      mode: 'edit',
+      form: {
+        id: d.id,
+        name: d.name || '',
+        description: d.description || '',
+        publish: !!d.publish,
+      },
+    })
+  }
+  async function saveDashboard(form, setSaving, setErrors, setBanner, close) {
+    const payload = {
+      application: parseInt(id, 10),
+      name: form.name.trim(),
+      description: form.description.trim() || null,
+      publish: !!form.publish,
+    }
+    setSaving(true)
+    try {
+      let resp, updated, created
+      if (form.id) {
+        resp = await api.updateDashboard(form.id, payload)
+        updated = resp?.dashboard
+        if (updated) setDashboards((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
+      } else {
+        resp = await api.createDashboard(payload)
+        created = resp?.dashboard ?? resp?.data ?? resp
+        if (created?.id) setDashboards((prev) => [created, ...prev])
+        else await loadDashboards()
+      }
+      setToast({ type: 'success', text: resp?.message || (form.id ? 'Dashboard updated.' : 'Dashboard created.') })
+      close()
+      // Jump straight into the new dashboard so the admin can start adding
+      // widgets immediately.
+      if (created?.id) navigate(`/applications/${id}/dashboards/${created.id}`)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const parsed = parseApiErrors(err, ['name', 'description', 'publish'])
+        const fes = {}
+        for (const k of Object.keys(parsed.fields)) if (parsed.fields[k]?.length) fes[k] = parsed.fields[k][0]
+        setErrors(fes)
+        const top = parsed.form[0] || err?.data?.error || err?.message
+        if (Object.keys(fes).length === 0 && top) setBanner({ type: 'error', text: top })
+        else if (parsed.form.length) setBanner({ type: 'error', text: parsed.form[0] })
+      } else {
+        setBanner({ type: 'error', text: 'Network error.' })
+      }
+    } finally {
+      setSaving(false)
+    }
+  }
+
   /* ---------------------- delete ---------------------- */
   async function performDelete() {
     const target = confirmDelete
@@ -321,6 +404,10 @@ export default function ApplicationDetail() {
         setAppCameras((prev) => prev.filter((l) => l.id !== target.item.id))
         const camName = target.item.camera_details?.camera_name || 'Camera'
         setToast({ type: 'success', text: `${camName} unlinked.` })
+      } else if (target.kind === 'dashboard') {
+        await api.deleteDashboard(target.item.id)
+        setDashboards((prev) => prev.filter((d) => d.id !== target.item.id))
+        setToast({ type: 'success', text: `Dashboard "${target.item.name}" deleted.` })
       }
       setConfirmDelete(null)
     } catch (err) {
@@ -372,6 +459,7 @@ export default function ApplicationDetail() {
               <div className="dash-stat"><div className="n">{devices.length}</div><div className="l">Devices</div></div>
               <div className="dash-stat"><div className="n">{appCameras.length}</div><div className="l">Cameras</div></div>
               <div className="dash-stat"><div className="n">{devices.filter((d) => d.is_connected).length}</div><div className="l">Online devices</div></div>
+              <div className="dash-stat"><div className="n">{dashboards.length}</div><div className="l">Dashboards</div></div>
             </section>
 
             {/* ---------- Devices ---------- */}
@@ -407,6 +495,45 @@ export default function ApplicationDetail() {
                       onOpen={() => navigate(`/applications/${id}/devices/${d.id}`)}
                       onEdit={() => openDeviceEdit(d)}
                       onDelete={() => setConfirmDelete({ kind: 'device', item: d })}
+                    />
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {/* ---------- Dashboards ---------- */}
+            <section className="admin-card list-card detail-section">
+              <div className="card-head">
+                <h3 className="card-title">Dashboards</h3>
+                <div className="card-head-actions">
+                  <span className="card-count">{dashboards.length}</span>
+                  {canUpdate && (
+                    <button type="button" className="btn-primary btn-sm" onClick={openDashboardCreate}>
+                      + Add Dashboard
+                    </button>
+                  )}
+                </div>
+              </div>
+              {dashboardsLoading ? (
+                <div className="admin-empty admin-loading">
+                  <span className="admin-spinner" aria-hidden="true" />
+                  <span>Loading dashboards…</span>
+                </div>
+              ) : dashboards.length === 0 ? (
+                <div className="admin-empty">
+                  {canUpdate ? 'No dashboards yet. Click "+ Add Dashboard" to build one.' : 'No dashboards yet.'}
+                </div>
+              ) : (
+                <ul className="detail-list">
+                  {dashboards.map((d) => (
+                    <DashboardRow
+                      key={d.id}
+                      dashboard={d}
+                      canUpdate={canUpdate}
+                      canDelete={canDelete}
+                      onOpen={() => navigate(`/applications/${id}/dashboards/${d.id}`)}
+                      onEdit={() => openDashboardEdit(d)}
+                      onDelete={() => setConfirmDelete({ kind: 'dashboard', item: d })}
                     />
                   ))}
                 </ul>
@@ -477,6 +604,15 @@ export default function ApplicationDetail() {
         <LiveStreamModal
           camera={camerasById.get(liveCamera.id) || liveCamera}
           onClose={() => setLiveCamera(null)}
+        />
+      )}
+      {dashboardModal && (
+        <DashboardModal
+          initial={dashboardModal.form}
+          onClose={() => setDashboardModal(null)}
+          onSubmit={(form, setSaving, setErrors, setBanner) =>
+            saveDashboard(form, setSaving, setErrors, setBanner, () => setDashboardModal(null))
+          }
         />
       )}
       {camLinkModal && (
@@ -777,13 +913,132 @@ function CameraLinkModal({ initial, mode, cameraOptions, onClose, onSubmit }) {
   )
 }
 
+/* ----------------------- dashboard row ----------------------- */
+function DashboardRow({ dashboard, canUpdate, canDelete, onOpen, onEdit, onDelete }) {
+  function onKey(e) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen?.() }
+  }
+  return (
+    <li
+      className="detail-row is-clickable"
+      role="link"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={onKey}
+      aria-label={`Open ${dashboard.name}`}
+    >
+      <div className="detail-row-id">
+        <div className="dash-thumb" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="8" height="10" rx="1.6" stroke="#F36A1E" strokeWidth="1.7" />
+            <rect x="13" y="3" width="8" height="6" rx="1.6" stroke="#F36A1E" strokeWidth="1.7" />
+            <rect x="3" y="15" width="8" height="6" rx="1.6" stroke="#F36A1E" strokeWidth="1.7" />
+            <rect x="13" y="11" width="8" height="10" rx="1.6" stroke="#F36A1E" strokeWidth="1.7" />
+          </svg>
+        </div>
+        <div className="detail-row-text">
+          <div className="detail-row-name">{dashboard.name}</div>
+          <div className="detail-row-sub">
+            {dashboard.created_by_name && <span>by {dashboard.created_by_name}</span>}
+            {dashboard.updated_at && <span>· updated {formatRelative(dashboard.updated_at)}</span>}
+          </div>
+          {dashboard.description && <div className="detail-row-desc">{dashboard.description}</div>}
+        </div>
+      </div>
+      <div className="detail-row-pills">
+        {dashboard.publish
+          ? <span className="soft-pill is-pos">Published</span>
+          : <span className="soft-pill is-neutral">Draft</span>}
+      </div>
+      <div className="detail-row-actions" onClick={(e) => e.stopPropagation()}>
+        {canUpdate && <button type="button" className="row-btn" onClick={onEdit}>Edit</button>}
+        {canDelete && <button type="button" className="row-btn danger" onClick={onDelete}>Delete</button>}
+        {!canUpdate && !canDelete && <span className="row-actions-none">View only</span>}
+      </div>
+    </li>
+  )
+}
+
+/* ----------------------- dashboard modal ----------------------- */
+function DashboardModal({ initial, onClose, onSubmit }) {
+  const [form, setForm] = useState(initial)
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState({})
+  const [banner, setBanner] = useState(null)
+
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape' && !saving) onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, saving])
+
+  function set(k, v) {
+    setForm((f) => ({ ...f, [k]: v }))
+    setErrors((e) => (e[k] ? { ...e, [k]: undefined } : e))
+  }
+
+  function submit(e) {
+    e.preventDefault()
+    setBanner(null)
+    const fes = {}
+    if (!form.name.trim()) fes.name = 'Dashboard name is required.'
+    setErrors(fes)
+    if (Object.keys(fes).length > 0) return
+    onSubmit(form, setSaving, setErrors, setBanner)
+  }
+
+  return (
+    <div className="modal-overlay" onMouseDown={() => !saving && onClose()}>
+      <div className="modal-card modal-wide" onMouseDown={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <h2>{form.id ? 'Edit Dashboard' : 'Add Dashboard'}</h2>
+          <button type="button" className="modal-x" aria-label="Close" onClick={() => !saving && onClose()}>×</button>
+        </header>
+        <div className="modal-body">
+          <form onSubmit={submit} noValidate>
+            {banner && <div className={'admin-banner ' + banner.type}>{banner.text}</div>}
+            <DField label="Dashboard name" required error={errors.name} full>
+              <input type="text" value={form.name} disabled={saving} autoFocus
+                onChange={(e) => set('name', e.target.value)} placeholder="Lobby overview" />
+            </DField>
+            <DField label="Description" error={errors.description} full>
+              <textarea rows={2} value={form.description} disabled={saving}
+                onChange={(e) => set('description', e.target.value)}
+                placeholder="What does this dashboard show or control?" />
+            </DField>
+            <label className="form-toggle">
+              <input type="checkbox" checked={form.publish} disabled={saving}
+                onChange={(e) => set('publish', e.target.checked)} />
+              <span>Published <small>— makes the dashboard available to end-users</small></span>
+            </label>
+            <div className="modal-foot">
+              <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving}>
+                {saving ? 'Saving…' : (form.id ? 'Save Changes' : 'Add Dashboard')}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ----------------------- delete confirm ----------------------- */
 function DeleteConfirm({ kind, item, onCancel, onConfirm }) {
   const [busy, setBusy] = useState(false)
   const verb = kind === 'cameraLink' ? 'Unlink' : 'Delete'
-  const label = kind === 'cameraLink'
-    ? (item.camera_details?.camera_name || 'this camera link')
-    : (item?.device_name || 'this device')
+  const noun =
+    kind === 'cameraLink' ? 'camera' :
+    kind === 'dashboard'  ? 'dashboard' : 'device'
+  const label =
+    kind === 'cameraLink' ? (item.camera_details?.camera_name || 'this camera link') :
+    kind === 'dashboard'  ? (item?.name || 'this dashboard') :
+    (item?.device_name || 'this device')
+  const subCopy =
+    kind === 'cameraLink' ? 'The camera remains in the system — only its link to this application is removed.' :
+    kind === 'dashboard'  ? 'The dashboard and all of its widget configurations will be permanently removed. Device payloads are not affected.' :
+    'The device and all its payload data will be permanently removed.'
   async function go() {
     setBusy(true)
     try { await onConfirm() } finally { setBusy(false) }
@@ -792,7 +1047,7 @@ function DeleteConfirm({ kind, item, onCancel, onConfirm }) {
     <div className="modal-overlay" onMouseDown={() => !busy && onCancel()}>
       <div className="modal-card modal-wide" onMouseDown={(e) => e.stopPropagation()}>
         <header className="modal-head">
-          <h2>{verb} {kind === 'cameraLink' ? 'camera' : 'device'}?</h2>
+          <h2>{verb} {noun}?</h2>
           <button type="button" className="modal-x" aria-label="Close" onClick={() => !busy && onCancel()}>×</button>
         </header>
         <div className="modal-body">
@@ -800,11 +1055,7 @@ function DeleteConfirm({ kind, item, onCancel, onConfirm }) {
             <p className="confirm-lead">
               {verb} <strong>{label}</strong>?
             </p>
-            <p className="confirm-sub">
-              {kind === 'cameraLink'
-                ? 'The camera remains in the system — only its link to this application is removed.'
-                : 'The device and all its payload data will be permanently removed.'}
-            </p>
+            <p className="confirm-sub">{subCopy}</p>
           </div>
           <div className="modal-foot">
             <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>Cancel</button>

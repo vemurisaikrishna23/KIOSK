@@ -108,13 +108,35 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
         self.token = self.scope["url_route"]["kwargs"].get("token")
         self.device = await self._get_device_by_token(self.token)
 
+        # Validate before joining groups. We accept() the connection
+        # BEFORE closing so the client actually receives the error
+        # message — otherwise the WS just sees a raw close code with
+        # no payload and has no way to show a useful toast.
         if not self.device:
+            await self.accept()
+            await self._send_json({
+                "status": "error",
+                "code": 4001,
+                "reason": "device_not_found",
+                "message": "Device not found. The provided token doesn't match any device on this server.",
+            })
             await self.close(code=4001)
             return
 
+        if not self.device.is_active:
+            await self.accept()
+            await self._send_json({
+                "status": "error",
+                "code": 4002,
+                "reason": "device_disabled",
+                "message": f"Device '{self.device.device_name}' is disabled. Enable it from the admin panel to connect.",
+            })
+            await self.close(code=4002)
+            return
+
         self.device_group = f"device_{self.device.device_uid}"
-        self.web_group = f"{self.device_group}_web"
-        self.hw_group = f"{self.device_group}_hardware"
+        self.web_group    = f"{self.device_group}_web"
+        self.hw_group     = f"{self.device_group}_hardware"
 
         if self.client_type == "hardware":
             await self.channel_layer.group_add(self.hw_group, self.channel_name)
@@ -332,6 +354,11 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
             "event": "value_changed",
             "action": action,
             "source": self.client_type,
+            # Include device_id so consumers fanning these events out
+            # (e.g. DashboardRealtimeConsumer) can attribute the change
+            # to a specific device without inferring from the path —
+            # essential for root-level / cross-device cases.
+            "device_id": self.device.id,
             "path": path,
             "payload": payload,
             "timestamp": now().isoformat()
@@ -435,9 +462,16 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
     # ===============================================================
     @database_sync_to_async
     def _get_device_by_token(self, token):
+        """
+        Look up a device by token regardless of is_active state so the
+        connect() handler can differentiate "no such device" from
+        "device disabled" and report each cause to the client.
+        """
+        if not token:
+            return None
         try:
-            return Device.objects.get(device_token=token, is_active=True)
-        except:
+            return Device.objects.get(device_token=token)
+        except Device.DoesNotExist:
             return None
 
     @database_sync_to_async
@@ -454,6 +488,7 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
             "event": "device_status",
             "action": "status",
             "source": "hardware",
+            "device_id": self.device.id,
             "path": "",
             "payload": {"is_connected": bool(is_connected)},
             "timestamp": now().isoformat(),
@@ -833,17 +868,12 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         self.dashboard_id = None
         self.dashboard = None
-
-        # flattened bindings:
-        # [{component_id, widget_name, binding_index, device_id, device_uid, path}]
         self.bindings = []
-
-        # device_id -> {"uid": ..., "web_group": ...}
         self.device_index = {}
 
-        print("\n=== DASHBOARD WS CONNECT ===")
-        print("PATH:", self.scope.get("path"))
-        print("KWARGS:", self.scope.get("url_route", {}).get("kwargs"))
+        print("\n=== DASHBOARD WS CONNECT ===", flush=True)
+        print("PATH:", self.scope.get("path"), flush=True)
+        print("KWARGS:", self.scope.get("url_route", {}).get("kwargs"), flush=True)
 
         try:
             self.dashboard_id = int(self.scope["url_route"]["kwargs"]["dashboard_id"])
@@ -851,39 +881,69 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
             await self.close(code=4000)
             return
 
-        self.dashboard = await self._get_dashboard(self.dashboard_id)
-        if not self.dashboard:
-            await self.close(code=4004)
-            return
-
-        components = await self._get_components(self.dashboard_id)
-        self.bindings, self.device_index = await self._build_bindings(components)
-
-        # ✅ Join ONLY device web groups once per device (prevents duplicate events)
-        for did, info in self.device_index.items():
-            await self.channel_layer.group_add(info["web_group"], self.channel_name)
-
+        # CRITICAL: accept() FIRST so the WS handshake completes within
+        # the client's timeout. Heavy DB / Redis work (which can take
+        # several seconds over a remote DB) happens AFTER accept on a
+        # background task — events that arrive before bindings are
+        # loaded are simply dropped, which is fine because the frontend
+        # has already snapshotted device payloads via REST.
         await self.accept()
 
-        snapshot = await self._initial_snapshot()
+        # Kick the binding setup + group_add work off in the background.
+        # Disconnect can still arrive mid-setup; the task respects
+        # `self._closed` so it bails out cleanly if so.
+        self._closed = False
+        import asyncio
+        asyncio.create_task(self._post_accept_setup())
 
-        # Connected response (initial snapshot per binding)
-        await self._send_json({
-            "status": "ok",
-            "action": "connected",
-            "dashboard_id": self.dashboard_id,
-            "components": snapshot,
-            "timestamp": now().isoformat()
-        })
+    async def _post_accept_setup(self):
+        """Loads the dashboard's bindings, joins each device's web group,
+        and emits the "connected" status message. Runs after accept(),
+        so the WS stays open while these (potentially slow) remote DB
+        + Redis ops complete."""
+        try:
+            self.dashboard = await self._get_dashboard(self.dashboard_id)
+            if self._closed: return
+            if not self.dashboard:
+                await self.close(code=4004); return
 
-        print("=== DASHBOARD WS CONNECTED ===\n")
+            components = await self._get_components(self.dashboard_id)
+            if self._closed: return
+            self.bindings, self.device_index = await self._build_bindings(components)
+            if self._closed: return
+
+            for did, info in self.device_index.items():
+                await self.channel_layer.group_add(info["web_group"], self.channel_name)
+                if self._closed: return
+
+            await self._send_json({
+                "status": "ok",
+                "action": "connected",
+                "dashboard_id": self.dashboard_id,
+                # No per-binding snapshot — REST already gave the client
+                # current device payloads on dashboard load. The WS only
+                # exists to push live changes from this moment on.
+                "components": [],
+                "timestamp": now().isoformat()
+            })
+
+            print(
+                f"=== DASHBOARD WS CONNECTED dashboard={self.dashboard_id} "
+                f"bindings={len(self.bindings)} devices={list(self.device_index.keys())} "
+                f"groups={[i['web_group'] for i in self.device_index.values()]} ===",
+                flush=True,
+            )
+        except Exception:
+            log.exception("DashboardRealtimeConsumer post-accept setup failed")
 
     # ===============================================================
     # 🔹 DISCONNECT
     # ===============================================================
     async def disconnect(self, close_code):
+        # Signal any pending post-accept setup task to bail out.
+        self._closed = True
         try:
-            for did, info in self.device_index.items():
+            for did, info in (self.device_index or {}).items():
                 await self.channel_layer.group_discard(info["web_group"], self.channel_name)
         except Exception:
             pass
@@ -983,7 +1043,22 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
         """
         try:
             event_path = (event.get("path") or "").strip("/")
-            device_id = self._infer_device_id_from_event_path(event_path)
+            # Prefer the device_id sent by DeviceRealtimeConsumer (always
+            # correct, including for root-level events). Fall back to the
+            # legacy path-inference only when the source consumer didn't
+            # include one.
+            device_id = event.get("device_id")
+            if device_id is None:
+                device_id = self._infer_device_id_from_event_path(event_path)
+
+            # Visible trace so daphne logs show the chain. Remove or
+            # demote to log.debug once stable.
+            print(
+                f"[dashboard-ws] forward dashboard={self.dashboard_id} "
+                f"device={device_id} path='{event_path}' "
+                f"action={event.get('action')} src={event.get('source')}",
+                flush=True,
+            )
 
             # ✅ One single message
             await self._send_json({
@@ -1095,6 +1170,7 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
             b_list = cfg.get("bindings", [])
 
             if not isinstance(b_list, list):
+                print(f"[dashboard-ws] skip component {c.id}: bindings is not a list ({type(b_list).__name__})")
                 continue
 
             for idx, b in enumerate(b_list):
@@ -1102,11 +1178,13 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
                 path = (b.get("payload_path") or "").strip("/")
 
                 if not did or not path:
+                    print(f"[dashboard-ws] skip binding {c.id}[{idx}]: did={did!r} path={path!r}")
                     continue
 
                 try:
                     device = Device.objects.get(id=did)
                 except Exception:
+                    print(f"[dashboard-ws] skip binding {c.id}[{idx}]: device_id={did} not found")
                     continue
 
                 if did not in device_index:
