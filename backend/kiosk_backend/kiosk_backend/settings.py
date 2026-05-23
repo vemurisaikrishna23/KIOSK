@@ -29,15 +29,36 @@ except ImportError:
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-m8j2g(012hvvj&yb=4tc5y2(fjuffua6p!nnw5!^e7^kpr1+jc'
+# Prefer a real secret on the server via DJANGO_SECRET_KEY env var.
+SECRET_KEY = os.environ.get(
+    'DJANGO_SECRET_KEY',
+    'django-insecure-m8j2g(012hvvj&yb=4tc5y2(fjuffua6p!nnw5!^e7^kpr1+jc',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Flip via env on the server (DJANGO_DEBUG=false).
+DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = ['*']
+# Hosts allowed to serve this backend. The server's public IP needs to
+# be in this list so Django doesn't refuse the request with
+# `DisallowedHost`. '*' is fine while behind a trusted proxy / locked
+# down by the firewall.
+ALLOWED_HOSTS = [
+    '192.210.241.34',
+    'localhost',
+    '127.0.0.1',
+    '*',
+]
 
+# Origins allowed to make POST/PUT/PATCH/DELETE that include cookies
+# or CSRF tokens. Must include the scheme. Add both http and https
+# entries if you'll eventually serve over TLS.
 CSRF_TRUSTED_ORIGINS = [
-    "https://kiosk-backend.myaccess.cloud",
+    'http://192.210.241.34',
+    'http://192.210.241.34:80',
+    'http://192.210.241.34:5173',  # vite dev preview, if you ever run it on the box
+    'http://192.210.241.34:8001',
+    'https://kiosk-backend.myaccess.cloud',
 ]
 
 # Application definition
@@ -218,7 +239,18 @@ CHANNEL_LAYERS = {
 
 AUTH_USER_MODEL = 'UserAccounts.User'
 
+# CORS — for an open dashboard reachable from any browser we leave
+# this permissive. Lock down to a specific origin list later by
+# setting CORS_ALLOW_ALL_ORIGINS=False and listing CORS_ALLOWED_ORIGINS.
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    'http://192.210.241.34',
+    'http://192.210.241.34:80',
+    'http://192.210.241.34:5173',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
@@ -247,7 +279,9 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Public URL of the React app — used to build clickable reset links.
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173').rstrip('/')
+# Override on the server via FRONTEND_URL=http://192.210.241.34 (or
+# the public hostname once DNS is wired up).
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://192.210.241.34').rstrip('/')
 STORAGES = {
     "default": {
         "BACKEND": "django.core.files.storage.FileSystemStorage",
