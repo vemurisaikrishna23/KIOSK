@@ -126,20 +126,37 @@ class Device(models.Model):
         """
         Merge, update, or delete nested JSON fields.
         All incoming fields must include an explicit 'type' key.
+        Auto-coerces int↔float to match the existing field's declared type.
         """
+
+        def coerce_and_normalize(incoming, target):
+            if not (isinstance(incoming, dict) and "type" in incoming and "value" in incoming):
+                return
+            if isinstance(target, dict) and "type" in target and "value" in target:
+                it, tt = incoming["type"], target["type"]
+                iv = incoming["value"]
+                if it == "int" and tt == "float":
+                    incoming["type"] = "float"
+                    incoming["value"] = float(iv) if isinstance(iv, (int, float)) else iv
+                elif it == "float" and tt == "int":
+                    incoming["type"] = "int"
+                    incoming["value"] = int(round(iv)) if isinstance(iv, (int, float)) else iv
+            t, v = incoming["type"], incoming["value"]
+            if t == "float" and isinstance(v, int):
+                incoming["value"] = float(v)
+            elif t == "int" and isinstance(v, float):
+                incoming["value"] = int(round(v))
 
         def merge(existing, incoming):
             for key, value in incoming.items():
-                # 🗑 Delete field
                 if value is None:
                     existing.pop(key, None)
                     continue
 
-                # 🔁 Recurse if nested structure without a 'type' field
                 if isinstance(value, dict) and "type" not in value:
                     existing[key] = merge(existing.get(key, {}), value)
                 else:
-                    # ✅ Replace or insert directly
+                    coerce_and_normalize(value, existing.get(key, {}))
                     existing[key] = value
             return existing
 
@@ -235,6 +252,11 @@ class Dashboard(models.Model):
     dashboard_image_enable = models.BooleanField(default=False)
     spline_url = models.CharField(max_length=255, blank=True, null=True)
     spline_url_enable = models.BooleanField(default=False)
+    # Color theme id (peach | ocean | mint | lavender | slate | sunset).
+    # Drives panel gradients, cell tint, accent and default widget colors
+    # on the frontend. Stored as a short string so adding new themes
+    # later doesn't require a migration.
+    theme = models.CharField(max_length=32, default='peach')
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -989,30 +989,56 @@ function BranchNode({ name, value, path, canUpdate, wsLive, onCommand, onError, 
 
 function LeafNode({ name, node, path, canUpdate, wsLive, onCommand, onError, onRequestDelete }) {
   const [editing, setEditing] = useState(false)
+  const [draftKey, setDraftKey] = useState(name)
+  const [draftType, setDraftType] = useState(node.type)
   const [draft, setDraft] = useState(() => stringifyLeafValue(node.value, node.type))
   const [bumpKey, setBumpKey] = useState(0)
   const [fieldError, setFieldError] = useState(null)
 
-  // Re-render with a key change when the leaf's value changes externally
-  // (hardware push) — gives us a subtle flash via CSS.
   useEffect(() => { setBumpKey((k) => k + 1) }, [node.value])
 
+  function startEdit() {
+    setDraftKey(name)
+    setDraftType(node.type)
+    setDraft(stringifyLeafValue(node.value, node.type))
+    setFieldError(null)
+    setEditing(true)
+  }
+
+  function onTypeChange(newType) {
+    setDraftType(newType)
+    setDraft('')
+    setFieldError(null)
+  }
+
   function save() {
+    const k = draftKey.trim()
+    if (!k) { setFieldError('Key is required'); return }
+    if (k.includes('/')) { setFieldError("Key can't contain '/'"); return }
     let parsed
-    try { parsed = parseLeafValue(draft, node.type) }
+    try { parsed = parseLeafValue(draft, draftType) }
     catch (e) {
-      const msg = `Invalid ${node.type}: ${e.message}`
+      const msg = `Invalid ${draftType}: ${e.message}`
       setFieldError(msg)
       onError?.(msg)
       return
     }
     setFieldError(null)
-    onCommand('put', path, { type: node.type, value: parsed })
+    const parentPath = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : ''
+    if (k !== name) {
+      onCommand('delete', path, {})
+      onCommand('put', parentPath ? `${parentPath}/${k}` : k, { type: draftType, value: parsed })
+    } else {
+      onCommand('put', path, { type: draftType, value: parsed })
+    }
     setEditing(false)
   }
 
   function cancel() {
+    setDraftKey(name)
+    setDraftType(node.type)
     setDraft(stringifyLeafValue(node.value, node.type))
+    setFieldError(null)
     setEditing(false)
   }
 
@@ -1020,52 +1046,96 @@ function LeafNode({ name, node, path, canUpdate, wsLive, onCommand, onError, onR
     onRequestDelete?.({ name, path, kind: 'leaf' })
   }
 
+  function valueInput() {
+    if (draftType === 'boolean') {
+      return (
+        <select className="tree-input" value={draft || 'false'} onChange={(e) => { setDraft(e.target.value); setFieldError(null) }}>
+          <option value="true">true</option>
+          <option value="false">false</option>
+        </select>
+      )
+    }
+    return (
+      <input
+        className="tree-input"
+        type="text"
+        inputMode={draftType === 'int' ? 'numeric' : draftType === 'float' ? 'decimal' : 'text'}
+        value={draft}
+        onChange={(e) => {
+          const v = e.target.value
+          if (draftType === 'int' && v !== '' && v !== '-' && !/^-?\d+$/.test(v)) return
+          if (draftType === 'float' && v !== '' && v !== '-' && v !== '.' && v !== '-.' && !/^-?\d*\.?\d*$/.test(v)) return
+          setDraft(v); setFieldError(null)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') { e.preventDefault(); save() }
+          if (e.key === 'Escape') { e.preventDefault(); cancel() }
+        }}
+        autoFocus
+        spellCheck={false}
+        placeholder={draftType === 'dict' ? '{"key":"value"}' : draftType === 'list' ? '[1,2,3]' : ''}
+      />
+    )
+  }
+
   return (
     <li className="tree-leaf">
       <div className="tree-row" key={bumpKey}>
         <span className="tree-caret-spacer" aria-hidden="true" />
-        <span className="tree-key">{name}:</span>
         {editing ? (
           <>
-            <span className={'tree-edit-cluster' + (fieldError ? ' has-error' : '')}>
-              {node.type === 'boolean' ? (
-                <select className="tree-input" value={draft} onChange={(e) => { setDraft(e.target.value); setFieldError(null) }}>
-                  <option value="true">true</option>
-                  <option value="false">false</option>
-                </select>
-              ) : (
+            <div className={'tree-edit-full' + (fieldError ? ' has-error' : '')}>
+              <div className="tree-edit-row">
                 <input
-                  className="tree-input"
-                  type={node.type === 'int' || node.type === 'float' ? 'number' : 'text'}
-                  value={draft}
-                  onChange={(e) => { setDraft(e.target.value); setFieldError(null) }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') { e.preventDefault(); save() }
-                    if (e.key === 'Escape') { e.preventDefault(); cancel() }
-                  }}
-                  autoFocus
+                  className="tree-input tree-input-key"
+                  type="text"
+                  value={draftKey}
+                  onChange={(e) => { setDraftKey(e.target.value); setFieldError(null) }}
+                  placeholder="key"
                   spellCheck={false}
                 />
-              )}
+                <select className="tree-input tree-input-type" value={draftType} onChange={(e) => onTypeChange(e.target.value)}>
+                  <option value="string">string</option>
+                  <option value="int">int</option>
+                  <option value="float">float</option>
+                  <option value="boolean">boolean</option>
+                  <option value="dict">dict</option>
+                  <option value="list">list</option>
+                </select>
+              </div>
+              <div className="tree-edit-row">
+                {valueInput()}
+              </div>
               {fieldError && <span className="tree-inline-err">{fieldError}</span>}
-            </span>
-            <span className="tree-row-actions">
-              <button type="button" className="tree-mini-btn is-primary" onClick={save} disabled={!wsLive}>Save</button>
-              <button type="button" className="tree-mini-btn" onClick={() => { setFieldError(null); cancel() }}>Cancel</button>
-            </span>
+              <div className="tree-edit-row tree-edit-actions">
+                <button type="button" className="tree-mini-btn is-primary" onClick={save} disabled={!wsLive}>Save</button>
+                <button type="button" className="tree-mini-btn" onClick={cancel}>Cancel</button>
+              </div>
+            </div>
           </>
         ) : (
           <>
+            <span className={'tree-key' + (canUpdate ? ' tree-key-editable' : '')}
+              onClick={canUpdate && wsLive ? startEdit : undefined}
+              role={canUpdate ? 'button' : undefined}
+              tabIndex={canUpdate ? 0 : undefined}
+              onKeyDown={canUpdate ? (e) => { if (e.key === 'Enter') startEdit() } : undefined}
+            >{name}:</span>
             <button
               type="button"
               className={'tree-value tree-value-' + node.type}
-              onClick={canUpdate ? () => setEditing(true) : undefined}
+              onClick={canUpdate ? startEdit : undefined}
               disabled={!canUpdate || !wsLive}
               title={fullLeafText(node.value, node.type) + (canUpdate ? ' — click to edit' : '')}
             >
               {renderLeafValue(node.value, node.type)}
             </button>
-            <span className="tree-type">{node.type}</span>
+            <span className={'tree-type' + (canUpdate ? ' tree-type-editable' : '')}
+              onClick={canUpdate && wsLive ? startEdit : undefined}
+              role={canUpdate ? 'button' : undefined}
+              tabIndex={canUpdate ? 0 : undefined}
+              onKeyDown={canUpdate ? (e) => { if (e.key === 'Enter') startEdit() } : undefined}
+            >{node.type}</span>
             <span className="tree-row-actions">
               <CopyPathButton path={path} />
               {canUpdate && (
@@ -1169,15 +1239,22 @@ function AddNodeForm({ parentPath, onCancel, onSubmit, onError }) {
             ) : (
               <input
                 className="tree-input"
-                type={kind === 'int' || kind === 'float' ? 'number' : 'text'}
+                type="text"
+                inputMode={kind === 'int' ? 'numeric' : kind === 'float' ? 'decimal' : 'text'}
                 placeholder={
                   kind === 'dict' ? '{ "key": value }' :
                   kind === 'list' ? '[ 1, 2, 3 ]' :
-                  kind === 'int' || kind === 'float' ? '0' :
+                  kind === 'int' ? '0' :
+                  kind === 'float' ? '0.0' :
                   'value'
                 }
                 value={value}
-                onChange={(e) => { setValue(e.target.value); setValueError(null) }}
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (kind === 'int' && v !== '' && v !== '-' && !/^-?\d+$/.test(v)) return
+                  if (kind === 'float' && v !== '' && v !== '-' && v !== '.' && v !== '-.' && !/^-?\d*\.?\d*$/.test(v)) return
+                  setValue(v); setValueError(null)
+                }}
                 spellCheck={false}
               />
             )}
@@ -1200,8 +1277,9 @@ function stringifyLeafValue(value, type) {
   if (value === null || value === undefined) return ''
   if (type === 'boolean') return value ? 'true' : 'false'
   if (type === 'dict' || type === 'list') {
-    try { return JSON.stringify(value) } catch { return '' }
+    try { return JSON.stringify(value, null, 2) } catch { return '' }
   }
+  if (type === 'float' && typeof value === 'number' && Number.isInteger(value)) return value.toFixed(1)
   return String(value)
 }
 
@@ -1241,6 +1319,7 @@ function fullLeafText(value, type) {
   if (type === 'dict' || type === 'list') {
     try { return JSON.stringify(value) } catch { return String(value) }
   }
+  if (type === 'float' && typeof value === 'number' && Number.isInteger(value)) return value.toFixed(1)
   return String(value)
 }
 
@@ -1251,6 +1330,7 @@ function renderLeafValue(value, type) {
   if (type === 'dict' || type === 'list') {
     try { return JSON.stringify(value) } catch { return String(value) }
   }
+  if (type === 'float' && typeof value === 'number' && Number.isInteger(value)) return value.toFixed(1)
   return String(value)
 }
 

@@ -10,6 +10,9 @@ import Applications from './pages/Applications.jsx'
 import ApplicationDetail from './pages/ApplicationDetail.jsx'
 import DeviceDetail from './pages/DeviceDetail.jsx'
 import DashboardDetail from './pages/DashboardDetail.jsx'
+import PublicLanding from './pages/PublicLanding.jsx'
+import PublicApplications from './pages/PublicApplications.jsx'
+import PublicDashboard from './pages/PublicDashboard.jsx'
 import { auth } from './lib/api.js'
 
 function RequireAuth({ children }) {
@@ -64,7 +67,16 @@ export default function App() {
         path="/applications/:appId/dashboards/:dashboardId"
         element={<RequireAuth><DashboardDetail /></RequireAuth>}
       />
-      <Route path="*" element={<Navigate to="/signin" replace />} />
+      {/* Public (no auth) — marketing landing + live demo list + view-only dashboard. */}
+      <Route path="/" element={<PublicLanding />} />
+      <Route path="/public" element={<PublicApplications />} />
+      <Route
+        path="/public/applications/:appId/dashboards/:dashboardId"
+        element={<PublicDashboard />}
+      />
+      {/* Fallback: send unknown URLs to the public landing rather than
+          to /signin, so visitors aren't pushed into an auth wall. */}
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

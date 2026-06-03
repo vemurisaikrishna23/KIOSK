@@ -183,6 +183,7 @@ class DashboardSerializer(serializers.ModelSerializer):
             "dashboard_image_enable",
             "spline_url",
             "spline_url_enable",
+            "theme",
             "created_by",
             "created_by_name",
             "created_at",

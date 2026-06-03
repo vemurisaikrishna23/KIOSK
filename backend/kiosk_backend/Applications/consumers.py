@@ -29,6 +29,25 @@ def _truncate_depth(data, depth):
     return {k: _truncate_depth(v, depth - 1) for k, v in data.items()}
 
 
+def _normalize_payload_values(payload):
+    """
+    Ensure the Python value type matches the declared type.
+    float fields always store float, int fields always store int.
+    """
+    if not isinstance(payload, dict):
+        return
+    if "type" in payload and "value" in payload:
+        t, v = payload["type"], payload["value"]
+        if t == "float" and isinstance(v, int):
+            payload["value"] = float(v)
+        elif t == "int" and isinstance(v, float):
+            payload["value"] = int(round(v))
+        return
+    for key, val in payload.items():
+        if isinstance(val, dict):
+            _normalize_payload_values(val)
+
+
 class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
 
     # ===============================================================
@@ -93,6 +112,42 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
                 self._validate_payload_types(value)
             else:
                 validate_item(key, value)
+
+    @database_sync_to_async
+    def _coerce_numeric_types(self, path, payload):
+        """
+        Auto-coerce int↔float to match the existing field's declared type.
+        Mutates payload in-place before validation.
+        """
+        self.device.refresh_from_db(fields=["payload"])
+        existing = self.device.payload or {}
+        parts = [p for p in path.split("/") if p]
+        for p in parts:
+            if isinstance(existing, dict):
+                existing = existing.get(p, {})
+            else:
+                return
+        self._coerce_walk(payload, existing)
+
+    def _coerce_walk(self, incoming, existing):
+        if not isinstance(incoming, dict):
+            return
+        if "type" in incoming and "value" in incoming:
+            if isinstance(existing, dict) and "type" in existing and "value" in existing:
+                it, tt = incoming["type"], existing["type"]
+                iv = incoming["value"]
+                if it == "int" and tt == "float":
+                    incoming["type"] = "float"
+                    incoming["value"] = float(iv) if isinstance(iv, (int, float)) else iv
+                elif it == "float" and tt == "int":
+                    incoming["type"] = "int"
+                    incoming["value"] = int(round(iv)) if isinstance(iv, (int, float)) else iv
+            return
+        if not isinstance(existing, dict):
+            return
+        for key, val in incoming.items():
+            if isinstance(val, dict):
+                self._coerce_walk(val, existing.get(key, {}))
 
     # ===============================================================
     # 🔹 CONNECTION
@@ -212,11 +267,15 @@ class DeviceRealtimeConsumer(AsyncWebsocketConsumer):
                 await self._handle_get(path, data.get("depth"))
 
             elif action == "put":
+                await self._coerce_numeric_types(path, payload)
                 self._validate_payload_types(payload)
+                _normalize_payload_values(payload)
                 await self._handle_put(path, payload)
 
             elif action == "patch":
+                await self._coerce_numeric_types(path, payload)
                 self._validate_payload_types(payload)
+                _normalize_payload_values(payload)
                 await self._handle_patch(path, payload)
 
             elif action == "post":
@@ -856,11 +915,62 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
             if t == "list" and not isinstance(v, list):
                 raise ValueError(f"Field '{key}' expects list")
 
+        # Empty or non-dict → no-op (e.g. an empty branch).
+        if not isinstance(payload, dict) or not payload:
+            return
+
+        # A bare leaf at the top level: { type: "int", value: 1 }.
+        # Control widgets (toggle / button / slider) PUT a single typed
+        # value to a path, so the payload IS the leaf — not a container
+        # of leaves. Validate it directly instead of iterating keys.
+        if "type" in payload and "value" in payload:
+            validate_item("(value)", payload)
+            return
+
         for key, value in payload.items():
             if isinstance(value, dict) and "type" not in value:
                 self._validate_payload_types(value)
             else:
                 validate_item(key, value)
+
+    @database_sync_to_async
+    def _coerce_numeric_types(self, device_id, path, payload):
+        """
+        Auto-coerce int↔float to match the existing field's declared type.
+        Mutates payload in-place before validation.
+        """
+        try:
+            device = Device.objects.get(id=device_id)
+        except Device.DoesNotExist:
+            return
+        existing = device.payload or {}
+        parts = [p for p in path.split("/") if p]
+        for p in parts:
+            if isinstance(existing, dict):
+                existing = existing.get(p, {})
+            else:
+                return
+        self._coerce_walk(payload, existing)
+
+    def _coerce_walk(self, incoming, existing):
+        if not isinstance(incoming, dict):
+            return
+        if "type" in incoming and "value" in incoming:
+            if isinstance(existing, dict) and "type" in existing and "value" in existing:
+                it, tt = incoming["type"], existing["type"]
+                iv = incoming["value"]
+                if it == "int" and tt == "float":
+                    incoming["type"] = "float"
+                    incoming["value"] = float(iv) if isinstance(iv, (int, float)) else iv
+                elif it == "float" and tt == "int":
+                    incoming["type"] = "int"
+                    incoming["value"] = int(round(iv)) if isinstance(iv, (int, float)) else iv
+            return
+        if not isinstance(existing, dict):
+            return
+        for key, val in incoming.items():
+            if isinstance(val, dict):
+                self._coerce_walk(val, existing.get(key, {}))
 
     # ===============================================================
     # 🔹 CONNECT
@@ -987,12 +1097,16 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
                 })
 
             if action == "put":
+                await self._coerce_numeric_types(device_id, path, payload)
                 self._validate_payload_types(payload)
+                _normalize_payload_values(payload)
                 await self._replace_payload(device_id, path, payload)
                 await self._broadcast_device(device_id, "put", path, payload)
 
             elif action == "patch":
+                await self._coerce_numeric_types(device_id, path, payload)
                 self._validate_payload_types(payload)
+                _normalize_payload_values(payload)
                 await self._merge_payload(device_id, path, payload)
                 await self._broadcast_device(device_id, "patch", path, payload)
 

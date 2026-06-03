@@ -4165,21 +4165,27 @@ button { font-family: inherit; }
 }
 .detail-row-text { min-width: 0; }
 .detail-row-name {
-  font-size: 14px;
-  font-weight: 700;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.018em;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .detail-row-sub {
-  margin-top: 2px;
-  font-size: 12px;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  margin-top: 3px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   color: var(--ink-3);
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
 }
 .detail-row-sub code {
   background: rgba(20, 22, 28, 0.05);
@@ -4187,10 +4193,14 @@ button { font-family: inherit; }
   border-radius: 4px;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 11px;
+  font-weight: 600;
 }
 .detail-row-desc {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   margin-top: 4px;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   color: var(--ink-3);
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -4523,6 +4533,17 @@ button { font-family: inherit; }
   transition: opacity 0.18s ease, color 0.18s ease, background 0.18s ease;
 }
 .tree-row:hover .tree-type { opacity: 1; }
+.tree-key-editable,
+.tree-type-editable {
+  cursor: pointer;
+}
+.tree-key-editable:hover {
+  color: var(--accent, #F36A1E);
+}
+.tree-type-editable:hover {
+  background: rgba(243, 106, 30, 0.10);
+  color: var(--accent, #F36A1E);
+}
 
 .tree-row-actions {
   display: inline-flex;
@@ -4648,6 +4669,36 @@ button { font-family: inherit; }
 .tree-add-field.has-error .tree-input {
   border-color: rgba(224, 70, 61, 0.55);
   box-shadow: 0 0 0 3px rgba(224, 70, 61, 0.12);
+}
+.tree-edit-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  background: rgba(243, 106, 30, 0.04);
+  border: 1px solid rgba(243, 106, 30, 0.15);
+  border-radius: 8px;
+}
+.tree-edit-full.has-error {
+  border-color: rgba(224, 70, 61, 0.35);
+}
+.tree-edit-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.tree-input-key {
+  flex: 1;
+  font-weight: 700;
+}
+.tree-input-type {
+  width: 90px;
+  flex-shrink: 0;
+}
+.tree-edit-actions {
+  justify-content: flex-end;
 }
 
 .tree-empty {
@@ -8520,7 +8571,8 @@ body { overflow-x: hidden; }
    horizontal scrollbar rather than collapsing the grid.
    ===================================================================== */
 .db-page {
-  background: #FBF7F1;
+  background: var(--db-page-bg, #FBF7F1);
+  transition: background 0.3s ease;
 }
 .db-page-actions-row {
   display: flex;
@@ -8531,6 +8583,43 @@ body { overflow-x: hidden; }
 }
 .db-preview-btn {
   padding: 6px 14px;
+}
+
+/* Theme picker — small swatches in the dashboard header row that let
+   the user switch between dashboard color themes. */
+.db-theme-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 12px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid #ECE2D2;
+  border-radius: 999px;
+}
+.db-theme-picker-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #5C6378;
+  margin-right: 4px;
+}
+.db-theme-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+  background-clip: padding-box;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.db-theme-swatch:hover { transform: scale(1.08); }
+.db-theme-swatch.is-active {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px rgba(20, 22, 28, 0.25);
 }
 /* Preview mode strips admin chrome — page reads as the end-user view. */
 /* Preview mode — pure full-page dashboard view.
@@ -8543,13 +8632,16 @@ body { overflow-x: hidden; }
 .kiosk-app.is-db-preview .kiosk-topbar { display: none !important; }
 .kiosk-app.is-db-preview .kiosk-foot   { display: none !important; }
 .kiosk-app.is-db-preview {
-  background: #FBF7F1;
+  /* Page background follows the active dashboard theme. Falls back to
+     the original cream when no theme var is set. */
+  background: var(--db-page-bg, #FBF7F1);
   height: 100vh;
   min-height: 0;
   overflow: hidden;
+  transition: background 0.3s ease;
 }
 .db-page.is-preview {
-  background: #FBF7F1;
+  background: var(--db-page-bg, #FBF7F1);
   /* In preview the entire page is the viewport; the shell is pinned
      center and scaled by JS via transform. */
   padding: 0;
@@ -8560,6 +8652,7 @@ body { overflow-x: hidden; }
   min-height: 0;
   overflow: hidden;
   position: relative;
+  transition: background 0.3s ease;
 }
 .db-page.is-preview .db-shell {
   /* Natural authored size — JS applies transform: scale(...) on resize
@@ -8584,6 +8677,12 @@ body { overflow-x: hidden; }
 .db-page.is-preview .db-group-right,
 .db-page.is-preview .db-group-bottom {
   flex: 0 0 auto;
+}
+/* Hide the cell-grid surface in preview mode — the empty cells are an
+   authoring guide and add noise to the polished view. Widgets keep
+   rendering on top because RGL sits in a sibling wrapper. */
+.db-page.is-preview .db-cell-grid {
+  display: none;
 }
 /* Exit-preview chip — pinned to the very top-right of the viewport so
    it sits in the page's outer padding and never overlaps a card. Esc
@@ -8642,16 +8741,31 @@ body { overflow-x: hidden; }
    controls), mirroring the mockup's section grouping. The peach tint is
    very light — closer to cream than orange — to match the reference. */
 .db-group {
-  background: linear-gradient(180deg, #FFF9F2 0%, #FCEEDC 100%);
-  border: 1px solid #F6E4D0;
-  border-radius: 22px;
-  padding: 14px;
+  /* Background, border, cell colors all come from the active dashboard
+     theme via CSS vars set on .db-shell. Peach defaults baked in so
+     the panel still renders if the var isn't set (e.g. legacy code
+     paths or storybook). */
+  position: relative;          /* anchor for ::before grain overlay */
+  background: var(--db-panel-bg,
+    radial-gradient(ellipse 120% 80% at 100% 0%, rgba(255, 222, 192, 0.55), transparent 65%),
+    radial-gradient(ellipse 110% 70% at 0% 100%, rgba(255, 240, 220, 0.45), transparent 70%),
+    linear-gradient(170deg, #FFFBF5 0%, #FCEFD9 60%, #F8E0BC 100%)
+  );
+  border: 1px solid var(--db-panel-border, rgba(246, 228, 208, 0.85));
+  border-radius: 24px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
   min-width: 0;
   min-height: 0;
-  box-shadow: 0 14px 28px -22px rgba(20, 22, 28, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),                 /* top highlight */
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04),                     /* bottom edge */
+    0 1px 2px rgba(20, 22, 28, 0.04),                       /* close shadow */
+    0 18px 36px -24px rgba(20, 22, 28, 0.18),               /* depth shadow */
+    0 4px 12px -6px rgba(20, 22, 28, 0.06);                 /* ambient */
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 .db-group-right {
   display: grid;
@@ -8681,11 +8795,20 @@ body { overflow-x: hidden; }
   align-content: start;
 }
 .db-cell {
-  background: #E7EAF4;
-  border: 1px solid #D9DEEC;
-  border-radius: 4px;
+  /* Translucent fill + themed border so the panel's gradient shows
+     through and the empty grid stays in the same color family as
+     the active theme. */
+  background: var(--db-cell-bg, rgba(255, 255, 255, 0.50));
+  border: 1px solid var(--db-cell-border, rgba(244, 212, 175, 0.55));
+  border-radius: 7px;
   min-width: 0;
   min-height: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.12s ease;
+}
+.db-cell:hover {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: var(--db-accent, rgba(243, 106, 30, 0.50));
 }
 
 /* Container 2 — the cell grid fills the entire panel. A floating +
@@ -8737,19 +8860,37 @@ body { overflow-x: hidden; }
   top: 14px;
   right: 14px;
   z-index: 5;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: #F36A1E;
+  /* Themed accent gradient — light → medium → deep, all from the
+     active dashboard theme. Falls back to peach when no theme set. */
+  background: linear-gradient(135deg,
+    var(--db-accent-light, #FF8A47) 0%,
+    var(--db-accent,       #F36A1E) 60%,
+    var(--db-accent-deep,  #D85510) 100%);
   color: #fff;
   border: 0;
   cursor: pointer;
   display: grid;
   place-items: center;
-  box-shadow: 0 8px 18px -6px rgba(243, 106, 30, 0.55);
-  transition: background 0.15s ease, transform 0.12s ease;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 4px rgba(20, 22, 28, 0.10),
+    0 10px 24px -6px rgba(20, 22, 28, 0.20),
+    0 0 0 4px rgba(20, 22, 28, 0.04);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease;
 }
-.db-c2-add:hover { background: #C95812; transform: scale(1.05); }
+.db-c2-add:hover {
+  transform: scale(1.06);
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 4px 8px rgba(20, 22, 28, 0.15),
+    0 14px 30px -8px rgba(20, 22, 28, 0.25),
+    0 0 0 5px rgba(20, 22, 28, 0.06);
+}
+.db-c2-add:active { transform: scale(0.98); }
 /* RGL wrapper sits inside .db-c2-stage-content at inset:0, sharing the
    exact box with the cell grid so widget edges align with cell edges. */
 .db-c2-rgl-wrap {
@@ -8923,13 +9064,56 @@ body { overflow-x: hidden; }
   line-height: 1.1;
 }
 .db-group-bottom {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  background: linear-gradient(180deg, #FFFDF7 0%, #FCF2E2 100%);   /* a touch lighter than the right panel */
-  /* Keep the bottom strip the same height it had with three control
-     cards inside, so an empty container looks like a placeholder of the
-     same size rather than collapsing to just its padding. */
-  min-height: 260px;
+  position: relative;
+  background: var(--db-panel-bottom-bg,
+    radial-gradient(ellipse 110% 80% at 0% 0%, rgba(255, 222, 192, 0.55), transparent 65%),
+    radial-gradient(ellipse 120% 70% at 100% 100%, rgba(255, 240, 220, 0.45), transparent 70%),
+    linear-gradient(190deg, #FFFDF8 0%, #FCF3E3 60%, #F8E4C6 100%)
+  );
+  /* Fixed height: 4 cells (200px) + 3 gaps (18px) + 16px×2 padding = 250px. */
+  height: 250px;
+  min-height: 250px;
+  max-height: 250px;
+  flex-shrink: 0;
+  gap: 0;
+  padding: 16px;
+}
+.db-c3-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.db-c3-stage-content {
+  position: relative;
+  height: 100%;
+}
+.db-c3-stage-content > .db-cell-grid {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: 0;
+  overflow: hidden;
+}
+.db-c3-stage::-webkit-scrollbar {
+  height: 6px;
+}
+.db-c3-stage::-webkit-scrollbar-track {
+  background: transparent;
+}
+.db-c3-stage::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+}
+.db-c3-stage::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+.db-c3-add {
+  top: 14px;
+  right: 14px;
 }
 .db-sensors {
   display: grid;
@@ -8947,7 +9131,14 @@ body { overflow-x: hidden; }
   border: 1px solid #F4D9C2;
   border-radius: 22px;
   padding: 14px 16px;
-  box-shadow: 0 16px 32px -22px rgba(20, 22, 28, 0.18);
+  /* Soft inner highlight at the top edge gives every card a subtle glass
+     /acrylic feel — simulates light catching the top surface. Bottom
+     inset adds a hairline shadow that crisps the lower edge. Outer
+     ambient + drop shadows preserve the depth they had before. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    inset 0 -1px 0 rgba(20, 22, 28, 0.04),
+    0 16px 32px -22px rgba(20, 22, 28, 0.18);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -9057,24 +9248,59 @@ body { overflow-x: hidden; }
    Camera card
    ===================================================================== */
 .db-cam-card {
-  padding: 14px 14px 14px 14px;
+  /* Same 16 px padding as the .db-group widget panel next to it, so
+     the inner inset reads identically on both containers — the
+     camera and widget areas line up visually with the same warm
+     frame thickness. The background + border come from the active
+     dashboard theme so the camera frame matches the panel beside it. */
+  position: relative;
+  padding: 16px;
+  gap: 10px;
+  background: var(--db-panel-bg,
+    linear-gradient(180deg, #FFF6EE 0%, #FBE5D2 100%)
+  ) !important;
+  border-color: var(--db-panel-border, #F4D9C2) !important;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 .db-cam-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  padding: 2px 4px 0;
 }
 .db-cam-head-title h2 {
   font-family: 'Manrope', system-ui, sans-serif;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   margin: 0;
   color: #14161C;
+  line-height: 1.15;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 .db-cam-head-sub {
-  font-size: 11.5px;
+  font-size: 12px;
+  font-weight: 500;
   color: #8c8377;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.db-cam-head-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--db-accent, #F36A1E) 14%, transparent);
+  color: var(--db-accent-deep, #A8400B);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 .db-power-btn {
   width: 34px; height: 34px;
@@ -9092,15 +9318,28 @@ body { overflow-x: hidden; }
   position: relative;
   flex: 1;
   min-height: 220px;
-  border-radius: 16px;
+  min-width: 0;
+  /* Slightly smaller than the card's outer 22 px radius so the inner
+     player corners nest cleanly inside the card's peach frame. */
+  border-radius: 14px;
   overflow: hidden;
-  background: #14161C;
+  /* Layered dark surface: subtle gradient from #1A1B22 → #0E1015 gives
+     the inactive surround more depth than a flat black. The iframe
+     itself sits inset:0 inside this dark frame. */
+  background: linear-gradient(180deg, #1A1B22 0%, #0E1015 100%);
+  /* Subtle inner highlight + hairline ring for edge definition. The
+     parent card already carries the drop shadow, so the player
+     itself only needs the inner accents. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 .db-cam-frame {
   position: absolute;
   inset: 0;
   width: 100%; height: 100%;
   border: 0;
+  display: block;
 }
 .db-cam-placeholder {
   position: absolute;
@@ -9110,7 +9349,10 @@ body { overflow-x: hidden; }
   color: #cbb89e;
   text-align: center;
   padding: 12px;
-  background: #1f1c19;
+  /* Match the player's layered dark gradient so the placeholder
+     reads as part of the same surface, not a flat patch. */
+  background: linear-gradient(180deg, #1F1C19 0%, #15110E 100%);
+  gap: 8px;
 }
 
 /* LIVE pill over the player */
@@ -9139,42 +9381,48 @@ body { overflow-x: hidden; }
 .db-cam-live-dot.is-on  { animation: dash-pulse 1.4s infinite; }
 .db-cam-live-dot.is-off { background: #9c9389; }
 
-/* Camera switcher over the player */
+/* Camera switcher — sits in the card header, not over the player.
+   Pill-shaped chip with theme-tinted background so it inherits the
+   dashboard color identity. Stays a positioning context for the
+   dropdown menu below it. */
 .db-cam-switcher {
-  position: absolute;
-  top: 10px; right: 10px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: rgba(20, 22, 28, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--db-accent, #F36A1E) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--db-accent, #F36A1E) 24%, transparent);
   padding: 3px 4px;
   border-radius: 999px;
-  color: #fff;
+  color: var(--db-accent-deep, #A8400B);
   z-index: 3;
+  flex-shrink: 0;
 }
 .db-cam-chev {
   width: 24px; height: 24px;
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: #fff;
+  color: inherit;
   display: grid; place-items: center;
   cursor: pointer;
   opacity: 0.85;
+  transition: background 0.12s ease, opacity 0.12s ease;
 }
-.db-cam-chev:hover { background: rgba(255, 255, 255, 0.14); opacity: 1; }
+.db-cam-chev:hover {
+  background: color-mix(in srgb, var(--db-accent, #F36A1E) 18%, transparent);
+  opacity: 1;
+}
 .db-cam-select {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   background: transparent;
   border: 0;
-  color: #fff;
-  font-weight: 600;
+  color: inherit;
+  font-weight: 700;
   font-size: 12px;
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: 999px;
   cursor: pointer;
   white-space: nowrap;
@@ -9537,19 +9785,125 @@ body { overflow-x: hidden; }
 /* =====================================================================
    Responsive — viewport-level fallback so the page degrades on phones
    ===================================================================== */
+@media (max-width: 980px) {
+  /* Tablet: actions row wraps so the theme picker isn't squeezed. */
+  .db-page-actions-row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .db-theme-picker {
+    margin-left: 0;
+    margin-right: 0;
+    overflow-x: auto;
+    max-width: 100%;
+    scrollbar-width: thin;
+  }
+  .db-theme-picker::-webkit-scrollbar { height: 4px; }
+  .db-theme-picker::-webkit-scrollbar-thumb { background: rgba(20, 22, 28, 0.18); border-radius: 999px; }
+}
+
 @media (max-width: 720px) {
+  /* Tighten the page padding so widgets aren't squeezed by the global
+     admin-page rule that adds 24/36 px of horizontal whitespace. */
+  .db-page,
+  .db-page.admin-page {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 12px;
+  }
   .db-shell {
     min-width: 0;
+    gap: 10px;
   }
+  /* Stack the top container (camera + widget grid) vertically. */
   .db-top {
     grid-template-columns: 1fr;
   }
   .db-group-right {
     grid-template-rows: auto auto;
+    min-height: 280px;
   }
   .db-group-bottom {
     grid-template-columns: 1fr;
+    /* Free the bottom panel from its 250px desktop height so it can grow
+       to fit one or two rows of widgets without inner scrolling. */
+    height: auto;
+    min-height: 220px;
+    max-height: none;
   }
+  /* Reduce panel padding so cards have room to breathe on a narrow screen. */
+  .db-group,
+  .db-group-bottom {
+    padding: 12px;
+    border-radius: 18px;
+  }
+  /* Camera card — smaller minimum height so the player doesn't dominate
+     the viewport on phones, and the title row tightens. */
+  .db-cam-card .db-cam-player { min-height: 180px; }
+  .db-cam-head-title h2 { font-size: 15px; gap: 8px; }
+  .db-cam-switcher { padding: 2px 3px; }
+  .db-cam-select { font-size: 11px; max-width: 130px; padding: 3px 6px; }
+  /* Sensors area inside the right panel collapses to single column. */
+  .db-sensors {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  /* Header row: back link + theme picker + preview, each on its own row
+     when the line wraps. */
+  .db-page-actions-row {
+    justify-content: flex-start;
+  }
+  .back-link {
+    font-size: 13px;
+  }
+  .db-preview-btn {
+    padding: 5px 12px;
+    font-size: 13px;
+  }
+  /* Container 2 stage padding — give the widget grid more room. */
+  .db-c2-stage { inset: 10px; }
+  /* "+" add-widget button — slightly smaller so it doesn't crowd the
+     panel corner on narrow screens. */
+  .db-c2-add {
+    width: 34px;
+    height: 34px;
+    top: 10px;
+    right: 10px;
+  }
+  .db-c3-add {
+    top: 10px;
+    right: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Phones: shrink swatch chips, smaller cards, scroll the theme picker. */
+  .db-theme-swatch {
+    width: 18px;
+    height: 18px;
+  }
+  .db-theme-picker-label {
+    font-size: 10.5px;
+  }
+  /* Title block in the actions row drops the "Back to" text for an icon. */
+  .back-link {
+    font-size: 12px;
+  }
+  /* Tighter spacing all around. */
+  .db-page,
+  .db-page.admin-page {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  .db-group,
+  .db-group-bottom {
+    padding: 10px;
+    border-radius: 16px;
+  }
+  /* Camera card title shrinks one more step. */
+  .db-cam-head-title h2 { font-size: 14px; }
+  .db-cam-head-badge { font-size: 9px; padding: 1px 6px; }
+  .db-cam-card .db-cam-player { min-height: 150px; }
 }
 
 /* =====================================================================
@@ -9705,6 +10059,126 @@ body { overflow-x: hidden; }
   }
 }
 
+/* ---------- Widget typography override ----------
+   Force Plus Jakarta Sans on EVERY element that's part of a widget,
+   including:
+     • .cv-card and its descendants (card / control / dial / fill /
+       chart variant surfaces — the picker preview and the dashboard)
+     • .db-card and descendants (camera card, legacy card chrome)
+     • .db-card-wrap and descendants (the dashboard's widget wrapper —
+       catches edit/delete overlay buttons and any chrome that sits
+       OUTSIDE the inner cv-card)
+     • SVG <text> nodes inside any of the above — SVG text doesn't
+       always inherit font-family from CSS in every browser, so we
+       set it explicitly.
+   Beats every per-element `font-family: 'Inter' | 'Manrope'` rule that
+   was previously baked into individual widget styles. */
+.cv-card,
+.cv-card *,
+.db-card,
+.db-card *,
+.db-card-wrap,
+.db-card-wrap *,
+.cv-card svg text,
+.db-card svg text,
+.db-card-wrap svg text,
+.db-cam-card,
+.db-cam-card * {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+}
+/* ---------- Admin-page typography override ----------
+   Apply the same Plus Jakarta Sans family + slightly tighter tracking
+   to every admin surface so the Applications list, ApplicationDetail,
+   Users, Roles, etc. read in the same heavy, modern voice as the
+   public landing. Catches any per-rule `font-family: 'Inter'` /
+   `'Manrope'` declarations baked into individual styles. */
+.admin-page,
+.admin-page *,
+.app-card-v2,
+.app-card-v2 *,
+.app-hero,
+.app-hero *,
+.app-body,
+.app-body * {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+}
+/* Application list titles and labels — heavier weight, tighter tracking
+   to match the reference look. */
+.app-card-v2 .app-name,
+.admin-page-title {
+  font-weight: 800 !important;
+  letter-spacing: -0.018em !important;
+}
+.app-card-v2 .app-desc,
+.app-card-v2 .app-meta-label,
+.app-card-v2 .app-meta-date,
+.app-meta-row {
+  font-weight: 600 !important;
+  letter-spacing: -0.005em !important;
+}
+/* Number / metadata bits inside admin tables and cards get tabular
+   numerals so columns line up. */
+.admin-page .app-meta-date,
+.admin-page .app-meta-label,
+.admin-page time,
+.admin-page .num,
+.admin-page .count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Widget DATA values — explicitly styled to match the reference look:
+   heavy Plus Jakarta Sans (weight 800), tabular numerals so columns
+   align, tight tracking (-0.025em / -0.03em for the biggest values),
+   condensed line-height so a 2-line value doesn't break the card.
+   Anchored to .cv-card / .db-card-wrap (+ descendants) so it lights up
+   every variant: hero values, mid values, gauge centers, stat tiles,
+   units, deltas, and dial readouts. */
+.cv-card .cv-big,
+.cv-card .cv-mid,
+.cv-card .cv-value,
+.cv-card .cv-stat-value,
+.cv-card .cv-stat-num,
+.cv-card .cv-delta,
+.cv-card .dial-value,
+.db-card-wrap .cv-big,
+.db-card-wrap .cv-mid,
+.db-card-wrap .cv-value,
+.db-card-wrap .cv-stat-value,
+.db-card-wrap .cv-stat-num,
+.db-card-wrap .cv-delta,
+.db-card-wrap .dial-value {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums !important;
+  letter-spacing: -0.025em !important;
+  line-height: 1.05 !important;
+  font-feature-settings: 'ss01', 'ss02';
+}
+.cv-card .cv-big,
+.db-card-wrap .cv-big {
+  letter-spacing: -0.035em !important;
+  line-height: 1 !important;
+}
+/* Units (°, °C, Mbps, etc) — slightly less heavy, opaque-but-secondary
+   so the number stays the visual hero. Same family + tabular nums. */
+.cv-card .cv-unit,
+.db-card-wrap .cv-unit {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums !important;
+  letter-spacing: -0.01em !important;
+}
+/* Stat labels and sub copy — uppercase + spaced caps for the "DEVICES
+   ONLINE" caption look from the reference. */
+.cv-card .cv-stat-label,
+.cv-card .cv-sub,
+.db-card-wrap .cv-stat-label,
+.db-card-wrap .cv-sub {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.005em !important;
+}
+
 /* ---------- Card variant gallery (rendered when Cards is selected) ---------- */
 .card-gallery {
   display: grid;
@@ -9758,7 +10232,13 @@ body { overflow-x: hidden; }
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: 0 1px 2px rgba(20, 22, 28, 0.04);
+  /* Glass-edge highlight: 1px white top + 1px hairline bottom inside the
+     border, plus the existing ambient shadow. Reads as a subtle "lit
+     from above" surface across every card variant. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(20, 22, 28, 0.05),
+    0 1px 2px rgba(20, 22, 28, 0.04);
   position: relative;
   overflow: hidden;          /* keep the decoration anchored inside */
   /* Inter for the whole card — title, labels, units, values. Matches
@@ -9777,10 +10257,17 @@ body { overflow-x: hidden; }
 }
 .cv-title {
   font-size: 14px;
-  font-weight: 800;        /* heavy title like the reference "Temperature" */
-  color: inherit;          /* follow the card palette's text color */
+  font-weight: 800;
+  color: inherit;
   line-height: 1.2;
   letter-spacing: -0.01em;
+}
+.cv-desc {
+  font-size: clamp(10px, 2.6cqmin, 12px);
+  font-weight: 500;
+  opacity: 0.55;
+  line-height: 1.3;
+  margin-top: 1px;
 }
 
 /* Simple Card 1 — value + label centered in the body */
@@ -9873,6 +10360,7 @@ body { overflow-x: hidden; }
 }
 .cv-delta.up   { color: #1FAE6B; }
 .cv-delta.down { color: #DC4646; }
+.cv-delta.flat { color: #8C8C8C; }      /* equal — neutral gray, no direction */
 
 /* circular icon chip — same family as accent-soft / accent */
 .cv-ic {
@@ -9984,6 +10472,1003 @@ body { overflow-x: hidden; }
 }
 .cv-pill.warn { background: rgba(243, 106, 30, 0.12); color: var(--accent); }
 .cv-pill.warn::before { box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.18); }
+.cv-pill.flat { background: rgba(140, 140, 140, 0.16); color: #6E6E6E; }
+.cv-pill.flat::before { box-shadow: 0 0 0 3px rgba(140, 140, 140, 0.18); }
+
+/* =====================================================================
+   Control widgets — card-styled interactive UIs. Each variant uses
+   .ctrl-card on top of .cv-card so they share the same chrome
+   (gradient, padding, shadow) as the data cards. Body classes per
+   variant arrange the control's interior (toggle / button / slider /
+   stepper / chip row / fan bars / input row).
+   ===================================================================== */
+/* Control cards use the same card surface system as data cards —
+   background + text + sub-color come from cardStyleFor() via inline
+   style so the user can pick any card colour. The --ctrl-btn vars
+   default to a warm brown (matches peach) but adapt when a different
+   palette is chosen via inherit/currentColor tricks. */
+.ctrl-card {
+  gap: clamp(10px, 3cqmin, 16px);
+  /* Fallback peach — overridden by inline cardStyleFor() on render. */
+  background: linear-gradient(135deg, #FFEFD9 0%, #FFD3A6 100%);
+  color: #3D2A18;
+  --cv-sub-color: #896241;
+  --ctrl-btn-from: #8B5A2E;
+  --ctrl-btn-to:   #6B4520;
+  padding: clamp(14px, 4.5cqmin, 22px);
+}
+/* ── Header row — icon · titles · (readout | toggle) ── */
+.ctrl-card-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 3cqmin, 14px);
+  min-width: 0;
+  width: 100%;
+}
+.ctrl-card-titles {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ctrl-card-titles .cv-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: clamp(13px, 4cqmin, 17px);
+  font-weight: 800;
+}
+.ctrl-card-titles .cv-sub {
+  font-size: clamp(11px, 3cqmin, 13px);
+}
+.ctrl-card-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-shrink: 0;
+}
+/* ── Icon chip — accent circle, scales with card ── */
+.ctrl-card-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(38px, 14cqmin, 58px);
+  height: clamp(38px, 14cqmin, 58px);
+  border-radius: 50%;
+  background: rgba(107, 69, 32, 0.14);     /* warm brown tint to match card */
+  flex-shrink: 0;
+}
+.ctrl-card-ic img,
+.ctrl-card-ic svg { width: 60%; height: 60%; }
+/* Legacy body wrapper */
+.ctrl-card-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+}
+.ctrl-card-sub { margin-top: 0; }
+
+/* ── All control cards — vertically center content in the card ── */
+.ctrl-card {
+  justify-content: center;
+  align-items: stretch;
+}
+
+/* ── Toggle Card — header + centered toggle + status label ── */
+.ctrl-card-toggle {
+  align-items: stretch;
+}
+.ctrl-card-toggle.is-on {
+  box-shadow:
+    0 1px 2px rgba(20, 22, 28, 0.04),
+    0 0 0 1px rgba(107, 69, 32, 0.22) inset,
+    0 0 20px -4px rgba(107, 69, 32, 0.20);
+}
+.ctrl-toggle-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 2.5cqmin, 14px);
+}
+/* Larger toggle for the dedicated Toggle Card so it's the visual
+   centrepiece of the widget, not an afterthought. */
+.ctrl-switch-lg {
+  width: clamp(72px, 26cqmin, 120px);
+  height: clamp(38px, 14cqmin, 64px);
+}
+.ctrl-toggle-status {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: clamp(12px, 3.4cqmin, 16px);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cv-sub-color, #896241);
+  transition: color 0.18s ease;
+}
+.ctrl-toggle-status.is-on {
+  color: var(--ctrl-btn-to, #6B4520);
+}
+
+/* ── Single Action Card — icon+titles top, full-width button bottom ── */
+.ctrl-card-single {
+  justify-content: center;
+}
+.ctrl-card-single .ctrl-action-btn {
+  width: 100%;
+  text-align: center;
+  padding-top: clamp(10px, 3cqmin, 16px);
+  padding-bottom: clamp(10px, 3cqmin, 16px);
+  border-radius: 14px;
+  font-size: clamp(14px, 4cqmin, 18px);
+}
+/* Small text below the button showing what the next click sends. */
+.ctrl-send-hint {
+  text-align: center;
+  font-size: clamp(10px, 2.6cqmin, 12px);
+  font-weight: 600;
+  color: var(--cv-sub-color, #896241);
+  opacity: 0.75;
+  letter-spacing: 0.02em;
+}
+
+/* ── Multi Action Card / button row ── */
+.ctrl-btn-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+.ctrl-btn-sm {
+  padding: clamp(7px, 2.2cqmin, 11px) clamp(12px, 3.5cqmin, 18px);
+  font-size: clamp(12px, 3cqmin, 14px);
+  border-radius: 999px;
+  flex: 1 1 0;
+  min-width: 70px;
+  text-align: center;
+}
+
+/* ── Stepper Card ── */
+.ctrl-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 3cqmin, 18px);
+  width: 100%;
+}
+.ctrl-step-btn {
+  width: clamp(38px, 13cqmin, 58px);
+  height: clamp(38px, 13cqmin, 58px);
+  border-radius: 50%;
+  border: 0;
+  background: linear-gradient(135deg, var(--ctrl-btn-from, #8B5A2E) 0%, var(--ctrl-btn-to, #6B4520) 100%);
+  color: #fff;
+  font-family: inherit;
+  font-size: clamp(18px, 5cqmin, 28px);
+  font-weight: 700;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 3px 8px -2px rgba(107, 69, 32, 0.35);
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+.ctrl-step-btn:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.ctrl-step-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.ctrl-step-value {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+}
+
+/* ── Number / Text input rows ── */
+.ctrl-input-row { width: 100%; }
+.ctrl-input-unit {
+  font-size: clamp(12px, 3.2cqmin, 14px);
+  color: var(--cv-sub-color, #896241);
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* ── ActionsEditor (configure form) ── */
+.ctrl-actions-editor {
+  margin-top: 10px;
+  padding: 12px 14px 14px;
+  border: 1px dashed #E4DACE;
+  border-radius: 10px;
+  background: rgba(255, 249, 240, 0.6);
+}
+.ctrl-actions-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.ctrl-actions-head .form-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent, #F36A1E);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ctrl-actions-list { display: flex; flex-direction: column; gap: 6px; }
+.ctrl-actions-row { display: flex; gap: 6px; align-items: center; }
+.ctrl-actions-row.has-error .ctrl-actions-input.input-error {
+  border-color: rgba(224, 70, 61, .55);
+}
+.ctrl-actions-row.has-error .ctrl-actions-input.input-error:focus {
+  border-color: rgba(224, 70, 61, .8);
+  box-shadow: 0 0 0 2px rgba(224, 70, 61, .12);
+}
+.ctrl-actions-input,
+.ctrl-actions-select {
+  flex: 1;
+  padding: 7px 10px;
+  border: 1px solid #E4E0D6;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  min-width: 0;
+  background: #fff;
+}
+.ctrl-actions-input:focus,
+.ctrl-actions-select:focus {
+  outline: none;
+  border-color: var(--accent, #F36A1E);
+  box-shadow: 0 0 0 2px rgba(243, 106, 30, 0.10);
+}
+.ctrl-actions-select { flex: 0 0 90px; }
+
+/* ── Target group wrapper (per-binding actions) ── */
+.ctrl-target-group {
+  border: 1px solid #F1E6D6;
+  border-radius: 10px;
+  background: #FFFBF5;
+  padding: 12px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.ctrl-target-group + .ctrl-target-group { margin-top: 10px; }
+.ctrl-target-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ctrl-target-num {
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--accent, #F36A1E);
+  letter-spacing: 0.04em;
+}
+.ctrl-add-target {
+  margin-top: 10px;
+  align-self: flex-start;
+}
+.ctrl-minmax-group {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #F1E6D6;
+  border-radius: 10px;
+  background: #FFFBF5;
+}
+
+/* ── Toggle Switch — redesigned with depth + glow ── */
+.ctrl-switch {
+  position: relative;
+  width: clamp(62px, 22cqmin, 100px);
+  height: clamp(34px, 12cqmin, 56px);
+  border: 0;
+  border-radius: 999px;
+  /* Off-state track uses the card palette's muted sub-colour so the
+     switch "belongs" to the card regardless of which colour is picked. */
+  background: linear-gradient(180deg,
+    var(--ctrl-switch-off-from, rgba(137,98,65,0.35)) 0%,
+    var(--ctrl-switch-off-to,   rgba(137,98,65,0.25)) 100%);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: background 0.22s ease, box-shadow 0.22s ease;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.10),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.ctrl-switch.is-on {
+  background: linear-gradient(135deg, var(--ctrl-btn-from, #8B5A2E) 0%, var(--ctrl-btn-to, #6B4520) 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.15),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06),
+    0 0 0 4px rgba(107, 69, 32, 0.14),
+    0 0 14px -2px rgba(107, 69, 32, 0.30);
+}
+.ctrl-switch-knob {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  transform: translateY(-50%);
+  width: calc(100% * 0.44);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F0ECE6 100%);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 4px 10px -2px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  transition: left 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ctrl-switch.is-on .ctrl-switch-knob {
+  left: calc(100% - 4px - (100% * 0.44));
+}
+.ctrl-switch:active:not(:disabled) .ctrl-switch-knob {
+  width: calc(100% * 0.50);              /* squish wider on press */
+}
+.ctrl-switch:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── Press Switch — physical momentary push-button look ── */
+.ctrl-press-switch {
+  position: relative;
+  width: clamp(60px, 22cqmin, 110px);
+  height: clamp(60px, 22cqmin, 110px);
+  border-radius: 50%;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  /* Layered 3D button: outer ring + raised surface + inner glow */
+  background:
+    radial-gradient(circle at 30% 30%,
+      rgba(255,255,255,0.35), transparent 50%),
+    linear-gradient(180deg, var(--ctrl-btn-from, #8B5A2E) 0%, var(--ctrl-btn-to, #6B4520) 100%);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.25),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.20),
+    0 4px 8px rgba(0, 0, 0, 0.15),
+    0 0 0 5px rgba(107, 69, 32, 0.12),
+    0 0 0 8px rgba(107, 69, 32, 0.06);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.ctrl-press-switch:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.30),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.22),
+    0 6px 12px rgba(0, 0, 0, 0.18),
+    0 0 0 6px rgba(107, 69, 32, 0.16),
+    0 0 0 10px rgba(107, 69, 32, 0.08);
+}
+.ctrl-press-switch:active:not(:disabled) {
+  transform: scale(0.94);
+  box-shadow:
+    inset 0 3px 8px rgba(0, 0, 0, 0.30),
+    0 1px 3px rgba(0, 0, 0, 0.12),
+    0 0 0 4px rgba(107, 69, 32, 0.10);
+}
+.ctrl-press-switch:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Active (ON) state — brighter glow ring, radiates outward. */
+.ctrl-press-switch.is-on {
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.30),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.22),
+    0 4px 8px rgba(0, 0, 0, 0.18),
+    0 0 0 6px rgba(107, 69, 32, 0.22),
+    0 0 0 10px rgba(107, 69, 32, 0.10),
+    0 0 32px rgba(107, 69, 32, 0.40);
+}
+.ctrl-press-switch svg,
+.ctrl-press-switch img { width: 44%; height: 44%; }
+
+/* ── Dual Toggle — two toggles stacked with individual labels ── */
+.ctrl-dual-row {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 3cqmin, 16px);
+  width: 100%;
+}
+.ctrl-dual-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: clamp(8px, 2.5cqmin, 12px) clamp(10px, 3cqmin, 14px);
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 12px;
+  border: 1px solid rgba(107, 69, 32, 0.10);
+}
+.ctrl-dual-label {
+  font-size: clamp(12px, 3.2cqmin, 15px);
+  font-weight: 700;
+  color: inherit;
+}
+.ctrl-dual-sub {
+  font-size: clamp(10px, 2.6cqmin, 12px);
+  color: var(--cv-sub-color, #896241);
+}
+
+/* ── Press Switch card — center the big button in remaining space ── */
+.ctrl-card-press {
+  align-items: center;
+}
+.ctrl-card-press .ctrl-press-switch {
+  margin: auto;
+}
+
+/* ── Action Button — dark solid base ──
+   A dark, high-contrast button that sits naturally on the warm peach
+   card surface. Same visual weight as the "Send" buttons so every
+   control card reads as one cohesive family. */
+.ctrl-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(9px, 2.8cqmin, 14px) clamp(18px, 5cqmin, 28px);
+  border-radius: 999px;
+  border: 0;
+  background: linear-gradient(135deg, var(--ctrl-btn-from, #8B5A2E) 0%, var(--ctrl-btn-to, #6B4520) 100%);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: clamp(13px, 3.6cqmin, 17px);
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 4px 14px -3px rgba(107, 69, 32, 0.40);
+  transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.18s ease;
+}
+.ctrl-action-btn:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.ctrl-action-btn:active:not(:disabled) { transform: translateY(0); filter: brightness(0.95); }
+.ctrl-action-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Active state for toggle buttons — bright white surface that pops
+   against the card. Uses the card's btn colour for the ring + text
+   so it stays in-palette regardless of which card colour is picked. */
+.ctrl-action-btn.is-active {
+  background: #fff;
+  color: var(--ctrl-btn-to, #6B4520);
+  font-weight: 800;
+  box-shadow:
+    0 0 0 2.5px var(--ctrl-btn-to, #6B4520),
+    0 4px 14px -3px rgba(0, 0, 0, 0.18),
+    0 0 12px rgba(255, 255, 255, 0.50);
+  transform: translateY(-1px);
+}
+.ctrl-action-btn.is-active:hover:not(:disabled) {
+  background: #fff;
+  filter: none;
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 2.5px var(--ctrl-btn-to, #6B4520),
+    0 6px 18px -4px rgba(0, 0, 0, 0.22),
+    0 0 18px rgba(255, 255, 255, 0.60);
+}
+
+/* ─── Per-style button variants ─── */
+
+/* Pill = default (matches the base above — no override needed).      */
+.ctrl-style-button { /* uses base */ }
+
+/* Square — sharp corners, solid fill, slightly tighter padding. */
+.ctrl-style-button_square {
+  border-radius: 8px;
+  padding: clamp(10px, 3cqmin, 16px) clamp(16px, 5cqmin, 28px);
+}
+
+/* Outline — transparent fill, accent border, accent text. Hover
+   inverts (accent fill, white text) for a clear pressed feedback. */
+.ctrl-style-button_outline {
+  background: transparent;
+  color: var(--db-accent, #F36A1E);
+  border: 2px solid var(--db-accent, #F36A1E);
+  padding: calc(clamp(8px, 2.5cqmin, 14px) - 2px) calc(clamp(14px, 4.5cqmin, 26px) - 2px);
+  box-shadow: none;
+}
+.ctrl-style-button_outline:hover:not(:disabled) {
+  background: var(--db-accent, #F36A1E);
+  color: #fff;
+  filter: none;
+}
+
+/* Ghost — barely-there fill, accent text. Hover surfaces a soft fill. */
+.ctrl-style-button_ghost {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--db-accent, #F36A1E);
+  box-shadow: none;
+  font-weight: 600;
+}
+.ctrl-style-button_ghost:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  filter: none;
+}
+
+/* CTA — large, wide, prominent. For "primary" actions like "Start" /
+   "Confirm". Inherits the gradient fill but wider + bigger text. */
+.ctrl-style-button_cta {
+  padding: clamp(12px, 3.5cqmin, 20px) clamp(24px, 6cqmin, 44px);
+  font-size: clamp(15px, 4.2cqmin, 22px);
+  letter-spacing: 0.02em;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 8px 20px -4px rgba(20, 22, 28, 0.30),
+    0 2px 4px rgba(20, 22, 28, 0.12);
+}
+
+/* Glow — futuristic vibe: gradient + neon halo around the button. */
+.ctrl-style-button_glow {
+  border-radius: 12px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(243, 106, 30, 0.55),
+    0 0 36px rgba(243, 106, 30, 0.30);
+}
+.ctrl-style-button_glow:hover:not(:disabled) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.40),
+    0 0 0 1px rgba(255, 255, 255, 0.25),
+    0 0 26px rgba(243, 106, 30, 0.70),
+    0 0 50px rgba(243, 106, 30, 0.40);
+}
+
+/* Icon — circular, fixed aspect, just an icon (Iconify) inside. */
+.ctrl-style-button_icon {
+  width: clamp(44px, 16cqmin, 80px);
+  height: clamp(44px, 16cqmin, 80px);
+  padding: 0;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.30),
+    0 6px 16px -4px rgba(20, 22, 28, 0.25);
+}
+
+/* Power — large circular button with a power icon. Has a glowing
+   ring that intensifies on hover. */
+.ctrl-style-button_power {
+  width: clamp(60px, 22cqmin, 110px);
+  height: clamp(60px, 22cqmin, 110px);
+  padding: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--db-accent-light, #FF8A47), var(--db-accent-deep, #D85510));
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.30),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.25),
+    0 4px 8px rgba(0, 0, 0, 0.20),
+    0 0 0 5px rgba(243, 106, 30, 0.18),
+    0 0 28px rgba(243, 106, 30, 0.40);
+}
+.ctrl-style-button_power:hover:not(:disabled) {
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.40),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.30),
+    0 6px 12px rgba(0, 0, 0, 0.25),
+    0 0 0 6px rgba(243, 106, 30, 0.24),
+    0 0 40px rgba(243, 106, 30, 0.55);
+}
+
+/* ── Level Control — − button | bar | + button ── */
+.ctrl-level-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 2.5cqmin, 14px);
+  width: 100%;
+}
+.ctrl-level-track {
+  flex: 1;
+  height: clamp(10px, 3cqmin, 16px);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.ctrl-level-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ctrl-btn-from, #8B5A2E), var(--ctrl-btn-to, #6B4520));
+  transition: width 0.2s ease;
+  min-width: 0;
+}
+
+/* ── Text Input + Send ── */
+.ctrl-input-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+}
+.ctrl-text-input {
+  flex: 1;
+  min-width: 0;
+  padding: clamp(8px, 2.5cqmin, 12px) clamp(10px, 3cqmin, 14px);
+  border: 1px solid rgba(107, 69, 32, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: clamp(13px, 3.5cqmin, 16px);
+  color: inherit;
+}
+.ctrl-text-input:focus {
+  outline: none;
+  border-color: var(--ctrl-btn-from, #8B5A2E);
+  box-shadow: 0 0 0 3px rgba(107, 69, 32, 0.15);
+}
+.ctrl-text-input:disabled { opacity: 0.55; }
+.ctrl-input-send {
+  padding: clamp(8px, 2.5cqmin, 12px) clamp(14px, 4cqmin, 20px);
+  border-radius: 8px;
+  border: 0;
+  background: linear-gradient(135deg, var(--ctrl-btn-from, #8B5A2E) 0%, var(--ctrl-btn-to, #6B4520) 100%);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: clamp(12px, 3.2cqmin, 15px);
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 2px 6px -2px rgba(107, 69, 32, 0.35);
+}
+.ctrl-input-send:hover:not(:disabled) { filter: brightness(1.15); }
+.ctrl-input-send:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ── List entry ── */
+.ctrl-card-list {
+  gap: 8px;
+  overflow: hidden;
+}
+.ctrl-card-list > .ctrl-card-row {
+  flex-shrink: 0;
+}
+.ctrl-list-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ctrl-list-input {
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 30px;
+  padding: clamp(8px, 2.5cqmin, 12px) clamp(10px, 3cqmin, 14px);
+  border: 1px solid rgba(107, 69, 32, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  font-family: 'Space Grotesk', monospace;
+  font-size: clamp(11px, 2.8cqmin, 13px);
+  color: inherit;
+  resize: none;
+  line-height: 1.5;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+.ctrl-list-input:focus {
+  outline: none;
+  border-color: var(--ctrl-btn-from, #8B5A2E);
+  box-shadow: 0 0 0 3px rgba(107, 69, 32, 0.15);
+}
+.ctrl-list-input.input-error {
+  border-color: rgba(224, 70, 61, 0.55);
+}
+.ctrl-list-input.input-error:focus {
+  border-color: rgba(224, 70, 61, 0.7);
+  box-shadow: 0 0 0 3px rgba(224, 70, 61, 0.12);
+}
+.ctrl-list-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ctrl-list-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.ctrl-list-meta {
+  flex: 1;
+  min-width: 0;
+}
+.ctrl-list-err {
+  font-size: 11px;
+  color: #e0463d;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.ctrl-list-count {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.45;
+}
+
+/* =====================================================================
+   DIAL / GAUGE WIDGETS
+   ===================================================================== */
+.dial-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  min-height: 0;
+  gap: clamp(2px, 1cqmin, 6px);
+  overflow: hidden;
+}
+.dial-svg {
+  width: clamp(100px, 60cqmin, 240px);
+  max-height: 100%;
+  height: auto;
+  display: block;
+  color: inherit;
+  flex-shrink: 1;
+}
+/* ── Center overlay (ring / full dial / full circle) ── */
+.dial-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  pointer-events: none;
+}
+/* ── Bottom readout (solid gauge, semi dial, progress dial) ── */
+.dial-readout {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: clamp(4px, 1.5cqmin, 8px);
+}
+.dial-value {
+  font-size: clamp(20px, 9cqmin, 42px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: inherit;
+}
+.dial-value-lg {
+  font-size: clamp(24px, 11cqmin, 52px);
+}
+.dial-unit {
+  font-size: clamp(10px, 3cqmin, 15px);
+  font-weight: 600;
+  opacity: 0.45;
+}
+.dial-of {
+  font-size: clamp(10px, 3cqmin, 13px);
+  font-weight: 600;
+  opacity: 0.4;
+}
+.dial-range-row {
+  display: flex;
+  justify-content: space-between;
+  width: 86%;
+  margin-top: 0;
+}
+.dial-range-arc {
+  position: absolute;
+  bottom: 6%;
+  left: 12%;
+  right: 12%;
+  width: auto;
+}
+.dial-range-label {
+  font-size: clamp(9px, 2.5cqmin, 11px);
+  font-weight: 600;
+  opacity: 0.38;
+}
+.dial-svg-label {
+  font-size: 6.5px;
+  font-weight: 700;
+  fill: currentColor;
+  opacity: 0.5;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.dial-svg-label-lg {
+  font-size: 8px;
+  font-weight: 800;
+  opacity: 0.55;
+}
+
+/* ── Dial preview in config frame ── */
+.card-config-preview-frame .dial-wrap {
+  min-height: 150px;
+}
+.card-config-preview-frame .dial-svg {
+  width: clamp(150px, 75%, 240px);
+}
+.card-config-preview-frame .dial-value {
+  font-size: 30px;
+}
+.card-config-preview-frame .dial-unit {
+  font-size: 13px;
+}
+
+/* =====================================================================
+   CUSTOM FILL WIDGETS
+   ===================================================================== */
+.fill-svg {
+  width: clamp(90px, 55cqmin, 220px);
+  height: auto;
+  display: block;
+  flex-shrink: 1;
+  max-height: 100%;
+}
+.db-card-wrap .fill-svg {
+  width: 80%;
+  max-width: none;
+}
+.card-config-preview-frame .fill-svg {
+  width: clamp(120px, 65%, 200px);
+}
+
+/* =====================================================================
+   CHART WIDGETS
+   ===================================================================== */
+.chart-svg {
+  width: clamp(100px, 60cqmin, 240px);
+  height: auto;
+  display: block;
+  flex-shrink: 1;
+  max-height: 100%;
+  color: inherit;
+}
+.chart-label {
+  font-size: 4.5px;
+  font-weight: 600;
+  fill: currentColor;
+  opacity: 0.45;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.chart-val {
+  font-size: 4px;
+  font-weight: 800;
+  fill: currentColor;
+  opacity: 0.6;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.chart-center-val {
+  font-size: 10px;
+  font-weight: 800;
+  fill: currentColor;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.chart-center-label {
+  font-size: 5px;
+  font-weight: 600;
+  fill: currentColor;
+  opacity: 0.4;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: clamp(6px, 2cqmin, 12px);
+  width: 100%;
+}
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.chart-legend-dot {
+  width: clamp(6px, 2cqmin, 10px);
+  height: clamp(6px, 2cqmin, 10px);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chart-legend-text {
+  font-size: clamp(9px, 2.5cqmin, 12px);
+  font-weight: 600;
+  opacity: 0.5;
+}
+
+/* Dashboard-scoped chart scaling */
+.db-card-wrap .chart-svg {
+  width: 92%;
+  max-width: none;
+}
+.db-card-wrap .chart-label {
+  font-size: clamp(4px, 2cqmin, 8px);
+}
+.db-card-wrap .chart-val {
+  font-size: clamp(3.5px, 1.8cqmin, 7px);
+}
+.db-card-wrap .chart-center-val {
+  font-size: clamp(8px, 5cqmin, 18px);
+}
+.db-card-wrap .chart-center-label {
+  font-size: clamp(4px, 2.5cqmin, 9px);
+}
+
+/* Config preview frame */
+.card-config-preview-frame .chart-svg {
+  width: clamp(140px, 70%, 240px);
+}
+
+/* ── Entry status messages (success / error) ── */
+.ctrl-status {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.ctrl-status-ok {
+  color: #1a8a4a;
+}
+.ctrl-status-err {
+  color: #e0463d;
+}
+
+/* ── JSON entry ── */
+.ctrl-card-json {
+  overflow: hidden;
+}
+.ctrl-card-json > .ctrl-card-row {
+  flex-shrink: 0;
+}
+.ctrl-json-body {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.ctrl-json-input {
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 30px;
+  padding: clamp(8px, 2.5cqmin, 12px) clamp(10px, 3cqmin, 14px);
+  border: 1px solid rgba(107, 69, 32, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  font-family: 'Space Grotesk', monospace;
+  font-size: clamp(11px, 2.8cqmin, 13px);
+  color: inherit;
+  resize: none;
+  line-height: 1.5;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+.ctrl-json-input:focus {
+  outline: none;
+  border-color: var(--ctrl-btn-from, #8B5A2E);
+  box-shadow: 0 0 0 3px rgba(107, 69, 32, 0.15);
+}
+.ctrl-json-input.input-error {
+  border-color: rgba(224, 70, 61, 0.55);
+}
+.ctrl-json-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ctrl-json-err {
+  font-size: 11px;
+  color: #e0463d;
+  font-weight: 600;
+}
+.ctrl-json-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
 
 /* =====================================================================
    Card Configure view — second step of the picker. Two-column layout:
@@ -10024,6 +11509,64 @@ body { overflow-x: hidden; }
 .card-config-preview-frame .cv-big  { font-size: 36px; }
 .card-config-preview-frame .cv-mid  { font-size: 20px; }
 .card-config-preview-frame .cv-title { font-size: 14px; }
+.card-config-preview-frame .ctrl-card {
+  container-type: inline-size;
+  min-height: 180px;
+  justify-content: center;
+}
+.card-config-preview-frame .ctrl-card-row {
+  gap: 12px;
+}
+.card-config-preview-frame .ctrl-card-ic {
+  width: 40px;
+  height: 40px;
+}
+.card-config-preview-frame .ctrl-card-ic img,
+.card-config-preview-frame .ctrl-card-ic svg {
+  width: 20px;
+  height: 20px;
+}
+.card-config-preview-frame .ctrl-card-titles .cv-title {
+  font-size: 15px;
+}
+.card-config-preview-frame .ctrl-card-titles .cv-sub {
+  font-size: 12px;
+}
+.card-config-preview-frame .ctrl-step-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+}
+.card-config-preview-frame .ctrl-step-value .cv-big {
+  font-size: 28px;
+}
+.card-config-preview-frame .ctrl-switch-lg {
+  width: 56px;
+  height: 30px;
+}
+.card-config-preview-frame .ctrl-action-btn {
+  padding: 10px 18px;
+  font-size: 13px;
+}
+.card-config-preview-frame .ctrl-text-input {
+  padding: 10px 14px;
+  font-size: 14px;
+}
+.card-config-preview-frame .ctrl-input-send {
+  padding: 10px 18px;
+  font-size: 13px;
+}
+.card-config-preview-frame .ctrl-json-input {
+  min-height: 50px;
+  font-size: 12px;
+}
+.card-config-preview-frame .ctrl-list-input {
+  min-height: 70px;
+  font-size: 12px;
+}
+.card-config-preview-frame .ctrl-card-list {
+  min-height: 240px;
+}
 .card-config-change {
   align-self: center;
   display: inline-flex;
@@ -10300,6 +11843,72 @@ body { overflow-x: hidden; }
   margin: 0;
   padding: clamp(12px, 5cqmin, 22px) clamp(14px, 5.5cqmin, 26px) clamp(14px, 5.5cqmin, 24px);
   gap: clamp(8px, 2.5cqmin, 14px);
+  /* Theme-tinted hairline border — the card's border picks up the
+     active theme accent at ~22% so every tile is visually anchored to
+     the dashboard's color identity instead of a generic gray frame. */
+  border-color: color-mix(in srgb, var(--db-accent, #E6D3BC) 22%, transparent);
+  /* Spring transition on hover — same curve as iOS/macOS UI so the
+     dashboard feels responsive without being bouncy. */
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 220ms ease;
+}
+/* Card hover lift — only outside of preview, only when the user isn't
+   currently dragging (RGL adds `react-draggable-dragging` on the item).
+   Translates upward and deepens the ambient shadow so each tile feels
+   like it's physically rising toward the cursor. */
+.db-page:not(.is-preview) .react-grid-item:not(.react-draggable-dragging) .db-card-wrap:hover .cv-card {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--db-accent, #E6D3BC) 55%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(20, 22, 28, 0.06),
+    0 14px 32px -16px rgba(20, 22, 28, 0.22),
+    0 4px 10px -6px rgba(20, 22, 28, 0.10);
+}
+/* Smooth number/value transitions — when a metric updates over WS the
+   text fades color/opacity instead of snapping. Tabular-nums already
+   prevents width jitter, this adds visual continuity. */
+.db-card-wrap .cv-big,
+.db-card-wrap .cv-mid,
+.db-card-wrap .cv-value,
+.db-card-wrap .cv-sub,
+.db-card-wrap .cv-stat-value {
+  transition: color 180ms ease, opacity 180ms ease;
+}
+/* Icon chip — soft inner highlight + hairline so it reads as a
+   physical pill, not a flat circle. Same glass treatment as the cards.
+   The base background (accent-soft) stays unchanged; the inset shadow
+   layers above it. */
+.db-card-wrap .cv-ic {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(20, 22, 28, 0.06),
+    0 2px 4px -2px rgba(20, 22, 28, 0.10);
+}
+/* Subtle grain texture on each panel — pushes pure gradients into
+   modern-flat-with-depth territory (the Linear/Vercel look). 120×120
+   SVG noise tile blended over the panel gradient. `isolation: isolate`
+   on the panel creates a local stacking context so the ::before sits
+   behind children (z-index: -1) without affecting children's own
+   positioning (.db-c2-stage uses position: absolute and must stay so). */
+.db-group,
+.db-group-bottom {
+  isolation: isolate;
+}
+.db-group::before,
+.db-group-bottom::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.06  0 0 0 0 0.07  0 0 0 0 0.10  0 0 0 0.55 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  background-size: 120px 120px;
+  opacity: 0.10;
+  mix-blend-mode: overlay;
+  z-index: -1;
 }
 /* Scoped scaling — these only fire when a .cv-card sits inside a
    .db-card-wrap (i.e. on the dashboard). The picker preview keeps
@@ -10343,30 +11952,82 @@ body { overflow-x: hidden; }
 .db-card-wrap .cv-grid-2x2 { gap: clamp(8px, 3cqmin, 16px) clamp(14px, 5cqmin, 28px); }
 /* Progress card bar height tracks the card too */
 .db-card-wrap .cv-bar { height: clamp(7px, 2.5cqmin, 14px); }
+
+/* ── Dial gauge scaling on dashboard — fills available space ── */
+.db-card-wrap .dial-svg {
+  width: 90%;
+  max-width: none;
+}
+.db-card-wrap .dial-value {
+  font-size: clamp(18px, 10cqmin, 54px);
+}
+.db-card-wrap .dial-value-lg {
+  font-size: clamp(22px, 12cqmin, 64px);
+}
+.db-card-wrap .dial-unit {
+  font-size: clamp(10px, 3.5cqmin, 18px);
+}
+.db-card-wrap .dial-of {
+  font-size: clamp(9px, 3cqmin, 16px);
+}
+.db-card-wrap .dial-range-label {
+  font-size: clamp(9px, 2.8cqmin, 14px);
+}
+.db-card-wrap .dial-svg-label {
+  font-size: clamp(5px, 2.5cqmin, 10px);
+}
+.db-card-wrap .dial-svg-label-lg {
+  font-size: clamp(6px, 3cqmin, 13px);
+}
+.db-card-wrap .dial-readout {
+  gap: clamp(3px, 1.5cqmin, 10px);
+}
+
 .db-card-actions {
   position: absolute;
-  top: 8px;
-  right: 8px;
+  top: 6px;
+  right: 6px;
   display: flex;
   gap: 4px;
   opacity: 0;
   transition: opacity 0.12s ease;
+  z-index: 4;
 }
 .db-card-wrap:hover .db-card-actions { opacity: 1; }
 .db-card-action {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
+  /* Visible button is 32×32 but the click target extends 6px beyond
+     on every side via the ::after pseudo — total ~44×44 px hit zone,
+     comfortable for touch and imprecise mouse placement. */
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   border: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   color: #14161C;
   display: grid;
   place-items: center;
   cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+  position: relative;
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.12),
+    0 4px 10px -4px rgba(0, 0, 0, 0.10);
+  transition: background 0.12s ease, transform 0.1s ease;
 }
-.db-card-action:hover { background: #fff; }
-.db-card-action.danger:hover { background: #FFE4E0; color: #C13D2A; }
+/* Invisible expanded hit area so the user doesn't have to target
+   the exact centre — anywhere near the button works. */
+.db-card-action::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.db-card-action:hover {
+  background: #fff;
+  transform: scale(1.06);
+}
+.db-card-action.danger:hover {
+  background: #FFE4E0;
+  color: #C13D2A;
+}
 
 /* =====================================================================
    PayloadPathField — dropdown of scalar leaves on the selected device.
@@ -10475,5 +12136,1626 @@ body { overflow-x: hidden; }
   border-color: var(--accent-soft);
   color: var(--accent);
   background: #FFFBF5;
+}
+
+/* =====================================================================
+   Public (no-auth) pages — landing application list + view-only
+   dashboard chrome. The dashboard itself is full DashboardDetail with
+   publicMode=true, so the only public-specific styles here cover the
+   landing page (PublicApplications.jsx) and the small title chip the
+   dashboard shows in place of the theme picker / preview button.
+   ===================================================================== */
+.kiosk-app.is-public-landing {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #FBF7F1 0%, #F2E3CB 100%);
+  display: flex;
+  flex-direction: column;
+}
+.public-topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 32px;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(244, 217, 194, 0.55);
+}
+.public-topbar-brand .logo-wordmark { height: 28px; display: block; }
+.public-topbar-title {
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: #14161C;
+  margin-left: 8px;
+}
+.public-topbar-back {
+  margin-left: auto;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(244, 217, 194, 0.65);
+  color: #14161C;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.public-topbar-back:hover { background: #fff; border-color: rgba(243, 106, 30, 0.4); }
+
+.public-page {
+  flex: 1;
+}
+.public-intro {
+  padding: 12px 0 24px;
+  max-width: 720px;
+}
+.public-intro h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #14161C;
+}
+.public-intro p {
+  margin: 0;
+  color: #5C6378;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.public-app-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 18px;
+}
+.public-app-card {
+  position: relative;
+  background: linear-gradient(180deg, #FFFBF5 0%, #FCEFD9 100%);
+  border: 1px solid rgba(244, 217, 194, 0.85);
+  border-radius: 18px;
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 180px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 14px 32px -24px rgba(20, 22, 28, 0.22);
+  transition: transform 200ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 200ms ease, border-color 200ms ease;
+}
+.public-app-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(243, 106, 30, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 18px 36px -20px rgba(20, 22, 28, 0.28);
+}
+.public-app-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.public-app-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14161C;
+  line-height: 1.2;
+}
+.public-app-card-type {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(243, 106, 30, 0.12);
+  color: #C95812;
+  flex-shrink: 0;
+}
+.public-app-card-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #5C6378;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.public-app-card-meta {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+.public-app-card-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8c8377;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(244, 217, 194, 0.6);
+}
+.public-app-card-actions {
+  display: flex;
+  gap: 8px;
+}
+.public-app-card-view {
+  flex: 1;
+  text-align: center;
+}
+
+/* Public-mode dashboard chrome — the title chip that replaces the
+   theme picker + Preview button in the page actions row. */
+.db-public-title {
+  margin-left: auto;
+  margin-right: 4px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #14161C;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(244, 217, 194, 0.6);
+}
+
+@media (max-width: 720px) {
+  .public-topbar { padding: 12px 16px; gap: 10px; }
+  .public-topbar-title { display: none; }
+  .public-intro h1 { font-size: 22px; }
+  .public-intro { padding: 8px 0 16px; }
+  .public-app-grid { gap: 12px; }
+  .public-app-card { padding: 14px 16px 16px; min-height: 160px; border-radius: 16px; }
+}
+
+/* ---------- Public analytics dashboard (top of /public) ---------- */
+.public-analytics {
+  background: linear-gradient(180deg, #FFFBF5 0%, #FCEFD9 100%);
+  border: 1px solid rgba(244, 217, 194, 0.85);
+  border-radius: 22px;
+  padding: 22px 24px 24px;
+  margin: 4px 0 28px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 14px 32px -24px rgba(20, 22, 28, 0.20);
+}
+.public-analytics-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.public-analytics-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14161C;
+}
+.public-analytics-sub {
+  font-size: 12.5px;
+  color: #8c8377;
+}
+.public-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.public-kpi-tile {
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(244, 217, 194, 0.6);
+  border-radius: 16px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 92px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.public-kpi-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #8c8377;
+}
+.public-kpi-value {
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #14161C;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.public-kpi-hint {
+  font-size: 11.5px;
+  color: #5C6378;
+}
+.public-breakdown {
+  border-top: 1px solid rgba(244, 217, 194, 0.55);
+  padding-top: 16px;
+}
+.public-breakdown-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #14161C;
+}
+.public-breakdown-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #5C6378;
+}
+.public-breakdown-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: -1px;
+}
+.public-breakdown-swatch.is-dash { background: #F36A1E; }
+.public-breakdown-swatch.is-dev  { background: #2D6EE0; }
+.public-breakdown-swatch.is-cam  { background: #1FAE6B; }
+.public-breakdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.public-breakdown-row {
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(244, 217, 194, 0.45);
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+}
+.public-breakdown-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #14161C;
+  margin-bottom: 6px;
+}
+.public-breakdown-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.public-breakdown-total {
+  font-size: 12px;
+  color: #8c8377;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.public-breakdown-bar {
+  display: flex;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.public-breakdown-seg { height: 100%; transition: width 280ms ease; }
+.public-breakdown-seg.is-dash { background: #F36A1E; }
+.public-breakdown-seg.is-dev  { background: #2D6EE0; }
+.public-breakdown-seg.is-cam  { background: #1FAE6B; }
+.public-breakdown-stats {
+  display: flex;
+  gap: 14px;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #5C6378;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .public-analytics { padding: 16px 16px 18px; border-radius: 18px; }
+  .public-analytics-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .public-analytics-head h2 { font-size: 17px; }
+  .public-kpi-grid { gap: 8px; }
+  .public-kpi-value { font-size: 26px; }
+  .public-breakdown-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .public-breakdown-stats { gap: 8px; font-size: 11px; }
+}
+
+/* =====================================================================
+   PUBLIC LANDING (PublicLanding.jsx) — clean minimal product page in
+   KIOSK peach + black + white. Layout follows a clean, alternating
+   white / dark section rhythm. The peach is used the way the reference
+   uses lime green: as a bold attention block in the hero, the small
+   accent shapes inside cards, and the squiggle/line decorations.
+
+   Spacing scale (use these consistently — never invent new values):
+     --pf-s-1: 4px    --pf-s-4: 24px    --pf-s-7: 64px
+     --pf-s-2: 8px    --pf-s-5: 32px    --pf-s-8: 96px
+     --pf-s-3: 16px   --pf-s-6: 48px    --pf-s-9: 128px
+   Container max width: 1180px. Section padding-y: var(--pf-s-8).
+   ===================================================================== */
+.pf-page {
+  --pf-s-1: 4px;
+  --pf-s-2: 8px;
+  --pf-s-3: 16px;
+  --pf-s-4: 24px;
+  --pf-s-5: 32px;
+  --pf-s-6: 48px;
+  --pf-s-7: 64px;
+  --pf-s-8: 96px;
+  --pf-s-9: 128px;
+  --pf-container: 1180px;
+  --pf-radius: 24px;
+  --pf-radius-sm: 14px;
+  --pf-ink: #14161C;
+  --pf-ink-2: #3D2E1A;
+  --pf-mute: #5C6378;
+  --pf-line: #F0EAE0;
+  --pf-line-2: #F4EEDF;
+  --pf-peach: #FBC890;
+  --pf-peach-light: #FFE9CE;
+  min-height: 100vh;
+  background: #FFFFFF;
+  color: var(--pf-ink);
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  letter-spacing: -0.005em;
+}
+
+/* ---------- NAV ---------- */
+.pf-nav {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--pf-s-5);
+  padding: var(--pf-s-3) var(--pf-s-5);
+  max-width: var(--pf-container);
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--pf-line);
+}
+.pf-brand { display: inline-flex; align-items: center; gap: 10px; }
+.pf-mark { display: block; flex-shrink: 0; }
+.pf-brand-name {
+  font-weight: 800;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--pf-ink);
+  line-height: 1;
+}
+.pf-nav-links {
+  display: flex;
+  gap: var(--pf-s-4);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.pf-nav-links a {
+  color: var(--pf-mute);
+  transition: color 0.15s ease;
+  line-height: 1;
+}
+.pf-nav-links a:hover { color: var(--pf-ink); }
+.pf-nav-actions { margin-left: auto; }
+.pf-nav-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-s-2);
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--pf-ink);
+  padding: 10px 16px;
+  border-radius: 999px;
+  line-height: 1;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.pf-nav-cta:hover { transform: translateY(-1px); background: #000; }
+
+/* ---------- HERO ---------- */
+.pf-hero-wrap {
+  max-width: var(--pf-container);
+  margin: 0 auto;
+  padding: var(--pf-s-4) var(--pf-s-5) var(--pf-s-6);
+}
+.pf-hero {
+  position: relative;
+  background: linear-gradient(135deg, var(--pf-peach-light) 0%, var(--pf-peach) 100%);
+  border-radius: 24px;
+  padding: var(--pf-s-7) var(--pf-s-6);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--pf-s-6);
+  align-items: center;
+  overflow: hidden;
+}
+.pf-hero-text { position: relative; z-index: 1; }
+.pf-hero h1 {
+  margin: 0;
+  font-size: clamp(34px, 4.6vw, 54px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+  color: var(--pf-ink);
+}
+.pf-hero-mark {
+  font-style: italic;
+  letter-spacing: -0.025em;
+}
+.pf-sparkle {
+  display: inline-block;
+  vertical-align: 0.05em;
+  margin-left: var(--pf-s-1);
+  transform: translateY(-6px);
+}
+.pf-hero p {
+  margin: var(--pf-s-3) 0 var(--pf-s-4);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pf-ink-2);
+  max-width: 460px;
+}
+.pf-hero-text > .pf-cta-dark { vertical-align: middle; }
+.pf-cta-dark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-s-2);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--pf-ink);
+  padding: 12px 22px;
+  border-radius: 999px;
+  line-height: 1;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.15s ease;
+}
+.pf-cta-dark:hover { transform: translateY(-2px); background: #000; }
+.pf-cta-lg { padding: 14px 26px; font-size: 15px; }
+.pf-cta-link {
+  display: inline-block;
+  margin-left: var(--pf-s-3);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--pf-ink);
+  border-bottom: 1.5px solid var(--pf-ink);
+  padding-bottom: 1px;
+  vertical-align: middle;
+}
+.pf-cta-link-dark {
+  display: inline-block;
+  margin-top: var(--pf-s-3);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pf-ink);
+  border-bottom: 1.5px solid var(--pf-ink);
+  padding-bottom: 1px;
+}
+.pf-cta-white {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-s-2);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--pf-ink);
+  background: #fff;
+  padding: 12px 22px;
+  border-radius: 999px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+.pf-cta-white:hover { transform: translateY(-2px); }
+
+/* (Squiggle removed — the new single mock window already has a clear
+   visual relationship to the CTA, no doodle needed.) */
+.pf-hero-squiggle { display: none; }
+
+/* ---------- HERO PREVIEW (single elegant window) ---------- */
+.pf-hero-preview {
+  position: relative;
+  z-index: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pf-preview-window {
+  width: 100%;
+  background: #fff;
+  border: 1px solid var(--pf-line);
+  border-radius: 20px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 32px 64px -28px rgba(20, 22, 28, 0.35),
+    0 8px 22px -10px rgba(20, 22, 28, 0.12);
+  overflow: hidden;
+  transform: rotate(-1deg);
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pf-preview-window:hover { transform: rotate(0); }
+.pf-preview-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 14px;
+  background: #FAF5EC;
+  border-bottom: 1px solid var(--pf-line);
+}
+.pf-preview-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #E8DCC6;
+}
+.pf-preview-dot:nth-child(1) { background: #FF6A6A; }
+.pf-preview-dot:nth-child(2) { background: #FFCB57; }
+.pf-preview-dot:nth-child(3) { background: #6FCF7C; }
+.pf-preview-host {
+  margin-left: 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8c8377;
+  letter-spacing: 0.01em;
+}
+.pf-preview-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #168A52;
+  background: rgba(31, 174, 107, 0.13);
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+.pf-preview-status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #1FAE6B;
+  animation: pf-blink 1.6s infinite;
+}
+.pf-preview-body {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 0;
+  min-height: 290px;
+}
+.pf-preview-list {
+  padding: var(--pf-s-3) var(--pf-s-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+}
+.pf-preview-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--pf-s-3);
+  padding: 12px 0;
+  border-top: 1px solid var(--pf-line-2);
+  font-size: 13.5px;
+}
+.pf-preview-row:first-child { border-top: 0; padding-top: 0; }
+.pf-preview-row:last-child  { padding-bottom: 0; }
+.pf-mock-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.pf-dot-peach { background: var(--pf-peach); }
+.pf-dot-mint  { background: #A4DDAB; }
+.pf-dot-lav   { background: #BDA9E0; }
+.pf-dot-honey { background: #F8DD6E; }
+.pf-preview-row-label { color: var(--pf-mute); font-weight: 600; }
+.pf-preview-row-val   { color: var(--pf-ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.pf-preview-hero {
+  background: linear-gradient(180deg, #FFFBF3 0%, #FFEAD0 100%);
+  border-left: 1px solid var(--pf-line);
+  padding: var(--pf-s-4);
+  display: flex;
+  flex-direction: column;
+}
+.pf-preview-hero-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #8c8377;
+  margin-bottom: var(--pf-s-1);
+}
+.pf-preview-hero-num {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--pf-ink);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pf-preview-spark {
+  width: 100%;
+  height: 60px;
+  display: block;
+  margin-top: var(--pf-s-2);
+}
+.pf-preview-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: auto;
+}
+.pf-mock-tab {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid #E8DCC6;
+  color: #8c8377;
+  cursor: default;
+  line-height: 1;
+}
+.pf-mock-tab.is-active {
+  background: var(--pf-ink);
+  color: #fff;
+  border-color: var(--pf-ink);
+}
+
+/* ---------- SHARED SECTION ---------- */
+.pf-section {
+  max-width: var(--pf-container);
+  margin: 0 auto;
+  padding: var(--pf-s-7) var(--pf-s-5);
+}
+.pf-h2 {
+  font-size: clamp(26px, 3.2vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  margin: 0 0 var(--pf-s-5);
+  color: var(--pf-ink);
+}
+.pf-h3-center {
+  text-align: center;
+  font-size: clamp(22px, 2.6vw, 32px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  margin: 0 0 var(--pf-s-2);
+  color: var(--pf-ink);
+}
+.pf-h2-center {
+  text-align: center;
+  font-size: clamp(26px, 3.2vw, 38px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: var(--pf-s-2) 0 var(--pf-s-2);
+  color: var(--pf-ink);
+}
+.pf-section-head {
+  text-align: center;
+  max-width: 640px;
+  margin: 0 auto var(--pf-s-5);
+}
+.pf-section-head p {
+  margin: var(--pf-s-2) 0 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--pf-mute);
+}
+.pf-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #C95812;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(243, 106, 30, 0.22);
+  padding: 5px 12px;
+  border-radius: 999px;
+  line-height: 1;
+}
+.pf-eyebrow-dot {
+  display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: linear-gradient(135deg, #FF8A47, #D85510);
+  margin-right: 8px;
+}
+
+/* ---------- HERO EYEBROW PILLS ---------- */
+.pf-hero-eyebrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pf-s-2);
+  margin-bottom: var(--pf-s-4);
+}
+.pf-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #14161C;
+  background: rgba(20, 22, 28, 0.10);
+  padding: 6px 12px;
+  border-radius: 999px;
+  line-height: 1;
+}
+.pf-pill-outline {
+  background: transparent;
+  border: 1.5px solid rgba(20, 22, 28, 0.30);
+}
+
+/* ---------- ABOUT ---------- */
+.pf-about-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: var(--pf-s-5);
+  align-items: start;
+}
+.pf-about-copy p {
+  margin: 0 0 var(--pf-s-3);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--pf-mute);
+}
+.pf-about-copy p:last-child { margin-bottom: 0; }
+.pf-about-copy strong { color: var(--pf-ink); font-weight: 800; }
+.pf-about-callout {
+  background: linear-gradient(180deg, #FFE9CE 0%, #FBC890 100%);
+  border-radius: var(--pf-radius);
+  padding: var(--pf-s-4) var(--pf-s-5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 18px 36px -24px rgba(20, 22, 28, 0.22);
+}
+.pf-about-callout h3 {
+  margin: 0 0 var(--pf-s-3);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--pf-ink);
+}
+.pf-about-callout ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pf-about-callout li {
+  position: relative;
+  padding-left: var(--pf-s-3);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-ink-2);
+  line-height: 1.5;
+}
+.pf-about-callout li::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 7px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--pf-ink);
+}
+
+/* ---------- PUBLIC PORTAL ---------- */
+.pf-portal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--pf-s-3);
+}
+.pf-portal-card {
+  background: #F8F2E5;
+  border-radius: var(--pf-radius);
+  padding: var(--pf-s-4);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s ease;
+}
+.pf-portal-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 22px 40px -28px rgba(20, 22, 28, 0.24);
+}
+.pf-portal-ic {
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: var(--pf-peach);
+  display: grid; place-items: center;
+  margin-bottom: var(--pf-s-3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.pf-portal-ic svg { width: 20px; height: 20px; }
+.pf-portal-card h3 {
+  margin: 0 0 var(--pf-s-1);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--pf-ink);
+}
+.pf-portal-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--pf-mute);
+}
+
+/* ---------- BENEFITS ---------- */
+.pf-benefit-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--pf-s-2);
+}
+.pf-benefit-card {
+  background: #fff;
+  border: 1px solid var(--pf-line);
+  border-radius: var(--pf-radius-sm);
+  padding: var(--pf-s-3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease;
+}
+.pf-benefit-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(243, 106, 30, 0.4);
+}
+.pf-benefit-num {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: #C95812;
+  margin-bottom: var(--pf-s-1);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.pf-benefit-card h3 {
+  margin: 0 0 var(--pf-s-1);
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--pf-ink);
+  line-height: 1.3;
+}
+.pf-benefit-card p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--pf-mute);
+}
+
+/* ---------- USE CASES ---------- */
+.pf-uc-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--pf-s-3);
+}
+.pf-uc-card {
+  background: #fff;
+  border: 1px solid var(--pf-line);
+  border-radius: var(--pf-radius-sm);
+  padding: var(--pf-s-3) var(--pf-s-4);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.pf-uc-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(243, 106, 30, 0.4);
+  box-shadow: 0 18px 32px -22px rgba(20, 22, 28, 0.22);
+}
+.pf-uc-ic {
+  width: 32px; height: 32px;
+  border-radius: 10px;
+  background: rgba(243, 106, 30, 0.12);
+  display: grid; place-items: center;
+  margin-bottom: 2px;
+}
+.pf-uc-ic svg { width: 18px; height: 18px; }
+.pf-uc-card h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--pf-ink);
+}
+.pf-uc-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--pf-mute);
+}
+
+/* ---------- SECTORS ---------- */
+.pf-sector-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--pf-s-3);
+}
+.pf-sector-card {
+  background: #F8F2E5;
+  border-radius: var(--pf-radius);
+  padding: var(--pf-s-4);
+  border: 1px solid rgba(244, 217, 194, 0.55);
+}
+.pf-sector-card-wide { grid-column: 1 / -1; }
+.pf-sector-card h3 {
+  margin: 0 0 var(--pf-s-1);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--pf-ink);
+}
+.pf-sector-card p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--pf-mute);
+}
+
+/* ---------- BLACK BANNER ---------- */
+.pf-banner {
+  position: relative;
+  background: linear-gradient(180deg, #1A1B22 0%, #0E1015 100%);
+  border-radius: var(--pf-radius);
+  padding: var(--pf-s-6);
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: var(--pf-s-5);
+  align-items: center;
+  overflow: hidden;
+  color: #fff;
+}
+.pf-banner-squiggle {
+  position: absolute;
+  top: var(--pf-s-3);
+  left: var(--pf-s-5);
+  width: 200px;
+  height: 50px;
+  opacity: 0.7;
+}
+.pf-banner-text { position: relative; z-index: 1; }
+.pf-banner-text h3 {
+  margin: 0 0 var(--pf-s-2);
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+}
+.pf-banner-text p {
+  margin: 0 0 var(--pf-s-4);
+  font-size: 14px;
+  line-height: 1.55;
+  color: #B6BDCC;
+  max-width: 420px;
+}
+.pf-banner-preview { display: grid; place-items: center; }
+.pf-banner-mock {
+  background: #fff;
+  border-radius: 20px;
+  padding: var(--pf-s-4);
+  color: var(--pf-ink);
+  width: 100%;
+  max-width: 280px;
+  box-shadow: 0 30px 60px -22px rgba(0, 0, 0, 0.55);
+}
+.pf-banner-mock-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pf-s-1);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #C95812;
+  background: var(--pf-peach);
+  padding: 4px 10px;
+  border-radius: 999px;
+  margin-bottom: var(--pf-s-3);
+  line-height: 1;
+}
+.pf-banner-mock-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #C95812;
+  animation: pf-blink 1.4s infinite;
+}
+@keyframes pf-blink {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+.pf-banner-mock-big {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.pf-banner-mock-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8c8377;
+  margin: 6px 0 var(--pf-s-4);
+}
+.pf-banner-mock-rows { display: flex; flex-direction: column; gap: 10px; }
+.pf-banner-mock-rows > div {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: var(--pf-s-3);
+  font-size: 13px;
+}
+.pf-banner-mock-rows > div > span:first-child {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pf-peach);
+}
+.pf-banner-mock-rows > div > span:nth-child(2) {
+  color: var(--pf-mute);
+  font-weight: 600;
+}
+.pf-banner-mock-rows > div > b {
+  font-weight: 800;
+  color: var(--pf-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- FINAL CTA ---------- */
+.pf-finalcta {
+  text-align: center;
+  padding: var(--pf-s-5) var(--pf-s-5) var(--pf-s-8);
+}
+.pf-finalcta-title { margin: 0 auto var(--pf-s-3); }
+.pf-finalcta-sub {
+  max-width: 500px;
+  margin: 0 auto var(--pf-s-4);
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--pf-mute);
+}
+
+/* ---------- FOOTER ---------- */
+.pf-footer {
+  background: var(--pf-ink);
+  color: #B6BDCC;
+}
+.pf-footer-inner {
+  max-width: var(--pf-container);
+  margin: 0 auto;
+  padding: var(--pf-s-6) var(--pf-s-5) var(--pf-s-4);
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--pf-s-6);
+  align-items: start;
+}
+.pf-footer-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.pf-footer-brand .pf-brand-name { color: #fff; }
+.pf-footer-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--pf-s-5);
+}
+.pf-footer-col h4 {
+  margin: 0 0 var(--pf-s-3);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8c93a4;
+  line-height: 1;
+}
+.pf-footer-col a,
+.pf-footer-col span {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #d2d8e2;
+  margin-bottom: var(--pf-s-2);
+  line-height: 1.4;
+  transition: color 0.15s ease;
+}
+.pf-footer-col a:hover { color: #fff; }
+.pf-footer-meta span { color: #8c93a4; }
+
+/* ---------- REVEAL ---------- */
+.pf-reveal { opacity: 0; transform: translateY(22px); transition: opacity 700ms ease, transform 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+.pf-reveal.is-in { opacity: 1; transform: translateY(0); }
+
+/* =====================================================================
+   ---------- ANIMATIONS + INTERACTIVE POLISH ----------
+   Floating orbs, gradient sweeps, shimmer CTAs, animated SVG paths,
+   hover lifts on every card, and subtle "alive" micro-motions on
+   accent dots and badges.
+   ===================================================================== */
+
+/* ----- HERO: floating orbs + grid dots + animated wave ----- */
+.pf-hero { isolation: isolate; }
+.pf-hero-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 0;
+}
+.pf-hero-text,
+.pf-hero-preview { position: relative; z-index: 1; }
+.pf-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(40px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.pf-orb-1 {
+  width: 320px; height: 320px;
+  background: radial-gradient(circle, #FF8A47 0%, transparent 70%);
+  top: -90px; right: -60px;
+  animation: pf-float-a 14s ease-in-out infinite;
+}
+.pf-orb-2 {
+  width: 260px; height: 260px;
+  background: radial-gradient(circle, #FFE9CE 0%, transparent 70%);
+  bottom: -80px; left: -40px;
+  animation: pf-float-b 18s ease-in-out infinite;
+}
+.pf-orb-3 {
+  width: 180px; height: 180px;
+  background: radial-gradient(circle, #FBC890 0%, transparent 70%);
+  top: 40%; left: 38%;
+  opacity: 0.45;
+  animation: pf-float-c 22s ease-in-out infinite;
+}
+@keyframes pf-float-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(20px, 30px) scale(1.08); }
+}
+@keyframes pf-float-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(-30px, -20px) scale(1.05); }
+}
+@keyframes pf-float-c {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(25px, -25px); }
+}
+.pf-dots {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(20, 22, 28, 0.12) 1px, transparent 1px);
+  background-size: 18px 18px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  opacity: 0.5;
+}
+.pf-hero-wave {
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  width: 100%; height: 60px;
+  pointer-events: none;
+}
+
+/* ----- HERO H1 staged reveal ----- */
+.pf-h1-anim .pf-line-1,
+.pf-h1-anim .pf-line-2 {
+  display: block;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: pf-rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.pf-h1-anim .pf-line-1 { animation-delay: 0.1s; }
+.pf-h1-anim .pf-line-2 { animation-delay: 0.3s; }
+@keyframes pf-rise {
+  to { opacity: 1; transform: translateY(0); }
+}
+.pf-hero-mark {
+  background: linear-gradient(120deg, #14161C 0%, #C95812 50%, #14161C 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: pf-mark-sheen 6s ease-in-out infinite;
+  font-style: italic;
+  letter-spacing: -0.025em;
+}
+@keyframes pf-mark-sheen {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+.pf-sparkle {
+  display: inline-block;
+  vertical-align: 0.05em;
+  margin-left: var(--pf-s-1);
+  transform: translateY(-6px) rotate(0);
+  animation: pf-spin 8s linear infinite;
+  transform-origin: 12px 12px;
+}
+@keyframes pf-spin {
+  to { transform: translateY(-6px) rotate(360deg); }
+}
+.pf-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pf-s-3);
+  margin-top: var(--pf-s-1);
+  flex-wrap: wrap;
+}
+
+/* ----- Animated pill with live dot ----- */
+.pf-pill-anim {
+  background: #14161C;
+  color: #fff;
+}
+.pf-pill-dot {
+  display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #FBC890;
+  margin-right: 7px;
+  box-shadow: 0 0 0 0 rgba(251, 200, 144, 0.85);
+  animation: pf-blink-glow 1.8s infinite;
+}
+@keyframes pf-blink-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 200, 144, 0.85); }
+  50%      { box-shadow: 0 0 0 6px rgba(251, 200, 144, 0); }
+}
+
+/* ----- CTA shimmer sweep ----- */
+.pf-cta-shimmer { position: relative; overflow: hidden; }
+.pf-cta-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 0%, transparent 40%, rgba(255, 255, 255, 0.25) 50%, transparent 60%, transparent 100%);
+  transform: translateX(-100%);
+  animation: pf-shimmer 3.5s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pf-shimmer {
+  to { transform: translateX(100%); }
+}
+.pf-cta-pulse {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 0 0 rgba(20, 22, 28, 0.35);
+  animation: pf-cta-pulse 2.4s ease-in-out infinite;
+}
+@keyframes pf-cta-pulse {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 0 rgba(20, 22, 28, 0.35); }
+  50%      { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 10px rgba(20, 22, 28, 0); }
+}
+.pf-cta-dark:hover, .pf-cta-white:hover { transform: translateY(-2px) scale(1.02); }
+
+/* ----- Hero preview enhancements ----- */
+.pf-preview-window:hover { transform: rotate(0) scale(1.02); }
+.pf-preview-row {
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+.pf-preview-row:hover {
+  background: rgba(251, 200, 144, 0.10);
+  transform: translateX(4px);
+}
+.pf-preview-status-dot,
+.pf-banner-mock-dot {
+  animation: pf-pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes pf-pulse-dot {
+  0%, 100% { transform: scale(1);   opacity: 1; }
+  50%      { transform: scale(0.7); opacity: 0.4; }
+}
+.pf-preview-hero-num {
+  background: linear-gradient(135deg, #14161C 0%, #C95812 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ----- ABOUT callout: subtle inner highlight pulse ----- */
+.pf-about-callout {
+  position: relative;
+  overflow: hidden;
+}
+.pf-about-callout::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 0%, transparent 60%);
+  animation: pf-callout-pulse 6s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes pf-callout-pulse {
+  0%, 100% { transform: translate(-20%, -20%) scale(0.8); opacity: 0.3; }
+  50%      { transform: translate(10%, 10%) scale(1);     opacity: 0.55; }
+}
+.pf-about-callout > * { position: relative; z-index: 1; }
+.pf-about-callout li {
+  transition: transform 0.18s ease, color 0.18s ease;
+}
+.pf-about-callout li:hover {
+  transform: translateX(4px);
+  color: #14161C;
+}
+
+/* ----- PORTAL cards: 3D tilt + bouncy icon ----- */
+.pf-portal-card {
+  position: relative;
+  overflow: hidden;
+}
+.pf-portal-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(251, 200, 144, 0.45) 50%, transparent 70%);
+  transform: translateX(-110%);
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.pf-portal-card:hover::before { transform: translateX(110%); }
+.pf-portal-card:hover .pf-portal-ic {
+  transform: scale(1.1) rotate(-6deg);
+}
+.pf-portal-ic { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.pf-portal-card > * { position: relative; z-index: 1; }
+
+/* ----- BENEFIT cards: count-up effect + accent bar ----- */
+.pf-benefit-card {
+  position: relative;
+  overflow: hidden;
+}
+.pf-benefit-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #FF8A47, #C95812);
+  transform: scaleY(0);
+  transform-origin: top;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.pf-benefit-card:hover::before { transform: scaleY(1); }
+.pf-benefit-card:hover .pf-benefit-num {
+  transform: scale(1.1);
+}
+.pf-benefit-num { transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-block; }
+
+/* ----- USE CASE cards: icon morph + glow ----- */
+.pf-uc-card { position: relative; overflow: hidden; }
+.pf-uc-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 0 rgba(243, 106, 30, 0);
+  transition: box-shadow 0.3s ease;
+}
+.pf-uc-card:hover::after { box-shadow: 0 0 24px -4px rgba(243, 106, 30, 0.35); }
+.pf-uc-card:hover .pf-uc-ic {
+  transform: rotate(-8deg) scale(1.12);
+  background: rgba(243, 106, 30, 0.22);
+}
+.pf-uc-ic { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.18s ease; }
+
+/* ----- SECTOR cards: sweeping accent line ----- */
+.pf-sector-card { position: relative; overflow: hidden; transition: transform 0.2s ease; }
+.pf-sector-card:hover { transform: translateY(-3px); }
+.pf-sector-card::after {
+  content: '';
+  position: absolute;
+  left: -100%;
+  top: 0; bottom: 0;
+  width: 60%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transition: left 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+.pf-sector-card:hover::after { left: 110%; }
+
+/* ----- BLACK BANNER: animated grid + floating orbs ----- */
+.pf-banner { isolation: isolate; }
+.pf-banner-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: inherit;
+  z-index: 0;
+}
+.pf-banner-text,
+.pf-banner-preview { position: relative; z-index: 2; }
+.pf-banner-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(251, 200, 144, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(251, 200, 144, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+  animation: pf-grid-drift 22s linear infinite;
+}
+@keyframes pf-grid-drift {
+  to { background-position: 32px 32px; }
+}
+.pf-banner-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(50px);
+  opacity: 0.32;
+}
+.pf-banner-orb-a {
+  width: 260px; height: 260px;
+  background: #FF8A47;
+  top: -80px; right: 18%;
+  animation: pf-float-a 16s ease-in-out infinite;
+}
+.pf-banner-orb-b {
+  width: 200px; height: 200px;
+  background: #FBC890;
+  bottom: -60px; left: 6%;
+  animation: pf-float-b 20s ease-in-out infinite;
+}
+.pf-banner-mock { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.pf-banner-mock:hover { transform: translateY(-4px) scale(1.02); }
+
+/* ----- FINAL CTA: radial rays + pulse ----- */
+.pf-finalcta { position: relative; }
+.pf-finalcta-rays {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  place-items: center;
+}
+.pf-finalcta-rays span {
+  position: absolute;
+  width: 2px;
+  height: 80px;
+  background: linear-gradient(180deg, transparent, rgba(243, 106, 30, 0.45), transparent);
+  border-radius: 999px;
+  transform-origin: 50% 100%;
+  animation: pf-ray-spin 12s linear infinite;
+}
+.pf-finalcta-rays span:nth-child(1) { transform: rotate(0deg)   translateY(-160px); }
+.pf-finalcta-rays span:nth-child(2) { transform: rotate(60deg)  translateY(-160px); animation-delay: -2s; }
+.pf-finalcta-rays span:nth-child(3) { transform: rotate(120deg) translateY(-160px); animation-delay: -4s; }
+.pf-finalcta-rays span:nth-child(4) { transform: rotate(180deg) translateY(-160px); animation-delay: -6s; }
+.pf-finalcta-rays span:nth-child(5) { transform: rotate(240deg) translateY(-160px); animation-delay: -8s; }
+.pf-finalcta-rays span:nth-child(6) { transform: rotate(300deg) translateY(-160px); animation-delay: -10s; }
+@keyframes pf-ray-spin {
+  to { transform-origin: 50% 100%; }
+}
+.pf-finalcta-title { position: relative; z-index: 1; }
+.pf-finalcta-sub   { position: relative; z-index: 1; }
+
+/* ----- NAV: animated underline on link hover ----- */
+.pf-nav-links a { position: relative; padding: 4px 2px; }
+.pf-nav-links a::after {
+  content: '';
+  position: absolute;
+  left: 50%; bottom: 0;
+  width: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, #FF8A47, #D85510);
+  transition: width 0.25s ease, left 0.25s ease;
+}
+.pf-nav-links a:hover::after { width: 100%; left: 0; }
+
+/* ----- FOOTER links lift on hover ----- */
+.pf-footer-col a {
+  transition: color 0.15s ease, transform 0.15s ease;
+  display: inline-block;
+}
+.pf-footer-col a:hover { color: #fff; transform: translateX(3px); }
+
+/* ----- Eyebrow dot gentle pulse ----- */
+.pf-eyebrow-dot {
+  animation: pf-blink-glow 2s infinite;
+}
+
+/* ----- KIOSK mark hover spin ----- */
+.pf-brand:hover .pf-mark {
+  animation: pf-mark-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes pf-mark-bounce {
+  0%   { transform: rotate(0) scale(1); }
+  50%  { transform: rotate(-8deg) scale(1.1); }
+  100% { transform: rotate(0) scale(1); }
+}
+.pf-mark { transition: transform 0.2s ease; }
+
+/* ----- Respect reduced-motion globally ----- */
+@media (prefers-reduced-motion: reduce) {
+  .pf-orb,
+  .pf-orb-1, .pf-orb-2, .pf-orb-3,
+  .pf-banner-orb,
+  .pf-banner-grid,
+  .pf-mark,
+  .pf-sparkle,
+  .pf-pill-dot,
+  .pf-preview-status-dot,
+  .pf-banner-mock-dot,
+  .pf-eyebrow-dot,
+  .pf-cta-shimmer::after,
+  .pf-cta-pulse,
+  .pf-callout-pulse,
+  .pf-finalcta-rays span,
+  .pf-h1-anim .pf-line-1,
+  .pf-h1-anim .pf-line-2 {
+    animation: none !important;
+  }
+  .pf-h1-anim .pf-line-1,
+  .pf-h1-anim .pf-line-2 { opacity: 1; transform: none; }
+  .pf-hero-mark {
+    background: linear-gradient(120deg, #14161C 0%, #C95812 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-reveal { opacity: 1; transform: none; transition: none; }
+  .pf-banner-mock-dot { animation: none; }
+}
+
+/* ---------- RESPONSIVE ---------- */
+@media (max-width: 980px) {
+  .pf-hero {
+    grid-template-columns: 1fr;
+    padding: var(--pf-s-6) var(--pf-s-5);
+    gap: var(--pf-s-6);
+  }
+  .pf-hero-preview { min-height: 280px; }
+  .pf-about-grid { grid-template-columns: 1fr; gap: var(--pf-s-5); }
+  .pf-portal-grid { grid-template-columns: 1fr; gap: var(--pf-s-3); }
+  .pf-benefit-grid { grid-template-columns: repeat(2, 1fr); }
+  .pf-uc-grid { grid-template-columns: repeat(2, 1fr); }
+  .pf-sector-grid { grid-template-columns: 1fr; }
+  .pf-sector-card-wide { grid-column: auto; }
+  .pf-banner {
+    grid-template-columns: 1fr;
+    padding: var(--pf-s-6) var(--pf-s-5);
+  }
+  .pf-banner-preview { justify-self: center; }
+  .pf-footer-inner { grid-template-columns: 1fr; gap: var(--pf-s-5); }
+  .pf-footer-cols { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 720px) {
+  .pf-nav { padding: var(--pf-s-3); gap: var(--pf-s-3); }
+  .pf-nav-links { display: none; }
+  .pf-hero-wrap { padding: var(--pf-s-3) var(--pf-s-3) var(--pf-s-5); }
+  .pf-hero {
+    padding: var(--pf-s-5) var(--pf-s-4);
+    border-radius: 20px;
+  }
+  .pf-section { padding: var(--pf-s-7) var(--pf-s-3); }
+  .pf-benefit-grid { grid-template-columns: 1fr; }
+  .pf-uc-grid { grid-template-columns: 1fr; }
+  .pf-portal-card { padding: var(--pf-s-4); }
+  .pf-about-callout { padding: var(--pf-s-4); }
+  .pf-banner {
+    padding: var(--pf-s-5) var(--pf-s-3);
+    border-radius: 20px;
+  }
+  .pf-banner-squiggle { display: none; }
+  .pf-finalcta { padding: 0 var(--pf-s-3) var(--pf-s-8); }
+  .pf-footer-inner { padding: var(--pf-s-5) var(--pf-s-3); gap: var(--pf-s-4); }
+  .pf-footer-cols { grid-template-columns: 1fr; gap: var(--pf-s-4); }
+  .pf-preview-body { grid-template-columns: 1fr; }
+  .pf-preview-hero { border-left: 0; border-top: 1px solid var(--pf-line); }
 }
 

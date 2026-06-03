@@ -469,4 +469,26 @@ export const api = {
     request(`${CAMERAS_BASE}/cameras/${id}/`, { method: 'PATCH', json: data, withAuth: true }),
   deleteCamera: (id) =>
     request(`${CAMERAS_BASE}/cameras/${id}/`, { method: 'DELETE', withAuth: true }),
+
+  /* -------- Public (no auth) endpoints --------
+     These hit `applications/api/public/...` which the backend serves
+     without an Authorization header. Used by /public landing page and
+     the public dashboard view-only page. */
+  publicListApplications: () =>
+    request(`${APPS_BASE}/public/applications/`),
+  publicGetApplication: (id) =>
+    request(`${APPS_BASE}/public/applications/${id}/`),
+  publicListDashboards: ({ application } = {}) => {
+    const params = new URLSearchParams()
+    if (application != null) params.set('application', application)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/public/dashboards/${qs ? '?' + qs : ''}`)
+  },
+  // One-shot loader: returns { dashboard, application, cameras, components, devices }
+  publicLoadDashboard: (dashboardId) =>
+    request(`${APPS_BASE}/public/dashboards/${dashboardId}/load/`),
+  // Aggregate stats for the /public analytics overview:
+  //   { totals: {...}, applications: [{id, name, dashboards, devices, cameras, ...}] }
+  publicAnalytics: () =>
+    request(`${APPS_BASE}/public/analytics/`),
 }

@@ -68,6 +68,49 @@ def clean_empty(obj):
 # 🔹 Strict Typed Validation (1:1 match with WS)
 # ======================================================
 
+def coerce_numeric_types(incoming, existing):
+    """
+    Auto-coerce int↔float in incoming payload to match the existing
+    field's declared type. Mutates incoming in-place.
+    """
+    if not isinstance(incoming, dict) or not isinstance(existing, dict):
+        return
+    if "type" in incoming and "value" in incoming:
+        if "type" in existing and "value" in existing:
+            it, tt = incoming["type"], existing["type"]
+            iv = incoming["value"]
+            if it == "int" and tt == "float":
+                incoming["type"] = "float"
+                incoming["value"] = float(iv) if isinstance(iv, (int, float)) else iv
+            elif it == "float" and tt == "int":
+                incoming["type"] = "int"
+                incoming["value"] = int(round(iv)) if isinstance(iv, (int, float)) else iv
+        return
+    for key, val in incoming.items():
+        if isinstance(val, dict):
+            coerce_numeric_types(val, existing.get(key, {}))
+
+
+def normalize_payload_values(payload):
+    """
+    Ensure the Python value type matches the declared type.
+    float fields always store float, int fields always store int.
+    Mutates payload in-place. Call AFTER validation.
+    """
+    if not isinstance(payload, dict):
+        return
+    if "type" in payload and "value" in payload:
+        t, v = payload["type"], payload["value"]
+        if t == "float" and isinstance(v, int):
+            payload["value"] = float(v)
+        elif t == "int" and isinstance(v, float):
+            payload["value"] = int(round(v))
+        return
+    for key, val in payload.items():
+        if isinstance(val, dict):
+            normalize_payload_values(val)
+
+
 def validate_types(payload):
     allowed = {"string", "int", "float", "boolean", "dict", "list"}
 
@@ -180,10 +223,15 @@ def firebase_style_api(request, token, path=""):
     except:
         return JsonResponse({"status": "error", "message": "Invalid JSON"}, status=400)
 
-    # 4️⃣ Validate typed fields
+    # 4️⃣ Coerce int↔float to match existing field types, then validate
+    if request.method in ["PUT", "PATCH"]:
+        existing_at_path = get_nested(payload, path_parts) if path_parts else payload
+        coerce_numeric_types(body, existing_at_path if isinstance(existing_at_path, dict) else {})
     err = validate_types(body) if request.method in ["PUT", "PATCH"] else None
     if err:
         return JsonResponse({"status": "error", "message": err}, status=422)
+    if request.method in ["PUT", "PATCH"]:
+        normalize_payload_values(body)
 
     # ======================================================
     # PUT — Full Replace

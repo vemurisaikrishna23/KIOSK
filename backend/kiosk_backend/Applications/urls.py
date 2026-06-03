@@ -38,5 +38,10 @@ urlpatterns = [
         PublicDashboardLoadAPIView.as_view(),
         name="public-dashboard-load",
     ),
+    path(
+        "public/analytics/",
+        PublicAnalyticsAPIView.as_view(),
+        name="public-analytics",
+    ),
 
 ]

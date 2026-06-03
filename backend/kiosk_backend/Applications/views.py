@@ -459,14 +459,12 @@ class DeviceViewSet(viewsets.ModelViewSet):
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # 🔹 Merge payload dynamically if provided
         payload_update = request.data.get("payload")
         if payload_update:
+            from .views_realtime import coerce_numeric_types, broadcast_ws
+            existing = instance.payload or {}
+            coerce_numeric_types(payload_update, existing)
             instance.merge_payload(payload_update)
-            # 🔹 Broadcast over WebSocket so dashboards / device pages
-            # subscribed to this device get the live update. Without this
-            # the REST PATCH path silently bypasses every WS subscriber.
-            from .views_realtime import broadcast_ws
             broadcast_ws(instance, "patch", "", payload_update)
 
         serializer.save()
@@ -794,6 +792,16 @@ class PublicDashboardLoadAPIView(APIView):
             application__is_active=True
         )
 
+        # Devices for this application — needed so widgets have initial
+        # payload snapshots to render against. The dashboard WS only
+        # pushes deltas from this moment on (see _post_accept_setup in
+        # DashboardRealtimeConsumer), so without seeding devices here a
+        # public dashboard would render with empty values until the next
+        # device update lands.
+        devices = Device.objects.filter(
+            application=dashboard.application
+        ).order_by("device_name", "id")
+
         return Response({
             # 1️⃣ Dashboard (direct serializer)
             "dashboard": DashboardSerializer(
@@ -825,4 +833,91 @@ class PublicDashboardLoadAPIView(APIView):
                 components,
                 many=True
             ).data,
+
+            # 5️⃣ Devices — initial payload snapshot for widgets
+            "devices": DeviceSerializer(
+                devices,
+                many=True,
+                context={"request": request}
+            ).data,
         }, status=status.HTTP_200_OK)
+
+
+class PublicAnalyticsAPIView(APIView):
+    """
+    Public, no-auth analytics summary for the /public landing page.
+
+    Returns top-level totals across every published application + a
+    per-application breakdown. Each count is restricted to entities
+    that belong to an `is_active + publish=True` application so it
+    matches what's actually viewable on the public side.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        apps_qs = Application.objects.filter(
+            is_active=True,
+            publish=True,
+        ).order_by("-created_at")
+
+        dashboards_qs = Dashboard.objects.filter(
+            publish=True,
+            application__is_active=True,
+            application__publish=True,
+        )
+        cameras_qs = ApplicationHasCamera.objects.filter(
+            application__is_active=True,
+            application__publish=True,
+        )
+        devices_qs = Device.objects.filter(
+            application__is_active=True,
+            application__publish=True,
+        )
+
+        totals = {
+            "applications":     apps_qs.count(),
+            "dashboards":       dashboards_qs.count(),
+            "cameras":          cameras_qs.count(),
+            "devices":          devices_qs.count(),
+            "devices_connected": devices_qs.filter(is_connected=True).count(),
+        }
+
+        # Per-app breakdown — small payload, no N+1 because we project
+        # the counts via a single query per relation.
+        from django.db.models import Count, Q
+        per_app_rows = apps_qs.annotate(
+            dashboards_count=Count(
+                "dashboards",
+                filter=Q(dashboards__publish=True),
+                distinct=True,
+            ),
+            devices_count=Count("devices", distinct=True),
+            devices_connected_count=Count(
+                "devices",
+                filter=Q(devices__is_connected=True),
+                distinct=True,
+            ),
+            cameras_count=Count("camera_links", distinct=True),
+        ).values(
+            "id",
+            "name",
+            "dashboards_count",
+            "devices_count",
+            "devices_connected_count",
+            "cameras_count",
+        )
+
+        # Materialize and surface the app name under the alias the
+        # frontend expects so we don't need to special-case which field
+        # name to read.
+        per_app_list = list(per_app_rows)
+        for row in per_app_list:
+            row["application_name"] = row.pop("name")
+
+        return Response(
+            {
+                "totals": totals,
+                "applications": per_app_list,
+            },
+            status=status.HTTP_200_OK,
+        )
