@@ -178,6 +178,8 @@ class DashboardSerializer(serializers.ModelSerializer):
             "name",
             "description",
             "publish",
+            "publish_desktop",
+            "publish_mobile",
                         # 🔹 NEW FIELDS
             "dashboard_image",
             "dashboard_image_enable",
@@ -347,3 +349,56 @@ class PublicCameraOnlySerializer(serializers.ModelSerializer):
         fields = [
             "camera_details"
         ]
+
+
+class SSLCertificateSerializer(serializers.ModelSerializer):
+    uploaded_by_email = serializers.CharField(source="uploaded_by.email", read_only=True)
+    file_url = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
+    filename = serializers.SerializerMethodField()
+    # Lifecycle status — "active" for the currently-served cert, "expired"
+    # for every prior one. Drives the UI pill colour.
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SSLCertificate
+        fields = [
+            "id",
+            "name",
+            "description",
+            "file",
+            "file_url",
+            "filename",
+            "file_size",
+            "uploaded_by",
+            "uploaded_by_email",
+            "uploaded_at",
+            "is_active",
+            "status",
+        ]
+        read_only_fields = ["uploaded_by", "uploaded_at", "file_url", "file_size", "filename", "uploaded_by_email", "status"]
+
+    def get_status(self, obj):
+        return "active" if obj.is_active else "expired"
+
+    def get_file_url(self, obj):
+        request = self.context.get("request")
+        if not obj.file:
+            return None
+        url = obj.file.url
+        return request.build_absolute_uri(url) if request else url
+
+    def get_filename(self, obj):
+        if not obj.file:
+            return None
+        try:
+            import os
+            return os.path.basename(obj.file.name)
+        except Exception:
+            return None
+
+    def get_file_size(self, obj):
+        try:
+            return obj.file.size
+        except Exception:
+            return None

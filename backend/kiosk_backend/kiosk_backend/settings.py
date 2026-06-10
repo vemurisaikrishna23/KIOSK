@@ -59,6 +59,10 @@ CSRF_TRUSTED_ORIGINS = [
     'http://192.210.241.34:5173',  # vite dev preview, if you ever run it on the box
     'http://192.210.241.34:8001',
     'https://kiosk-backend.myaccess.cloud',
+    # LAN access for testing on a phone within the same Wi-Fi network.
+    'http://192.168.1.19',
+    'http://192.168.1.19:5173',
+    'http://192.168.1.19:8001',
 ]
 
 # Application definition

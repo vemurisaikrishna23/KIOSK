@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import { Pager } from './Users.jsx'
@@ -197,11 +197,32 @@ export default function Roles() {
     }
   }
 
+  // Per-role refs so we can scroll the freshly-expanded card into view.
+  const cardRefs = useRef(new Map())
+  function registerCardRef(id, el) {
+    if (el) cardRefs.current.set(id, el)
+    else    cardRefs.current.delete(id)
+  }
   function toggleExpand(id) {
     setExpanded((s) => {
       const next = new Set(s)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      const opening = !next.has(id)
+      if (opening) next.add(id)
+      else         next.delete(id)
+      if (opening) {
+        // Wait for the panel to render, then scroll the card into view
+        // if any part of its bottom (the just-expanded section) is below
+        // the viewport. Top stays anchored to the nav.
+        requestAnimationFrame(() => {
+          const el = cardRefs.current.get(id)
+          if (!el) return
+          const rect = el.getBoundingClientRect()
+          const viewportH = window.innerHeight || document.documentElement.clientHeight
+          if (rect.bottom > viewportH - 24 || rect.top < 80) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        })
+      }
       return next
     })
   }
@@ -302,7 +323,11 @@ export default function Roles() {
                   const policies = groupByPolicy(perms)
                   const isOpen = expanded.has(r.id)
                   return (
-                    <article className="role-card" key={r.id}>
+                    <article
+                      className={'role-card' + (isOpen ? ' is-open' : '')}
+                      key={r.id}
+                      ref={(el) => registerCardRef(r.id, el)}
+                    >
                       <header className="role-card-head" onClick={() => toggleExpand(r.id)}>
                         <div className="role-card-id">
                           <div className="role-icon" aria-hidden="true">

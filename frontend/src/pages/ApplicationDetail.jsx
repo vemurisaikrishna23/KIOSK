@@ -945,11 +945,6 @@ function DashboardRow({ dashboard, canUpdate, canDelete, onOpen, onEdit, onDelet
           {dashboard.description && <div className="detail-row-desc">{dashboard.description}</div>}
         </div>
       </div>
-      <div className="detail-row-pills">
-        {dashboard.publish
-          ? <span className="soft-pill is-pos">Published</span>
-          : <span className="soft-pill is-neutral">Draft</span>}
-      </div>
       <div className="detail-row-actions" onClick={(e) => e.stopPropagation()}>
         {canUpdate && <button type="button" className="row-btn" onClick={onEdit}>Edit</button>}
         {canDelete && <button type="button" className="row-btn danger" onClick={onDelete}>Delete</button>}
@@ -1006,11 +1001,6 @@ function DashboardModal({ initial, onClose, onSubmit }) {
                 onChange={(e) => set('description', e.target.value)}
                 placeholder="What does this dashboard show or control?" />
             </DField>
-            <label className="form-toggle">
-              <input type="checkbox" checked={form.publish} disabled={saving}
-                onChange={(e) => set('publish', e.target.checked)} />
-              <span>Published <small>— makes the dashboard available to end-users</small></span>
-            </label>
             <div className="modal-foot">
               <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
               <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving}>

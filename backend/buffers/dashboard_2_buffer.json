@@ -1,0 +1,1184 @@
+{
+  "dashboard": {
+    "id": 2,
+    "application": 1,
+    "application_name": "Shutter Application",
+    "name": "test",
+    "description": null,
+    "publish": true,
+    "publish_desktop": false,
+    "publish_mobile": false,
+    "dashboard_image": null,
+    "dashboard_image_enable": false,
+    "spline_url": null,
+    "spline_url_enable": false,
+    "theme": "peach",
+    "created_by": 3,
+    "created_by_name": "Sai (Super Admin)",
+    "created_at": "2026-05-20T15:25:05.806517+05:30",
+    "updated_at": "2026-06-10T13:54:44.113835+05:30"
+  },
+  "components": [
+    {
+      "id": 43,
+      "dashboard": 2,
+      "widget_name": "City",
+      "widget_type": "card",
+      "order": 0,
+      "config": {
+        "ui": {},
+        "title": "City Name",
+        "layout": {
+          "h": 3,
+          "w": 6,
+          "x": 0,
+          "y": 0
+        },
+        "mobile": {
+          "show": true,
+          "layout": {
+            "h": 2,
+            "w": 2,
+            "x": 2,
+            "y": 0
+          }
+        },
+        "static": {
+          "pattern": "https://api.iconify.design/game-icons:waves.svg?color=%237B5A2E",
+          "bar_color": "gold",
+          "card_color": "#b1a5b0",
+          "icon_color": "gold"
+        },
+        "variant": "simple_value",
+        "bindings": [
+          {
+            "icon": "",
+            "label": "District",
+            "device_id": 3,
+            "payload_path": "city"
+          }
+        ],
+        "container": 2,
+        "description": "Name of the City"
+      },
+      "created_at": "2026-06-06T13:27:57.558410+05:30",
+      "updated_at": "2026-06-09T13:55:20.686918+05:30"
+    },
+    {
+      "id": 44,
+      "dashboard": 2,
+      "widget_name": "Name",
+      "widget_type": "card",
+      "order": 1,
+      "config": {
+        "ui": {},
+        "title": "Person Name",
+        "layout": {
+          "h": 3,
+          "w": 6,
+          "x": 6,
+          "y": 0
+        },
+        "mobile": {
+          "show": true,
+          "layout": {
+            "h": 2,
+            "w": 2,
+            "x": 0,
+            "y": 0
+          }
+        },
+        "static": {
+          "icon": "material-symbols:person",
+          "pattern": "https://api.iconify.design/material-symbols:person-rounded.svg?color=%237B5A2E",
+          "bar_color": "gold",
+          "card_color": "cream",
+          "icon_color": "amber"
+        },
+        "variant": "simple_icon",
+        "bindings": [
+          {
+            "icon": "",
+            "label": "Name",
+            "device_id": 3,
+            "payload_path": "name"
+          }
+        ],
+        "container": 2,
+        "description": "Name of the Person"
+      },
+      "created_at": "2026-06-06T13:31:55.192028+05:30",
+      "updated_at": "2026-06-09T13:32:08.319546+05:30"
+    },
+    {
+      "id": 45,
+      "dashboard": 2,
+      "widget_name": "Fuel_Readings",
+      "widget_type": "card",
+      "order": 2,
+      "config": {
+        "ui": {},
+        "title": "Live Fuel Readings",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 8,
+          "y": 3
+        },
+        "mobile": {
+          "show": true,
+          "layout": {
+            "h": 3,
+            "w": 4,
+            "x": 0,
+            "y": 2
+          }
+        },
+        "static": {
+          "icon": "mdi:fuel-pump",
+          "pattern": "https://api.iconify.design/mdi:fuel-pump.svg?color=%237B5A2E",
+          "bar_color": "gold",
+          "card_color": "#f5770f",
+          "icon_color": "black"
+        },
+        "variant": "comparison",
+        "bindings": [
+          {
+            "icon": "",
+            "label": "Live Reading",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Live_Readings"
+          },
+          {
+            "icon": "",
+            "label": "Last Reading",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Previous_Readings"
+          }
+        ],
+        "container": 2,
+        "description": "Fuel Data in Litres"
+      },
+      "created_at": "2026-06-06T13:49:05.098724+05:30",
+      "updated_at": "2026-06-10T12:37:22.965020+05:30"
+    },
+    {
+      "id": 46,
+      "dashboard": 2,
+      "widget_name": "Sensor Readings",
+      "widget_type": "card",
+      "order": 3,
+      "config": {
+        "ui": {},
+        "title": "Sensor Readings",
+        "layout": {
+          "h": 4,
+          "w": 8,
+          "x": 0,
+          "y": 3
+        },
+        "mobile": {
+          "show": true,
+          "layout": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 5
+          }
+        },
+        "static": {
+          "icon": "icons8:sensor",
+          "pattern": "https://api.iconify.design/icons8:sensor.svg?color=%237B5A2E",
+          "bar_color": "gold",
+          "card_color": "mustard",
+          "icon_color": "blue"
+        },
+        "variant": "multivalue_grid",
+        "bindings": [
+          {
+            "icon": "",
+            "unit": "Years Counting",
+            "label": "Age",
+            "device_id": 3,
+            "payload_path": "age1"
+          },
+          {
+            "icon": "",
+            "unit": "Counting Number",
+            "label": "Number Count",
+            "device_id": 3,
+            "payload_path": "count"
+          },
+          {
+            "icon": "",
+            "unit": "Celsius",
+            "label": "Temperature",
+            "device_id": 3,
+            "payload_path": "temperature"
+          },
+          {
+            "icon": "",
+            "unit": "Percentage",
+            "label": "Humidity",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 2,
+        "description": "Sensor Readings Data"
+      },
+      "created_at": "2026-06-06T14:20:06.283849+05:30",
+      "updated_at": "2026-06-10T13:21:11.490535+05:30"
+    },
+    {
+      "id": 47,
+      "dashboard": 2,
+      "widget_name": "Sensor",
+      "widget_type": "card",
+      "order": 4,
+      "config": {
+        "ui": {},
+        "title": "3 Sensor Readings",
+        "layout": {
+          "h": 4,
+          "w": 6,
+          "x": 0,
+          "y": 7
+        },
+        "static": {
+          "bar_color": "orange",
+          "card_color": "sunset",
+          "icon_color": "orange"
+        },
+        "variant": "multivalue_row",
+        "bindings": [
+          {
+            "icon": "ep:odometer",
+            "unit": "Odom",
+            "label": "Odometry Data",
+            "device_id": 3,
+            "payload_path": "humidity"
+          },
+          {
+            "icon": "mdi:temperature",
+            "unit": "Celcius",
+            "label": "Temperature",
+            "device_id": 3,
+            "payload_path": "temperature"
+          },
+          {
+            "icon": "mdi:humidity",
+            "unit": "Percentage",
+            "label": "Humidity",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 2,
+        "description": "3 Sensors Data Readings"
+      },
+      "created_at": "2026-06-06T16:45:10.149917+05:30",
+      "updated_at": "2026-06-09T11:45:40.146103+05:30"
+    },
+    {
+      "id": 48,
+      "dashboard": 2,
+      "widget_name": "2Binding card",
+      "widget_type": "card",
+      "order": 5,
+      "config": {
+        "ui": {},
+        "title": "Double Binding Card",
+        "layout": {
+          "h": 4,
+          "w": 6,
+          "x": 6,
+          "y": 7
+        },
+        "static": {
+          "bar_color": "gold",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "multivalue_assorted",
+        "bindings": [
+          {
+            "icon": "arcticons:broken-age",
+            "unit": "Years",
+            "label": "Age",
+            "device_id": 3,
+            "payload_path": "age1"
+          },
+          {
+            "icon": "hugeicons:humidity",
+            "unit": "Percentage",
+            "label": "Humidity",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 2,
+        "description": ""
+      },
+      "created_at": "2026-06-08T10:18:50.933511+05:30",
+      "updated_at": "2026-06-09T13:09:54.394912+05:30"
+    },
+    {
+      "id": 49,
+      "dashboard": 2,
+      "widget_name": "Production Rate",
+      "widget_type": "card",
+      "order": 6,
+      "config": {
+        "ui": {},
+        "title": "Graph",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 0,
+          "y": 0
+        },
+        "static": {
+          "icon": "mdi:graph-line",
+          "unit": "Units",
+          "bar_color": "gold",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "trend",
+        "bindings": [
+          {
+            "icon": "",
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "count"
+          },
+          {
+            "icon": "",
+            "label": "Trend / delta source (optional)",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 3,
+        "description": "Production Rate Graph"
+      },
+      "created_at": "2026-06-08T10:24:38.941861+05:30",
+      "updated_at": "2026-06-08T10:24:47.027625+05:30"
+    },
+    {
+      "id": 50,
+      "dashboard": 2,
+      "widget_name": "TEST122323",
+      "widget_type": "card",
+      "order": 7,
+      "config": {
+        "ui": {},
+        "title": "Daily Target",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 5,
+          "y": 0
+        },
+        "static": {
+          "bar_color": "gold",
+          "card_color": "honey",
+          "done_label": "Completed",
+          "icon_color": "gold",
+          "left_label": "Pending"
+        },
+        "variant": "progress",
+        "bindings": [
+          {
+            "icon": "",
+            "label": "Current value source",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Previous_Readings"
+          },
+          {
+            "label": "Total / target value source",
+            "use_static": true,
+            "static_value": 50011
+          }
+        ],
+        "container": 3,
+        "description": "Daily Target"
+      },
+      "created_at": "2026-06-08T10:52:46.202984+05:30",
+      "updated_at": "2026-06-08T10:53:26.850934+05:30"
+    },
+    {
+      "id": 51,
+      "dashboard": 2,
+      "widget_name": "Light",
+      "widget_type": "control",
+      "order": 8,
+      "config": {
+        "ui": {},
+        "title": "Light",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 9,
+          "y": 0
+        },
+        "static": {
+          "icon": "tabler:bulb",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "switch",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "on_type": "dict",
+            "off_type": "dict",
+            "on_value": "{\"sai\":123}",
+            "device_id": 3,
+            "off_value": "{\"state\": \"off\"}",
+            "payload_path": "settings"
+          }
+        ],
+        "container": 3,
+        "description": "Toggle to On/Off"
+      },
+      "created_at": "2026-06-08T10:57:20.573395+05:30",
+      "updated_at": "2026-06-09T10:56:11.212412+05:30"
+    },
+    {
+      "id": 52,
+      "dashboard": 2,
+      "widget_name": "room_switch",
+      "widget_type": "control",
+      "order": 9,
+      "config": {
+        "ui": {},
+        "title": "Room Control",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 13,
+          "y": 0
+        },
+        "static": {
+          "icon": "icon-park-outline:control",
+          "card_color": "honey",
+          "icon_color": "bronze"
+        },
+        "variant": "dual_toggle",
+        "bindings": [
+          {
+            "label": "Live Fuel Readings",
+            "on_type": "float",
+            "off_type": "float",
+            "on_label": "Update Live Fuel Reading",
+            "on_value": "1.0",
+            "device_id": 3,
+            "off_label": "Revert Live Fuel Reading",
+            "off_value": "0.0",
+            "payload_path": "Fuel_Readings/Live_Readings"
+          },
+          {
+            "label": "Previous Fuel Readings",
+            "on_type": "float",
+            "off_type": "float",
+            "on_label": "Update Previous Fuel Reading",
+            "on_value": "1",
+            "device_id": 3,
+            "off_label": "Revert Previous Fuel Reading",
+            "off_value": "0.0",
+            "payload_path": "Fuel_Readings/Previous_Readings"
+          }
+        ],
+        "container": 3,
+        "description": "Room Control With Two Switches"
+      },
+      "created_at": "2026-06-09T09:46:45.166761+05:30",
+      "updated_at": "2026-06-10T10:23:29.027975+05:30"
+    },
+    {
+      "id": 53,
+      "dashboard": 2,
+      "widget_name": "pump_swiitch",
+      "widget_type": "control",
+      "order": 10,
+      "config": {
+        "ui": {},
+        "title": "Pump Switch",
+        "layout": {
+          "h": 4,
+          "w": 3,
+          "x": 18,
+          "y": 0
+        },
+        "static": {
+          "icon": "pinhead:water-standpipe-with-pump-handle-and-droplet",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "press_switch",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "on_type": "int",
+            "off_type": "int",
+            "on_value": "1",
+            "device_id": 3,
+            "off_value": "0",
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 3,
+        "description": "Pump Switch"
+      },
+      "created_at": "2026-06-09T10:29:47.410339+05:30",
+      "updated_at": "2026-06-09T11:03:45.421958+05:30"
+    },
+    {
+      "id": 54,
+      "dashboard": 2,
+      "widget_name": "LightName",
+      "widget_type": "control",
+      "order": 11,
+      "config": {
+        "ui": {},
+        "title": "Room Light",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 21,
+          "y": 0
+        },
+        "static": {
+          "card_color": "honey",
+          "icon_color": "#3300ff"
+        },
+        "variant": "single_button",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "on_type": "float",
+            "off_type": "float",
+            "on_label": "On",
+            "on_value": "1.0",
+            "device_id": 3,
+            "off_label": "Off",
+            "off_value": "0.0",
+            "payload_path": "age1"
+          }
+        ],
+        "container": 3,
+        "description": "Room Light Control"
+      },
+      "created_at": "2026-06-09T11:21:06.919840+05:30",
+      "updated_at": "2026-06-09T11:45:43.369215+05:30"
+    },
+    {
+      "id": 55,
+      "dashboard": 2,
+      "widget_name": "Quick Actions",
+      "widget_type": "control",
+      "order": 12,
+      "config": {
+        "ui": {},
+        "title": "Quick Actions",
+        "layout": {
+          "h": 4,
+          "w": 6,
+          "x": 26,
+          "y": 0
+        },
+        "static": {
+          "icon": "si:actions-fill",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "multi_button",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "actions": [
+              {
+                "type": "float",
+                "label": "Age",
+                "value": "1.7"
+              }
+            ],
+            "device_id": 3,
+            "payload_path": "age1"
+          },
+          {
+            "label": "Target",
+            "actions": [
+              {
+                "type": "string",
+                "label": "City",
+                "value": "Visakhaptanam"
+              }
+            ],
+            "device_id": 3,
+            "payload_path": "city"
+          },
+          {
+            "label": "Target",
+            "actions": [
+              {
+                "type": "float",
+                "label": "Fuel Reading",
+                "value": "1.4"
+              }
+            ],
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Live_Readings"
+          }
+        ],
+        "container": 3,
+        "description": "Actions"
+      },
+      "created_at": "2026-06-09T11:49:41.401803+05:30",
+      "updated_at": "2026-06-09T12:20:27.441581+05:30"
+    },
+    {
+      "id": 56,
+      "dashboard": 2,
+      "widget_name": "temp",
+      "widget_type": "control",
+      "order": 13,
+      "config": {
+        "ui": {},
+        "title": "Temperature",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 32,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "icon": "mdi:temperature",
+          "step": 1,
+          "unit": "Percentage",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "stepper",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 3,
+        "description": "Temperature Value"
+      },
+      "created_at": "2026-06-09T12:01:33.396577+05:30",
+      "updated_at": "2026-06-09T12:20:25.447841+05:30"
+    },
+    {
+      "id": 57,
+      "dashboard": 2,
+      "widget_name": "brightness",
+      "widget_type": "control",
+      "order": 14,
+      "config": {
+        "ui": {},
+        "title": "Brightness",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 36,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "icon": "boxicons:sun-bright-filled",
+          "step": 10,
+          "unit": "Percentage",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "slider",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 3,
+        "description": "Increase or Decrease the Brightness"
+      },
+      "created_at": "2026-06-09T12:06:05.780270+05:30",
+      "updated_at": "2026-06-09T12:20:22.207577+05:30"
+    },
+    {
+      "id": 58,
+      "dashboard": 2,
+      "widget_name": "String Send",
+      "widget_type": "control",
+      "order": 15,
+      "config": {
+        "ui": {},
+        "title": "String Send Card",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 41,
+          "y": 0
+        },
+        "static": {
+          "icon": "mdi:code-string",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "text_input",
+        "bindings": [
+          {
+            "label": "Enter the String",
+            "device_id": 3,
+            "payload_path": "city"
+          }
+        ],
+        "container": 3,
+        "description": "Send string"
+      },
+      "created_at": "2026-06-09T12:14:51.917479+05:30",
+      "updated_at": "2026-06-09T12:44:57.103502+05:30"
+    },
+    {
+      "id": 59,
+      "dashboard": 2,
+      "widget_name": "Number",
+      "widget_type": "control",
+      "order": 16,
+      "config": {
+        "ui": {},
+        "title": "Set Temperature",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 46,
+          "y": 0
+        },
+        "static": {
+          "icon": "solar:temperature-bold-duotone",
+          "unit": "Celsius",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "number_input",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "device_id": 3,
+            "payload_path": "temperature"
+          }
+        ],
+        "container": 3,
+        "description": "Temperature Set"
+      },
+      "created_at": "2026-06-09T13:04:23.643434+05:30",
+      "updated_at": "2026-06-09T13:08:07.707207+05:30"
+    },
+    {
+      "id": 60,
+      "dashboard": 2,
+      "widget_name": "List",
+      "widget_type": "control",
+      "order": 17,
+      "config": {
+        "ui": {},
+        "title": "Config List",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 50,
+          "y": 0
+        },
+        "static": {
+          "icon": "lets-icons:array",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "list_input",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "device_id": 3,
+            "payload_path": "alerts"
+          }
+        ],
+        "container": 3,
+        "description": "Send List"
+      },
+      "created_at": "2026-06-09T13:08:01.033128+05:30",
+      "updated_at": "2026-06-09T13:08:24.933692+05:30"
+    },
+    {
+      "id": 61,
+      "dashboard": 2,
+      "widget_name": "JSON",
+      "widget_type": "control",
+      "order": 18,
+      "config": {
+        "ui": {},
+        "title": "Config Json",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 55,
+          "y": 0
+        },
+        "static": {
+          "icon": "material-symbols:data-object",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "json_input",
+        "bindings": [
+          {
+            "label": "Target binding",
+            "device_id": 3,
+            "payload_path": "config"
+          }
+        ],
+        "container": 3,
+        "description": "Send JSON"
+      },
+      "created_at": "2026-06-09T13:09:12.192483+05:30",
+      "updated_at": "2026-06-09T13:09:16.983108+05:30"
+    },
+    {
+      "id": 62,
+      "dashboard": 2,
+      "widget_name": "Battery Level",
+      "widget_type": "fill",
+      "order": 19,
+      "config": {
+        "ui": {},
+        "title": "Battery Level",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 0,
+          "y": 11
+        },
+        "mobile": {
+          "show": true,
+          "layout": {
+            "h": 4,
+            "w": 4,
+            "x": 0,
+            "y": 9
+          }
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "unit": "Percentage",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "battery_fill",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Live_Readings"
+          }
+        ],
+        "container": 2,
+        "description": "Battery Charge Percentage"
+      },
+      "created_at": "2026-06-09T13:20:05.543484+05:30",
+      "updated_at": "2026-06-10T13:17:56.694880+05:30"
+    },
+    {
+      "id": 63,
+      "dashboard": 2,
+      "widget_name": "Level Tank",
+      "widget_type": "fill",
+      "order": 20,
+      "config": {
+        "ui": {},
+        "title": "Fuel Tank Level",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 4,
+          "y": 11
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "unit": "%",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "tank_rect_fill",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Live_Readings"
+          }
+        ],
+        "container": 2,
+        "description": "Fuel Tank Level"
+      },
+      "created_at": "2026-06-09T13:21:44.437979+05:30",
+      "updated_at": "2026-06-09T13:23:17.274303+05:30"
+    },
+    {
+      "id": 64,
+      "dashboard": 2,
+      "widget_name": "Fuel Tank Level",
+      "widget_type": "fill",
+      "order": 21,
+      "config": {
+        "ui": {},
+        "title": "Fuel Tank Level 2",
+        "layout": {
+          "h": 4,
+          "w": 4,
+          "x": 8,
+          "y": 11
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "unit": "%",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "tank_sphere_fill",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Previous_Readings"
+          }
+        ],
+        "container": 2,
+        "description": "Fuel Tank Level 2"
+      },
+      "created_at": "2026-06-09T13:22:55.657744+05:30",
+      "updated_at": "2026-06-10T12:37:29.711244+05:30"
+    },
+    {
+      "id": 68,
+      "dashboard": 2,
+      "widget_name": "Solid Gauge",
+      "widget_type": "dial",
+      "order": 22,
+      "config": {
+        "ui": {},
+        "title": "Solid Gauge",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 62,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "card_color": "frost",
+          "icon_color": "blue"
+        },
+        "variant": "solid_gauge",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "temperature"
+          }
+        ],
+        "container": 3,
+        "description": "Solid Gauge Readings"
+      },
+      "created_at": "2026-06-10T11:42:47.967277+05:30",
+      "updated_at": "2026-06-10T12:39:20.196642+05:30"
+    },
+    {
+      "id": 69,
+      "dashboard": 2,
+      "widget_name": "Semi Dial",
+      "widget_type": "dial",
+      "order": 23,
+      "config": {
+        "ui": {},
+        "title": "Semi Dial Gauge",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 67,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "card_color": "frost",
+          "icon_color": "blue"
+        },
+        "variant": "semi_dial",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "temperature"
+          }
+        ],
+        "container": 3,
+        "description": "Semi Dial Gauge"
+      },
+      "created_at": "2026-06-10T11:43:34.990721+05:30",
+      "updated_at": "2026-06-10T12:39:17.470431+05:30"
+    },
+    {
+      "id": 70,
+      "dashboard": 2,
+      "widget_name": "Full Dial",
+      "widget_type": "dial",
+      "order": 24,
+      "config": {
+        "ui": {},
+        "title": "Full Dial Gauge",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 77,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "card_color": "frost",
+          "icon_color": "blue"
+        },
+        "variant": "full_dial",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "Fuel_Readings/Live_Readings"
+          }
+        ],
+        "container": 3,
+        "description": "Full Dial Gauge"
+      },
+      "created_at": "2026-06-10T11:44:43.227114+05:30",
+      "updated_at": "2026-06-10T12:39:10.673216+05:30"
+    },
+    {
+      "id": 71,
+      "dashboard": 2,
+      "widget_name": "Progress Dial",
+      "widget_type": "dial",
+      "order": 25,
+      "config": {
+        "ui": {},
+        "title": "Progress Dial",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 87,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "progress_dial",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "humidity"
+          }
+        ],
+        "container": 3,
+        "description": "Progress Dial"
+      },
+      "created_at": "2026-06-10T11:46:11.569400+05:30",
+      "updated_at": "2026-06-10T12:38:58.134808+05:30"
+    },
+    {
+      "id": 72,
+      "dashboard": 2,
+      "widget_name": "Threshold Dial",
+      "widget_type": "dial",
+      "order": 26,
+      "config": {
+        "ui": {},
+        "title": "Threshold Dial",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 72,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "unit": "Temp",
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "threshold_dial",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "temperature"
+          }
+        ],
+        "container": 3,
+        "description": "Threshold Dial"
+      },
+      "created_at": "2026-06-10T11:53:12.145392+05:30",
+      "updated_at": "2026-06-10T12:39:13.633839+05:30"
+    },
+    {
+      "id": 73,
+      "dashboard": 2,
+      "widget_name": "Full Circle Dial",
+      "widget_type": "dial",
+      "order": 27,
+      "config": {
+        "ui": {},
+        "title": "Full Circle Dial",
+        "layout": {
+          "h": 4,
+          "w": 5,
+          "x": 82,
+          "y": 0
+        },
+        "static": {
+          "max": 100,
+          "min": 0,
+          "card_color": "honey",
+          "icon_color": "gold"
+        },
+        "variant": "full_circle_dial",
+        "bindings": [
+          {
+            "label": "Value source",
+            "device_id": 3,
+            "payload_path": "temperature"
+          }
+        ],
+        "container": 3,
+        "description": "Full Circle Dial"
+      },
+      "created_at": "2026-06-10T12:33:01.604401+05:30",
+      "updated_at": "2026-06-10T12:41:12.962284+05:30"
+    }
+  ]
+}

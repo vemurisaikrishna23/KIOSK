@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Responsive, WidthProvider } from 'react-grid-layout'
 import TopBar from '../components/TopBar.jsx'
@@ -32,6 +32,60 @@ const C2_RESIZE_HANDLES = ['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']
 const C2_COLS = 12
 const DEFAULT_WIDGET_LAYOUT = { w: 4, h: 3, minW: 3, minH: 2 }
 
+/* ---- Mobile dashboard layout ----
+   A SEPARATE, phone-optimised layout the admin builds AFTER the desktop
+   dashboard. Each widget persists its phone placement inside its own
+   config: config.mobile = { show:boolean, layout:{x,y,w,h} } — so the
+   desktop layout (config.layout) is never touched. The grid is a simple
+   4-column, vertically-compacting stack so it always reads tidy on a
+   phone. The editor renders it inside a phone frame; the public end-user
+   view renders it full-width in the device's real viewport. */
+const MOBILE_COLS = 4
+const MOBILE_GAP = 10
+const MOBILE_ROW_H = 74
+const MOBILE_DEFAULT_H = 3
+const MOBILE_MIN_ROWS = 4   // empty-state drop-area height only
+// Same 8 resize handles as the desktop containers, so the mobile widgets
+// get the identical corner/edge "point" handles.
+const MOBILE_RESIZE_HANDLES = ['s', 'w', 'e', 'n', 'sw', 'nw', 'se', 'ne']
+/* Device catalogue for the in-editor mobile simulator — mirrors the device
+   list you'd find in a "mobile simulator" browser extension. `notch` picks
+   the top cut-out: 'island' (pill), 'notch' (wide notch), 'punch' (camera
+   dot) or 'none'. w/h are CSS logical px (portrait). `type` drives the
+   bezel style (phone vs tablet). Grouped by `brand` in the picker. */
+const MOBILE_DEVICES = [
+  // ---- Apple · iPhone ----
+  { id: 'ip-se',        brand: 'iPhone', label: 'iPhone SE',            w: 375, h: 667,  notch: 'none',   radius: 44, type: 'phone' },
+  { id: 'ip-8plus',     brand: 'iPhone', label: 'iPhone 8 Plus',        w: 414, h: 736,  notch: 'none',   radius: 44, type: 'phone' },
+  { id: 'ip-x',         brand: 'iPhone', label: 'iPhone X / XS',        w: 375, h: 812,  notch: 'notch',  radius: 48, type: 'phone' },
+  { id: 'ip-xr',        brand: 'iPhone', label: 'iPhone XR / 11',       w: 414, h: 896,  notch: 'notch',  radius: 50, type: 'phone' },
+  { id: 'ip-13mini',    brand: 'iPhone', label: 'iPhone 13 mini',       w: 360, h: 780,  notch: 'notch',  radius: 48, type: 'phone' },
+  { id: 'ip-14',        brand: 'iPhone', label: 'iPhone 14',            w: 390, h: 844,  notch: 'notch',  radius: 50, type: 'phone' },
+  { id: 'ip-14plus',    brand: 'iPhone', label: 'iPhone 14 Plus',       w: 428, h: 926,  notch: 'notch',  radius: 52, type: 'phone' },
+  { id: 'ip-14pro',     brand: 'iPhone', label: 'iPhone 14 Pro',        w: 393, h: 852,  notch: 'island', radius: 54, type: 'phone' },
+  { id: 'ip-15',        brand: 'iPhone', label: 'iPhone 15',            w: 393, h: 852,  notch: 'island', radius: 54, type: 'phone' },
+  { id: 'ip-15promax',  brand: 'iPhone', label: 'iPhone 15 Pro Max',    w: 430, h: 932,  notch: 'island', radius: 56, type: 'phone' },
+  { id: 'ip-16pro',     brand: 'iPhone', label: 'iPhone 16 Pro',        w: 402, h: 874,  notch: 'island', radius: 56, type: 'phone' },
+  // ---- Google · Pixel ----
+  { id: 'px-5',         brand: 'Pixel',  label: 'Pixel 5',              w: 393, h: 851,  notch: 'punch',  radius: 44, type: 'phone' },
+  { id: 'px-7',         brand: 'Pixel',  label: 'Pixel 7',              w: 412, h: 915,  notch: 'punch',  radius: 44, type: 'phone' },
+  { id: 'px-8',         brand: 'Pixel',  label: 'Pixel 8',              w: 412, h: 915,  notch: 'punch',  radius: 44, type: 'phone' },
+  { id: 'px-8pro',      brand: 'Pixel',  label: 'Pixel 8 Pro',          w: 448, h: 998,  notch: 'punch',  radius: 46, type: 'phone' },
+  // ---- Samsung · Galaxy ----
+  { id: 'gs-s8',        brand: 'Galaxy', label: 'Galaxy S8',            w: 360, h: 740,  notch: 'none',   radius: 44, type: 'phone' },
+  { id: 'gs-s10',       brand: 'Galaxy', label: 'Galaxy S10',           w: 360, h: 760,  notch: 'punch',  radius: 44, type: 'phone' },
+  { id: 'gs-s20',       brand: 'Galaxy', label: 'Galaxy S20',           w: 360, h: 800,  notch: 'punch',  radius: 44, type: 'phone' },
+  { id: 'gs-s23',       brand: 'Galaxy', label: 'Galaxy S23',           w: 360, h: 780,  notch: 'punch',  radius: 44, type: 'phone' },
+  { id: 'gs-s23ultra',  brand: 'Galaxy', label: 'Galaxy S23 Ultra',     w: 384, h: 824,  notch: 'punch',  radius: 36, type: 'phone' },
+  { id: 'gs-note20',    brand: 'Galaxy', label: 'Galaxy Note 20',       w: 412, h: 883,  notch: 'punch',  radius: 38, type: 'phone' },
+  { id: 'gs-zflip',     brand: 'Galaxy', label: 'Galaxy Z Flip',        w: 360, h: 880,  notch: 'punch',  radius: 42, type: 'phone' },
+  // ---- Other ----
+  { id: 'op-11',        brand: 'Other',  label: 'OnePlus 11',           w: 412, h: 919,  notch: 'punch',  radius: 46, type: 'phone' },
+  { id: 'xi-13',        brand: 'Other',  label: 'Xiaomi 13',            w: 393, h: 873,  notch: 'punch',  radius: 46, type: 'phone' },
+  { id: 'nx-5',         brand: 'Other',  label: 'Nexus 5',              w: 360, h: 640,  notch: 'none',   radius: 36, type: 'phone' },
+]
+const MOBILE_DEVICE_BRANDS = ['iPhone', 'Pixel', 'Galaxy', 'Other']
+
 /* Per-variant default + minimum sizes (in cell units).
    minW/minH stop the card from being resized below a readable size.
    Defaults set the size when a fresh widget is dropped on the grid. */
@@ -47,10 +101,75 @@ const VARIANT_LAYOUT_DEFAULTS = {
 }
 function variantLayoutDefaults(variant) {
   if (!variant) return DEFAULT_WIDGET_LAYOUT
-  return VARIANT_LAYOUT_DEFAULTS[variant] || CONTROL_LAYOUT_DEFAULTS[variant] || DIAL_LAYOUT_DEFAULTS[variant] || FILL_LAYOUT_DEFAULTS[variant] || CHART_LAYOUT_DEFAULTS[variant] || DEFAULT_WIDGET_LAYOUT
+  return VARIANT_LAYOUT_DEFAULTS[variant] || CONTROL_LAYOUT_DEFAULTS[variant] || DIAL_LAYOUT_DEFAULTS[variant] || FILL_LAYOUT_DEFAULTS[variant] || CHART_LAYOUT_DEFAULTS[variant] || LOG_LAYOUT_DEFAULTS[variant] || DEFAULT_WIDGET_LAYOUT
 }
 function isControlVariant(v) { return !!(v && CONTROL_VARIANT_DEFS[v]) }
 function isCardVariant(v)    { return !!(v && CARD_VARIANT_DEFS[v]) }
+/* A sensible default phone size per widget category, so a freshly-added
+   widget lands looking right: dials / fills are half-width (two pair up),
+   cards & controls are full-width but short, charts & logs are taller. */
+function mobileDefaultSize(c) {
+  const v = c?.config?.variant
+  if (v && CHART_VARIANT_DEFS[v])   return { w: 4, h: 3 }
+  if (v && LOG_VARIANT_DEFS[v])     return { w: 4, h: 4 }
+  if (v && DIAL_VARIANT_DEFS[v])    return { w: 2, h: 3 }
+  if (v && FILL_VARIANT_DEFS[v])    return { w: 2, h: 3 }
+  if (v && CONTROL_VARIANT_DEFS[v]) return { w: 4, h: 2 }
+  if (v && CARD_VARIANT_DEFS[v])    return { w: 4, h: 2 }
+  return { w: 4, h: MOBILE_DEFAULT_H }
+}
+/* First free slot (top→bottom, left→right) for a w×h block on the 4-col
+   phone grid, given the current layout. Lets half-width widgets pair up
+   neatly instead of stacking down the left edge. */
+function findMobileSlot(layout, w, h) {
+  const occupied = (x, y) => layout.some((l) =>
+    x < (l.x + l.w) && (x + 1) > l.x && y < (l.y + l.h) && (y + 1) > l.y)
+  const fits = (x, y) => {
+    for (let dx = 0; dx < w; dx++)
+      for (let dy = 0; dy < h; dy++)
+        if (occupied(x + dx, y + dy)) return false
+    return true
+  }
+  for (let y = 0; y < 400; y++)
+    for (let x = 0; x <= MOBILE_COLS - w; x++)
+      if (fits(x, y)) return { x, y }
+  return { x: 0, y: 0 }
+}
+/* Mobile placement for a widget — reads config.mobile.layout, clamped to
+   the 4-col phone grid; falls back to the per-category default size,
+   stacked by index. */
+function getMobileLayout(c, idx) {
+  const stored = c?.config?.mobile?.layout
+  const def = mobileDefaultSize(c)
+  if (stored && Number.isFinite(stored.x) && Number.isFinite(stored.y)) {
+    const w = Math.min(MOBILE_COLS, Math.max(1, stored.w ?? def.w))
+    return {
+      i: String(c.id),
+      x: Math.max(0, Math.min(stored.x ?? 0, MOBILE_COLS - w)),
+      y: stored.y,
+      w,
+      h: Math.max(2, stored.h ?? def.h),
+      minW: 1, minH: 2,
+    }
+  }
+  return { i: String(c.id), x: 0, y: idx * 3, w: def.w, h: def.h, minW: 1, minH: 2 }
+}
+/* True when the viewport is phone-sized — drives the public end-user view
+   to render the mobile layout instead of the desktop containers. */
+function useIsNarrow(maxWidth = 768) {
+  const [narrow, setNarrow] = useState(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false
+    return window.matchMedia(`(max-width: ${maxWidth}px)`).matches
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia(`(max-width: ${maxWidth}px)`)
+    const handler = (e) => setNarrow(e.matches)
+    mq.addEventListener ? mq.addEventListener('change', handler) : mq.addListener(handler)
+    return () => { mq.removeEventListener ? mq.removeEventListener('change', handler) : mq.removeListener(handler) }
+  }, [maxWidth])
+  return narrow
+}
 function getWidgetLayout(c, idx, cols = 11) {
   const variant = c?.config?.variant
   const defaults = variantLayoutDefaults(variant)
@@ -141,7 +260,7 @@ const ICON_COLORS = [
   { id: 'black',    label: 'Black',    hex: '#1A1A1A' },
 ]
 function getCardColor(id)   { return CARD_COLORS.find((c) => c.id === id) || CARD_COLORS[0] }
-function getIconColor(id)   { return ICON_COLORS.find((c) => c.id === id) || ICON_COLORS[0] }
+function getIconColor(id)   { if (typeof id === 'string' && id.charAt(0) === '#') return { id, label: 'Custom', hex: id }; return ICON_COLORS.find((c) => c.id === id) || ICON_COLORS[0] }
 
 /* Dashboard-level palettes. Each theme drives:
    – panel gradients (.db-group, .db-group-bottom)
@@ -152,31 +271,47 @@ function getIconColor(id)   { return ICON_COLORS.find((c) => c.id === id) || ICO
 const DASHBOARD_THEMES = [
   {
     id: 'peach', label: 'Peach',
-    pageBg:     '#F0DCB8',
-    panelBg:    'radial-gradient(ellipse 120% 80% at 100% 0%, rgba(255,222,192,0.55), transparent 65%), radial-gradient(ellipse 110% 70% at 0% 100%, rgba(255,240,220,0.45), transparent 70%), linear-gradient(170deg, #FFFBF5 0%, #FCEFD9 60%, #F8E0BC 100%)',
-    bottomBg:   'radial-gradient(ellipse 110% 80% at 0% 0%, rgba(255,222,192,0.55), transparent 65%), radial-gradient(ellipse 120% 70% at 100% 100%, rgba(255,240,220,0.45), transparent 70%), linear-gradient(190deg, #FFFDF8 0%, #FCF3E3 60%, #F8E4C6 100%)',
-    border:     'rgba(246, 228, 208, 0.85)',
+    pageBg:     '#EEF2F5',
+    panelBg:    '#FFF7F3',
+    bottomBg:   '#FFF7F3',
+    border:     'rgba(246, 220, 200, 0.85)',
     cellBg:     'rgba(255, 255, 255, 0.50)',
-    cellBorder: 'rgba(244, 212, 175, 0.55)',
+    cellBorder: 'rgba(248, 210, 188, 0.55)',
     accent:     '#F36A1E',
     accentLight:'#FF8A47',
     accentDeep: '#D85510',
+    defaultCardColor: '#FDD6BD',
+    defaultIconColor: 'orange',
+  },
+  // Smart-home reference palette: soft cream-peach page, light peach panels,
+  // white widget cards, vibrant orange accent.
+  {
+    id: 'coral', label: 'Coral',
+    pageBg:     '#F4E6D9',
+    panelBg:    'radial-gradient(ellipse 120% 80% at 100% 0%, rgba(255,214,188,0.55), transparent 65%), radial-gradient(ellipse 110% 70% at 0% 100%, rgba(255,236,225,0.45), transparent 70%), linear-gradient(170deg, #FFF7F2 0%, #FDEADF 60%, #F9D8C7 100%)',
+    bottomBg:   'radial-gradient(ellipse 110% 80% at 0% 0%, rgba(255,214,188,0.55), transparent 65%), radial-gradient(ellipse 120% 70% at 100% 100%, rgba(255,236,225,0.45), transparent 70%), linear-gradient(190deg, #FFF9F5 0%, #FDEDE3 60%, #F9DBCB 100%)',
+    border:     'rgba(250, 220, 200, 0.85)',
+    cellBg:     'rgba(255, 255, 255, 0.55)',
+    cellBorder: 'rgba(250, 215, 195, 0.55)',
+    accent:     '#F4661E',
+    accentLight:'#FF8A47',
+    accentDeep: '#D9540F',
     defaultCardColor: 'peach',
     defaultIconColor: 'orange',
   },
   {
-    id: 'ocean', label: 'Ocean',
-    pageBg:     '#D7E5F2',
-    panelBg:    'radial-gradient(ellipse 120% 80% at 100% 0%, rgba(180,210,250,0.55), transparent 65%), radial-gradient(ellipse 110% 70% at 0% 100%, rgba(220,235,250,0.45), transparent 70%), linear-gradient(170deg, #F5FAFE 0%, #E0EDFB 60%, #B7D5FA 100%)',
-    bottomBg:   'radial-gradient(ellipse 110% 80% at 0% 0%, rgba(180,210,250,0.55), transparent 65%), radial-gradient(ellipse 120% 70% at 100% 100%, rgba(220,235,250,0.45), transparent 70%), linear-gradient(190deg, #F7FBFE 0%, #E3EFFB 60%, #BBD8FA 100%)',
-    border:     'rgba(190, 215, 245, 0.85)',
-    cellBg:     'rgba(255, 255, 255, 0.55)',
-    cellBorder: 'rgba(180, 210, 245, 0.55)',
-    accent:     '#2D6EE0',
-    accentLight:'#5089E8',
-    accentDeep: '#1F54B5',
-    defaultCardColor: 'sky',
-    defaultIconColor: 'blue',
+    id: 'white', label: 'White',
+    pageBg:     '#EDF0F3',
+    panelBg:    '#FFFFFF',
+    bottomBg:   '#FFFFFF',
+    border:     'rgba(226, 231, 237, 0.95)',
+    cellBg:     'rgba(248, 249, 251, 0.80)',
+    cellBorder: 'rgba(226, 231, 237, 0.80)',
+    accent:     '#475569',
+    accentLight:'#677589',
+    accentDeep: '#2F3A4E',
+    defaultCardColor: 'snow',
+    defaultIconColor: 'slate',
   },
   {
     id: 'mint', label: 'Mint',
@@ -279,7 +414,11 @@ const DASHBOARD_THEMES = [
     defaultIconColor: 'gold',
   },
 ]
-function getTheme(id) { return DASHBOARD_THEMES.find((t) => t.id === id) || DASHBOARD_THEMES[0] }
+function getTheme(id) {
+  const custom = parseCustomTheme(id)
+  if (custom) return buildCustomTheme(custom.hex, custom.mode)
+  return DASHBOARD_THEMES.find((t) => t.id === id) || DASHBOARD_THEMES[0]
+}
 function themeCssVars(t) {
   return {
     '--db-page-bg':        t.pageBg,
@@ -422,7 +561,96 @@ function hexToRgba(hex, alpha = 0.18) {
   const r = parseInt(v.slice(0,2),16), g = parseInt(v.slice(2,4),16), b = parseInt(v.slice(4,6),16)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
+// Build a card style from an arbitrary custom hex (the "custom color" the
+// user picks from the palette). The chosen hex is the deep end of a soft
+// gradient that fades lighter — mirroring the built-in bold gradients — and
+// text color is chosen for contrast against that lighter end where data sits.
+function hexToRgb(hex) {
+  let h = String(hex).replace('#', '')
+  if (h.length === 3) h = h.split('').map((x) => x + x).join('')
+  const n = parseInt(h, 16)
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }
+}
+function mixWhite({ r, g, b }, t) {
+  return {
+    r: Math.round(r + (255 - r) * t),
+    g: Math.round(g + (255 - g) * t),
+    b: Math.round(b + (255 - b) * t),
+  }
+}
+function mixBlack({ r, g, b }, t) {
+  return {
+    r: Math.round(r * (1 - t)),
+    g: Math.round(g * (1 - t)),
+    b: Math.round(b * (1 - t)),
+  }
+}
+function rgbCss({ r, g, b }) { return `rgb(${r}, ${g}, ${b})` }
+function rgbaCss({ r, g, b }, a) { return `rgba(${r}, ${g}, ${b}, ${a})` }
+
+// A custom dashboard theme is encoded into the same short `theme` string
+// the presets use, as `custom:<mode>:<hex>` (e.g. "custom:gradient:#F4A261"
+// or "custom:solid:#3E7D52"). `mode` is the user's choice between a soft
+// linear-gradient panel or a flat ("complete") single-color panel.
+function parseCustomTheme(id) {
+  if (typeof id !== 'string' || id.slice(0, 7) !== 'custom:') return null
+  const parts = id.split(':')
+  const mode = parts[1] === 'solid' ? 'solid' : 'gradient'
+  const hex = (parts[2] && parts[2].charAt(0) === '#') ? parts[2] : '#F4A261'
+  return { mode, hex }
+}
+function customThemeId(hex, mode) { return `custom:${mode === 'solid' ? 'solid' : 'gradient'}:${hex}` }
+
+// Derive a full dashboard palette from a single base hex. Light tints drive
+// the panel surfaces (so text stays readable) while the base hex drives the
+// accent. In 'solid' mode the panels are a flat tint; in 'gradient' mode they
+// fade like the built-in themes.
+function buildCustomTheme(hex, mode) {
+  const rgb = hexToRgb(hex)
+  const veryLight = rgbCss(mixWhite(rgb, 0.92))
+  const light     = rgbCss(mixWhite(rgb, 0.80))
+  const lightMid  = rgbCss(mixWhite(rgb, 0.66))
+  const tint      = rgbaCss(rgb, 0.20)
+  const panelBg = mode === 'solid'
+    ? light
+    : `radial-gradient(ellipse 120% 80% at 100% 0%, ${tint}, transparent 65%), linear-gradient(170deg, ${veryLight} 0%, ${light} 60%, ${lightMid} 100%)`
+  const bottomBg = mode === 'solid'
+    ? veryLight
+    : `radial-gradient(ellipse 110% 80% at 0% 0%, ${tint}, transparent 65%), linear-gradient(190deg, ${veryLight} 0%, ${light} 60%, ${lightMid} 100%)`
+  return {
+    id: customThemeId(hex, mode),
+    label: 'Custom',
+    pageBg:      rgbCss(mixWhite(rgb, 0.55)),
+    panelBg,
+    bottomBg,
+    border:      rgbaCss(mixWhite(rgb, 0.55), 0.85),
+    cellBg:      'rgba(255, 255, 255, 0.55)',
+    cellBorder:  rgbaCss(mixWhite(rgb, 0.50), 0.55),
+    accent:      hex,
+    accentLight: rgbCss(mixWhite(rgb, 0.28)),
+    accentDeep:  rgbCss(mixBlack(rgb, 0.22)),
+    defaultCardColor: hex,
+    defaultIconColor: hex,
+  }
+}
+function customCardStyle(hex) {
+  const rgb = hexToRgb(hex)
+  const light = mixWhite(rgb, 0.62)
+  const lightCss = `rgb(${light.r}, ${light.g}, ${light.b})`
+  const lum = (0.299 * light.r + 0.587 * light.g + 0.114 * light.b) / 255
+  const text = lum > 0.55 ? '#1C1407' : '#FFFFFF'
+  const sub = lum > 0.55 ? 'rgba(28, 20, 7, 0.66)' : 'rgba(255, 255, 255, 0.78)'
+  return {
+    background: `linear-gradient(135deg, ${hex} 0%, ${lightCss} 100%)`,
+    color: text,
+    '--cv-sub-color': sub,
+  }
+}
 function cardStyleFor(colorId) {
+  // A custom color is stored as a raw hex string (e.g. "#3E7D52").
+  if (typeof colorId === 'string' && colorId.charAt(0) === '#') {
+    return customCardStyle(colorId)
+  }
   const c = getCardColor(colorId)
   const style = {
     background: c.bg,
@@ -438,6 +666,78 @@ function cardStyleFor(colorId) {
     style.border = '1px solid rgba(255, 255, 255, 0.18)'
   }
   return style
+}
+
+/* Card color picker — shows a single row of swatches by default (whatever
+   fits the field width; the rest are clipped), with a "More" toggle that
+   reveals the full palette, plus a rainbow custom-color chip that opens the
+   native color picker. Shared by every card config form's Appearance section.
+   The value is either a built-in color id or a raw hex string (custom). */
+function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, fallbackCustom = '#F4A261' }) {
+  const [expanded, setExpanded] = useState(false)
+  const isCustom = typeof value === 'string' && value.charAt(0) === '#'
+  return (
+    <div className={'card-color-picker' + (expanded ? ' is-expanded' : '')}>
+      <div className="color-swatches card-color-swatches">
+        {colors.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            className={'color-swatch' + (solid ? ' color-swatch-solid' : '') + (value === c.id ? ' is-active' : '')}
+            style={{ background: c.bg || c.hex }}
+            title={c.label}
+            aria-label={c.label}
+            aria-pressed={value === c.id}
+            onClick={() => onChange(c.id)}
+            disabled={disabled}
+          />
+        ))}
+        {/* Custom-color palette chip — last item, so it only appears once the
+            row is expanded via "More" (it's clipped off in the collapsed row). */}
+        <label
+          className={'color-swatch color-swatch-custom' + (isCustom ? ' is-active' : '')}
+          title="Custom color"
+          style={isCustom ? { background: value } : undefined}
+        >
+          <input
+            type="color"
+            value={isCustom ? value : fallbackCustom}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {!isCustom && (
+            <svg className="color-swatch-custom-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2.5a9.5 9.5 0 1 0 0 19c1 0 1.6-.8 1.6-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.7-1.6 1.6-1.6h1.9A4.4 4.4 0 0 0 22 11.5C22 6.5 17.5 2.5 12 2.5Z" stroke="currentColor" strokeWidth="1.6"/>
+              <circle cx="7.5" cy="11" r="1.2" fill="currentColor"/>
+              <circle cx="11" cy="7" r="1.2" fill="currentColor"/>
+              <circle cx="15.5" cy="8" r="1.2" fill="currentColor"/>
+            </svg>
+          )}
+        </label>
+      </div>
+      <button
+        type="button"
+        className="color-more-btn"
+        onClick={() => setExpanded((v) => !v)}
+        disabled={disabled}
+        aria-expanded={expanded}
+      >
+        {expanded ? 'Less' : 'More'}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+          style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+    </div>
+  )
+}
+// Card colors use gradient backgrounds (c.bg); icon/bar/gauge colors are solid
+// hex chips (c.hex). Both get the same collapse + custom-palette behavior.
+function CardColorPicker(props) {
+  return <ColorSwatchPicker {...props} colors={CARD_COLORS} fallbackCustom="#F4A261" />
+}
+function IconColorPicker(props) {
+  return <ColorSwatchPicker {...props} colors={ICON_COLORS} solid fallbackCustom="#F36A1E" />
 }
 
 /* =====================================================================
@@ -484,6 +784,21 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   const [error, setError] = useState(null)
   const [selectedCamId, setSelectedCamId] = useState(null)
   const [previewMode, setPreviewMode] = useState(false)
+  // Which layout the admin is editing: the desktop/tablet grid or the
+  // phone layout. Public viewers never touch this — their view is chosen
+  // automatically from the real screen width (see isNarrow below).
+  // Default the editor viewport to the device that matches the screen: phones
+  // (narrow / portrait) open straight to the Mobile layout, larger screens to
+  // Desktop. The user can still switch with the toolbar toggle.
+  const [editViewport, setEditViewport] = useState(() => {
+    if (typeof window === 'undefined') return 'desktop'
+    const narrow = window.matchMedia
+      ? window.matchMedia('(max-width: 768px)').matches
+      : window.innerWidth <= 768
+    const portrait = window.innerHeight >= window.innerWidth
+    return (narrow || portrait) ? 'mobile' : 'desktop'
+  }) // 'desktop' | 'mobile'
+  const isNarrow = useIsNarrow(768)
   const previewShellRef = useRef(null)
   const [widgetModal, setWidgetModal] = useState(null)     // {mode:'create'|'edit', form}
   const [pickerOpen, setPickerOpen] = useState(false)      // category-picker popup (opens from "+")
@@ -506,12 +821,23 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // server (initial load + cross-tab sync).
   const themePersistRef = useRef(themeId)
 
+  // Custom theme: the user-picked base color and the gradient/solid mode.
+  // Kept in local state so toggling the mode keeps the chosen color (and
+  // vice-versa) without re-deriving from the encoded theme string. Seeded
+  // from the current theme if it's already a custom one.
+  const initCustom = parseCustomTheme(themeId)
+  const [customHex, setCustomHex] = useState(initCustom?.hex || '#F4A261')
+  const [customMode, setCustomMode] = useState(initCustom?.mode || 'gradient')
+  const isCustomTheme = typeof themeId === 'string' && themeId.slice(0, 7) === 'custom:'
+
   // Adopt server theme once the dashboard loads.
   useEffect(() => {
     const serverTheme = dashboard?.theme
     if (serverTheme && serverTheme !== themeId) {
       themePersistRef.current = serverTheme
       setThemeId(serverTheme)
+      const c = parseCustomTheme(serverTheme)
+      if (c) { setCustomHex(c.hex); setCustomMode(c.mode) }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dashboard?.theme])
@@ -531,6 +857,31 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     themePersistRef.current = themeId
     api.updateDashboard(dashboard.id, { theme: themeId }).catch(() => {})
   }, [themeId, dashboard?.id, publicMode])
+
+  // Per-viewport publish state. The admin activates the Desktop and the
+  // Mobile layout independently — the toggle in the toolbar acts on whichever
+  // viewport is currently being edited. Persisted immediately (optimistic).
+  const publishKey = editViewport === 'mobile' ? 'publish_mobile' : 'publish_desktop'
+  const isViewportPublished = !!dashboard?.[publishKey]
+  const [publishBusy, setPublishBusy] = useState(false)
+  async function togglePublish() {
+    if (publicMode || !dashboard?.id || publishBusy) return
+    const next = !dashboard[publishKey]
+    const label = editViewport === 'mobile' ? 'Mobile' : 'Desktop'
+    setPublishBusy(true)
+    setDashboard((d) => ({ ...d, [publishKey]: next }))   // optimistic
+    try {
+      const resp = await api.updateDashboard(dashboard.id, { [publishKey]: next })
+      // Sync with the server's authoritative flags (incl. derived `publish`).
+      setDashboard((d) => ({ ...d, publish: resp?.publish ?? d.publish, [publishKey]: resp?.[publishKey] ?? next }))
+      setToast({ type: 'success', text: `${label} layout ${next ? 'published' : 'unpublished'}.` })
+    } catch {
+      setDashboard((d) => ({ ...d, [publishKey]: !next }))  // revert
+      setToast({ type: 'error', text: 'Could not update publish status.' })
+    } finally {
+      setPublishBusy(false)
+    }
+  }
 
   const activeTheme = getTheme(themeId)
   const themeVars   = themeCssVars(activeTheme)
@@ -601,32 +952,73 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   useEffect(() => {
     setC2Layout((prev) => {
       const prevById = new Map(prev.map((l) => [l.i, l]))
+      // Track already-placed Container-2 rectangles so we can reveal any widget
+      // that an older (occupancy-blind) add dropped on top of another — those
+      // would otherwise stay hidden behind it and look "missing" on desktop.
+      const placedC2 = []
+      const collides = (a) => placedC2.some((b) =>
+        a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y)
       return components.map((c, idx) => {
-        const existing = prevById.get(String(c.id))
-        if (existing) return existing
-        return getWidgetLayout(c, idx, c2Cols)
+        const base = prevById.get(String(c.id)) || getWidgetLayout(c, idx, c2Cols)
+        // Container-3 widgets live in their own grid; leave their (unused here)
+        // entry as-is and don't factor them into Container-2 occupancy.
+        if (Number(c.config?.container) === 3) return base
+        let item = { ...base }
+        let guard = 0
+        while (collides(item) && guard++ < 500) item = { ...item, y: item.y + 1 }
+        placedC2.push(item)
+        return item
       })
     })
   }, [components, c2Cols])
 
-  // The number of rows the visible cell grid renders. Defaults to 7
-  // when there are no widgets, then grows to fit whatever widgets the
-  // user has placed below the default region. Container scrolls
-  // vertically when this exceeds the visible stage height.
-  // c2Rows = how many rows the cell grid renders. Only grows when
-  // a widget extends past the visible area. The CSS-`auto-fill` cell
-  // grid handles the default fit; we still need this number to size
-  // the scrollable stage content and to inform RGL.
-  // c2Rows = how many rows the cell grid renders. The visible default
-  // is C2_MIN_ROWS; the grid only extends below that when a widget
-  // genuinely occupies a lower row. No buffer / no empty extras.
+  // Measure the visible stage height so the grid's MINIMUM row count is
+  // however many rows actually fit the container — not a hardcoded number.
+  // This way an empty (or under-filled) container shows exactly enough rows
+  // to fill itself with no leftover empty rows below and no scrolling;
+  // removing widgets collapses the grid right back to the container.
+  const c2StageRef = useRef(null)
+  const [c2FitRows, setC2FitRows] = useState(C2_MIN_ROWS)
+  useEffect(() => {
+    let raf = 0
+    function measure() {
+      const el = c2StageRef.current
+      if (!el) return
+      const h = el.clientHeight
+      if (h > 0) {
+        const fit = Math.max(1, Math.floor((h + C2_GAP) / (C2_CELL_SIZE + C2_GAP)))
+        setC2FitRows((prev) => (prev === fit ? prev : fit))
+      }
+    }
+    // The stage only mounts after the dashboard loads (and when not in the
+    // mobile viewport), so retry on the next frame until the ref exists, and
+    // observe it for later size changes.
+    measure()
+    raf = requestAnimationFrame(measure)
+    const ro = (typeof ResizeObserver !== 'undefined' && c2StageRef.current) ? new ResizeObserver(measure) : null
+    if (ro && c2StageRef.current) ro.observe(c2StageRef.current)
+    if (typeof window !== 'undefined') window.addEventListener('resize', measure)
+    return () => {
+      cancelAnimationFrame(raf)
+      if (ro) ro.disconnect()
+      if (typeof window !== 'undefined') window.removeEventListener('resize', measure)
+    }
+  }, [loading, dashboard, editViewport])
+
+  // c2Rows = how many rows the cell grid renders. The floor is "rows that
+  // fit the container" so the grid never spills past the visible stage when
+  // empty; it only grows (and the stage scrolls) when a widget genuinely
+  // occupies a lower row. No buffer / no empty extras.
   const c2Rows = useMemo(() => {
     let maxBottom = 0
     for (const it of c2Layout) maxBottom = Math.max(maxBottom, (it.y || 0) + (it.h || 0))
-    return Math.max(C2_MIN_ROWS, maxBottom)
-  }, [c2Layout])
+    return Math.max(c2FitRows, maxBottom)
+  }, [c2Layout, c2FitRows])
 
   const c2StageH = c2Rows * C2_CELL_SIZE + Math.max(0, c2Rows - 1) * C2_GAP
+  // True when the grid is taller than the visible stage — the vertical
+  // scrollbar shows, so we inset the widgets to leave it a clear lane.
+  const c2HasVScroll = c2Rows > c2FitRows
 
   function onC2LayoutChange(curr) {
     // Immediate UI update — RGL now has snapped (integer) x/y/w/h, so
@@ -671,7 +1063,12 @@ export default function DashboardDetail({ publicMode = false } = {}) {
       ro.disconnect()
       window.removeEventListener('resize', measure)
     }
-  }, [])
+    // Re-run once the stage actually mounts (it only renders after the
+    // dashboard loads and when not in the mobile viewport). Without this the
+    // effect runs at mount with a null ref, c3PanelW stays 0, and the column
+    // math falls back to window width — overshooting the real panel and
+    // showing a phantom horizontal scroll.
+  }, [loading, dashboard, editViewport])
 
   // c3FitCols = number of 50px cells that fit COMPLETELY inside the visible
   // stage (uses floor — no half-cut cells, no overflow that would trigger
@@ -748,6 +1145,93 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     setC3Layout(curr)
     for (const item of curr) {
       persistWidgetLayout(item.i, item.x, item.y, item.w, item.h)
+    }
+  }
+
+  /* ---------------------- Mobile layout ----------------------
+     The widgets the admin chose to surface on phones, ordered top→bottom
+     by their saved phone-row. The mobile grid auto-compacts vertically,
+     so order is what matters most; x/w give the side-by-side pairing. */
+  const mobileComponents = useMemo(
+    () => components
+      .filter((c) => c.config?.mobile?.show)
+      .sort((a, b) => (a.config?.mobile?.layout?.y ?? 0) - (b.config?.mobile?.layout?.y ?? 0)),
+    [components],
+  )
+  const [mLayout, setMLayout] = useState([])
+  useEffect(() => {
+    setMLayout((prev) => {
+      const prevById = new Map(prev.map((l) => [l.i, l]))
+      return mobileComponents.map((c, idx) => prevById.get(String(c.id)) || getMobileLayout(c, idx))
+    })
+  }, [mobileComponents])
+
+  // Persist a widget's PHONE placement into config.mobile.layout without
+  // disturbing config.layout (desktop). Mirrors the desktop debounce +
+  // sequence-guard so out-of-order PATCH responses can't clobber state.
+  const mobileSeqRef = useRef({})
+  const mobilePersistRef = useRef({})
+  const flushMobileLayout = useCallback(async (id, x, y, w, h) => {
+    const target = components.find((c) => String(c.id) === String(id))
+    if (!target) return
+    const prevMobile = target.config?.mobile || {}
+    const nextConfig = { ...(target.config || {}), mobile: { ...prevMobile, show: true, layout: { x, y, w, h } } }
+    const mySeq = (mobileSeqRef.current[id] || 0) + 1
+    mobileSeqRef.current[id] = mySeq
+    try {
+      const resp = await api.updateDashboardComponent(target.id, { config: nextConfig })
+      if (mobileSeqRef.current[id] !== mySeq) return
+      const updated = resp?.component
+      if (updated) setComponents((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
+    } catch {/* keep on-screen position; user can drag again to retry */}
+  }, [components])
+  const persistMobileLayout = useCallback((id, x, y, w, h) => {
+    const sig = `${x},${y},${w},${h}`
+    const target = components.find((c) => String(c.id) === String(id))
+    const saved = target?.config?.mobile?.layout
+    if (saved && saved.x === x && saved.y === y && saved.w === w && saved.h === h) {
+      mobilePersistRef.current[id] = { sig, timer: null }; return
+    }
+    if (mobilePersistRef.current[id]?.sig === sig) return
+    if (mobilePersistRef.current[id]?.timer) clearTimeout(mobilePersistRef.current[id].timer)
+    const timer = setTimeout(() => { flushMobileLayout(id, x, y, w, h) }, 250)
+    mobilePersistRef.current[id] = { sig, timer }
+  }, [flushMobileLayout, components])
+
+  // onLayoutChange only mirrors RGL's snapped result into state (no PATCH —
+  // vertical compaction re-emits on every mount, which would otherwise spam
+  // the backend). Persistence happens on drag/resize STOP for the whole
+  // (possibly reflowed) set; the equality guard skips untouched widgets.
+  function onMobileLayoutChange(curr) { setMLayout(curr) }
+  function onMobilePersistAll(curr) {
+    setMLayout(curr)
+    for (const it of curr) persistMobileLayout(it.i, it.x, it.y, it.w, it.h)
+  }
+
+  const [mobileBusy, setMobileBusy] = useState(null) // id mid-toggle
+  async function toggleMobileInclude(c) {
+    const isIn = !!c.config?.mobile?.show
+    setMobileBusy(c.id)
+    try {
+      let nextConfig
+      if (isIn) {
+        nextConfig = { ...(c.config || {}), mobile: { ...(c.config?.mobile || {}), show: false } }
+      } else {
+        // Place the new card in the first free slot, sized by its category
+        // (dials/fills half-width pair up, cards/charts span full width).
+        const def = mobileDefaultSize(c)
+        const slot = findMobileSlot(mLayout, def.w, def.h)
+        const layout = { x: slot.x, y: slot.y, w: def.w, h: def.h }
+        nextConfig = { ...(c.config || {}), mobile: { show: true, layout } }
+      }
+      setComponents((prev) => prev.map((x) => (x.id === c.id ? { ...x, config: nextConfig } : x)))
+      await api.updateDashboardComponent(c.id, { config: nextConfig })
+    } catch {
+      setToast({ type: 'error', text: 'Could not update the mobile layout.' })
+      // Roll back the optimistic toggle on failure.
+      setComponents((prev) => prev.map((x) => (x.id === c.id ? c : x)))
+    } finally {
+      setMobileBusy(null)
     }
   }
 
@@ -1127,6 +1611,20 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     if (form.write_op)           config.static.write_op = form.write_op
     if (form.write_value !== '') config.static.write_value = form.write_value
 
+    // On edit, preserve which container the widget lives in and its
+    // saved position/size — the form rebuilds config from scratch and
+    // would otherwise drop them (sending a Container-3 widget back to
+    // Container 2 and resetting its layout).
+    if (form.id) {
+      const existing = components.find((c) => c.id === form.id)
+      if (existing?.config?.container != null) config.container = existing.config.container
+      if (existing?.config?.layout)            config.layout    = existing.config.layout
+      // Preserve the mobile-dashboard inclusion + phone layout; rebuilding
+      // config from the form would otherwise drop it, toggling the widget
+      // off the phone and losing its position there.
+      if (existing?.config?.mobile)            config.mobile    = existing.config.mobile
+    }
+
     const payload = {
       dashboard: parseInt(dashboardId, 10),
       widget_name: form.widget_name.trim(),
@@ -1201,15 +1699,26 @@ export default function DashboardDetail({ publicMode = false } = {}) {
         }
         initialLayout = { x: placed.x, y: placed.y, w: wgtW, h: wgtH }
       } else {
+        // Collision-aware placement: scan top→bottom, left→right for the first
+        // slot that doesn't overlap an existing Container-2 widget. The old
+        // index-based math ignored occupancy, so a new widget could land on top
+        // of (and be hidden behind) an existing one — invisible on desktop while
+        // still showing in the mobile stack.
         const cols = c2Cols
-        const perRow = Math.max(1, Math.floor(cols / defaults.w))
-        const idx = c2Components.length
-        initialLayout = {
-          x: (idx % perRow) * defaults.w,
-          y: Math.floor(idx / perRow) * defaults.h,
-          w: defaults.w,
-          h: defaults.h,
+        const wgtW = Math.min(defaults.w, cols)
+        const wgtH = defaults.h
+        const occupied = c2Components
+          .map((c, i) => c2Layout.find((l) => l.i === String(c.id)) || getWidgetLayout(c, i, cols))
+          .map((l) => ({ x1: l.x, y1: l.y, x2: l.x + l.w, y2: l.y + l.h }))
+        const fits = (x, y) => !occupied.some((o) => x < o.x2 && x + wgtW > o.x1 && y < o.y2 && y + wgtH > o.y1)
+        let placed = null
+        for (let y = 0; placed == null && y < 500; y++) {
+          for (let x = 0; x + wgtW <= cols; x++) {
+            if (fits(x, y)) { placed = { x, y }; break }
+          }
         }
+        if (!placed) placed = { x: 0, y: 0 }
+        initialLayout = { x: placed.x, y: placed.y, w: wgtW, h: wgtH }
       }
       const fullConfig = { ...payload.config, layout: initialLayout, container: targetContainer }
       const resp = await api.createDashboardComponent({
@@ -1252,6 +1761,18 @@ export default function DashboardDetail({ publicMode = false } = {}) {
       const preservedLayout = existing?.config?.layout
       const fullConfig = { ...payload.config }
       if (preservedLayout) fullConfig.layout = preservedLayout
+      // Preserve which container the widget lives in. The editor form's
+      // config doesn't carry `container`, so without this a Container-3
+      // widget would fall back to Container 2 (the c2Components filter
+      // treats any non-3 value as container 2) after every edit.
+      if (existing?.config?.container != null) {
+        fullConfig.container = existing.config.container
+      }
+      // Preserve the mobile-dashboard inclusion + phone layout so editing a
+      // card widget doesn't remove it from the phone or reset its position.
+      if (existing?.config?.mobile) {
+        fullConfig.mobile = existing.config.mobile
+      }
       const resp = await api.updateDashboardComponent(id, {
         widget_name: payload.widget_name.trim(),
         widget_type: payload.widget_type,
@@ -1303,11 +1824,22 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     )
   }
 
+  // Public viewers get the mobile stack automatically on phone-sized
+  // screens (only when a mobile layout has actually been built); the admin
+  // gets whichever viewport they picked from the toolbar toggle.
+  const showMobileLayout = publicMode
+    ? (isNarrow && mobileComponents.length > 0)
+    : (editViewport === 'mobile')
+
   return (
-    <div className={'kiosk-app' + (previewMode ? ' is-db-preview' : '') + (publicMode ? ' is-public' : '')} style={themeVars}>
+    <div className={'kiosk-app is-db' + (previewMode ? ' is-db-preview' : '') + (publicMode ? ' is-public' : '')} style={themeVars}>
       {!publicMode && <TopBar />}
 
-      <div className={'admin-page db-page' + (previewMode ? ' is-preview' : '')}>
+      <div className={'admin-page db-page'
+        + (previewMode ? ' is-preview' : '')
+        + (!previewMode && !publicMode && showMobileLayout ? ' is-mobile-edit' : '')
+        + (previewMode && showMobileLayout && !isNarrow ? ' is-mobile-preview' : '')
+        + (previewMode && showMobileLayout && isNarrow ? ' is-mobile-fullscreen' : '')}>
         {!previewMode && (
           <div className="db-page-actions-row">
             <Link to={publicMode ? '/public' : `/applications/${appId}`} className="back-link">
@@ -1331,7 +1863,101 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                   onClick={() => setThemeId(t.id)}
                 />
               ))}
+              {/* Custom base-color swatch — opens the native color picker.
+                  Picking a color builds a full palette around it, honoring
+                  the current gradient/solid mode. */}
+              <label
+                className={'db-theme-swatch db-theme-swatch-custom' + (isCustomTheme ? ' is-active' : '')}
+                title="Custom color"
+                style={{ background: getTheme(customThemeId(customHex, customMode)).panelBg, borderColor: customHex }}
+              >
+                <input
+                  type="color"
+                  value={customHex}
+                  onChange={(e) => { setCustomHex(e.target.value); setThemeId(customThemeId(e.target.value, customMode)) }}
+                />
+                {!isCustomTheme && (
+                  <svg className="db-theme-swatch-custom-ic" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 2.5a9.5 9.5 0 1 0 0 19c1 0 1.6-.8 1.6-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.7-1.6 1.6-1.6h1.9A4.4 4.4 0 0 0 22 11.5C22 6.5 17.5 2.5 12 2.5Z" stroke="currentColor" strokeWidth="1.6"/>
+                    <circle cx="7.5" cy="11" r="1.2" fill="currentColor"/>
+                    <circle cx="11" cy="7" r="1.2" fill="currentColor"/>
+                    <circle cx="15.5" cy="8" r="1.2" fill="currentColor"/>
+                  </svg>
+                )}
+              </label>
+              {/* Fill mode — only meaningful for the custom color. Lets the
+                  user choose a soft linear gradient or a flat single color. */}
+              {isCustomTheme && (
+                <div className="db-theme-mode" role="group" aria-label="Custom fill style">
+                  <button
+                    type="button"
+                    className={'db-theme-mode-btn' + (customMode === 'gradient' ? ' is-active' : '')}
+                    onClick={() => { setCustomMode('gradient'); setThemeId(customThemeId(customHex, 'gradient')) }}
+                    aria-pressed={customMode === 'gradient'}
+                    title="Linear gradient"
+                  >
+                    Gradient
+                  </button>
+                  <button
+                    type="button"
+                    className={'db-theme-mode-btn' + (customMode === 'solid' ? ' is-active' : '')}
+                    onClick={() => { setCustomMode('solid'); setThemeId(customThemeId(customHex, 'solid')) }}
+                    aria-pressed={customMode === 'solid'}
+                    title="Solid color"
+                  >
+                    Solid
+                  </button>
+                </div>
+              )}
             </div>
+            )}
+            {!publicMode && (
+              <div className="db-viewport-toggle" role="group" aria-label="Layout target">
+                <button
+                  type="button"
+                  className={'db-vp-btn' + (editViewport === 'desktop' ? ' is-active' : '')}
+                  onClick={() => setEditViewport('desktop')}
+                  aria-pressed={editViewport === 'desktop'}
+                  title="Desktop / tablet layout"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="3" y="4" width="18" height="12" rx="1.6" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M9 20h6M12 16v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                  Desktop
+                </button>
+                <button
+                  type="button"
+                  className={'db-vp-btn' + (editViewport === 'mobile' ? ' is-active' : '')}
+                  onClick={() => { if (components.length) setEditViewport('mobile') }}
+                  disabled={!components.length}
+                  aria-pressed={editViewport === 'mobile'}
+                  title={components.length ? 'Phone layout — choose which widgets appear' : 'Add widgets to the desktop dashboard first'}
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="7" y="3" width="10" height="18" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M11 18h2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                  </svg>
+                  Mobile
+                </button>
+              </div>
+            )}
+            {!publicMode && (
+              <button
+                type="button"
+                className={'db-publish-btn' + (isViewportPublished ? ' is-published' : '')}
+                onClick={togglePublish}
+                disabled={publishBusy}
+                aria-pressed={isViewportPublished}
+                title={isViewportPublished
+                  ? `The ${editViewport} layout is live for end-users — click to unpublish`
+                  : `Publish the ${editViewport} layout so end-users can see it`}
+              >
+                <span className="db-publish-dot" aria-hidden="true" />
+                {isViewportPublished
+                  ? `Published · ${editViewport === 'mobile' ? 'Mobile' : 'Desktop'}`
+                  : `Publish ${editViewport === 'mobile' ? 'Mobile' : 'Desktop'}`}
+              </button>
             )}
             {!publicMode && (
               <button
@@ -1365,6 +1991,52 @@ export default function DashboardDetail({ publicMode = false } = {}) {
               </header>
             )}
 
+            {showMobileLayout ? (
+              /* Full-screen stack (no bezel) for public viewers AND for the
+                 admin previewing on a real phone. The phone box only shows
+                 when previewing/editing from a desktop, where there's no
+                 device chrome to stand in for it. */
+              (publicMode || (previewMode && isNarrow)) ? (
+                <MobilePublicShell
+                  components={mobileComponents}
+                  layout={mLayout}
+                  devicesById={devicesById}
+                  sendCommand={sendDashboardCommand}
+                  cameras={stageCameras}
+                  activeCamera={activeCamera}
+                  onSelectCam={setSelectedCamId}
+                  /* Preview on a real phone renders the exact simulator
+                     screen (fixed camera + filled grid + internal scroll)
+                     fitted to the device — only the public end-user view
+                     uses the plain page-scroll stack. */
+                  bounded={!publicMode}
+                />
+              ) : (
+                <MobileEditorShell
+                  allComponents={components}
+                  mobileComponents={mobileComponents}
+                  layout={mLayout}
+                  devicesById={devicesById}
+                  sendCommand={sendDashboardCommand}
+                  canDelete={canDelete}
+                  editable={canUpdate && !previewMode}
+                  mobileBusy={mobileBusy}
+                  themeVars={themeVars}
+                  cameras={stageCameras}
+                  activeCamera={activeCamera}
+                  onSelectCam={setSelectedCamId}
+                  onToggleInclude={toggleMobileInclude}
+                  onLayoutChange={onMobileLayoutChange}
+                  onPersistAll={onMobilePersistAll}
+                  onEditWidget={(c) => {
+                    const v = c?.config?.variant
+                    if (v && (CARD_VARIANT_DEFS[v] || CONTROL_VARIANT_DEFS[v] || DIAL_VARIANT_DEFS[v] || FILL_VARIANT_DEFS[v] || CHART_VARIANT_DEFS[v] || LOG_VARIANT_DEFS[v])) setEditingWidget(c)
+                    else openWidgetEdit(c)
+                  }}
+                  onDeleteWidget={(c) => setConfirmDelete(c)}
+                />
+              )
+            ) : (
             <div className="db-shell" ref={previewShellRef} style={themeVars}>
               <div className="db-top">
                 {/* Container 1 — Camera (its own panel). */}
@@ -1381,7 +2053,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                       cell grid + RGL share the same scroll height. When
                       widgets push beyond the default rows, the inner content
                       gets taller and the stage scrolls. */}
-                  <div className="db-c2-stage">
+                  <div className={'db-c2-stage' + (c2HasVScroll ? ' db-c2-scrolling' : '')} ref={c2StageRef}>
                     <div
                       className="db-c2-stage-content"
                       style={{ height: `${c2StageH}px` }}
@@ -1443,7 +2115,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                                       // variant + layout). Legacy widgets fall back
                                       // to the old form.
                                       const v = c?.config?.variant
-                                      if (v && (CARD_VARIANT_DEFS[v] || CONTROL_VARIANT_DEFS[v] || DIAL_VARIANT_DEFS[v] || FILL_VARIANT_DEFS[v] || CHART_VARIANT_DEFS[v])) {
+                                      if (v && (CARD_VARIANT_DEFS[v] || CONTROL_VARIANT_DEFS[v] || DIAL_VARIANT_DEFS[v] || FILL_VARIANT_DEFS[v] || CHART_VARIANT_DEFS[v] || LOG_VARIANT_DEFS[v])) {
                                         setEditingWidget(c)
                                       } else {
                                         openWidgetEdit(c)
@@ -1475,7 +2147,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                 </section>
               </div>
               {/* Container 3 — horizontal-scroll panel with cell grid. */}
-              <section className="db-group db-group-bottom db-c3">
+              <section className={'db-group db-group-bottom db-c3' + (c3HasOverflow ? ' db-c3-scrolling' : '')}>
                 <div className="db-c3-stage" ref={c3StageRef}>
                   <div
                     className="db-c3-stage-content"
@@ -1525,7 +2197,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                                   sendCommand={sendDashboardCommand}
                                   onEdit={() => {
                                     const v = c?.config?.variant
-                                    if (v && (CARD_VARIANT_DEFS[v] || CONTROL_VARIANT_DEFS[v] || DIAL_VARIANT_DEFS[v] || FILL_VARIANT_DEFS[v] || CHART_VARIANT_DEFS[v])) {
+                                    if (v && (CARD_VARIANT_DEFS[v] || CONTROL_VARIANT_DEFS[v] || DIAL_VARIANT_DEFS[v] || FILL_VARIANT_DEFS[v] || CHART_VARIANT_DEFS[v] || LOG_VARIANT_DEFS[v])) {
                                       setEditingWidget(c)
                                     } else { openWidgetEdit(c) }
                                   }}
@@ -1549,6 +2221,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                 )}
               </section>
             </div>
+            )}
           </>
         )}
       </div>
@@ -1612,6 +2285,364 @@ export default function DashboardDetail({ publicMode = false } = {}) {
       )}
     </div>
   )
+}
+
+/* =====================================================================
+   Mobile dashboard  —  a separate, phone-optimised layout built from the
+   SAME widgets as the desktop dashboard. The admin picks which widgets
+   appear (config.mobile.show) and arranges them in a 4-column, vertically
+   compacting grid (config.mobile.layout). On a real phone the public view
+   renders this stack full-width; in the editor it sits inside a phone
+   frame next to a widget include-list.
+   ===================================================================== */
+function MobileGrid({ components, layout, editable, devicesById, sendCommand, canDelete, onEdit, onDelete, onLayoutChange, onPersistAll, cameras, activeCamera, onSelectCam, fillContainer = false, transformScale = 1 }) {
+  const hasCam = Array.isArray(cameras) && cameras.length > 0
+
+  // In the editor the container has a fixed height, so the cell grid FILLS
+  // it (like the desktop containers): render enough rows to cover the
+  // visible area, then grow past it as widgets are placed lower (scroll).
+  // Skipped in the public view, where the page itself scrolls (the
+  // container isn't height-bounded, so measuring it would loop).
+  const widgetsRef = useRef(null)
+  const [innerH, setInnerH] = useState(0)
+  useEffect(() => {
+    if (!fillContainer) return undefined
+    function measure() {
+      const el = widgetsRef.current
+      if (!el) return
+      const cs = getComputedStyle(el)
+      const h = el.clientHeight - (parseFloat(cs.paddingTop) || 0) - (parseFloat(cs.paddingBottom) || 0)
+      if (h > 0) setInnerH(h)
+    }
+    measure()
+    const ro = (typeof ResizeObserver !== 'undefined' && widgetsRef.current) ? new ResizeObserver(measure) : null
+    if (ro && widgetsRef.current) ro.observe(widgetsRef.current)
+    if (typeof window !== 'undefined') window.addEventListener('resize', measure)
+    return () => { if (ro) ro.disconnect(); if (typeof window !== 'undefined') window.removeEventListener('resize', measure) }
+  }, [fillContainer])
+
+  // Base rows that fit the container at the natural row height (used only
+  // for the EMPTY state, to show a full grid filling the panel).
+  const fillRows = (fillContainer && innerH > 0)
+    ? Math.max(1, Math.floor((innerH + MOBILE_GAP) / (MOBILE_ROW_H + MOBILE_GAP)))
+    : MOBILE_MIN_ROWS
+
+  // How far the widgets actually reach (the lowest-placed widget bottom).
+  const maxB = useMemo(() => {
+    let m = 0
+    for (const l of layout) m = Math.max(m, (l.y || 0) + (l.h || 0))
+    return m
+  }, [layout])
+
+  // Cell rows rendered = enough to FILL the panel AND cover the content.
+  const rows = Math.max(fillRows, maxB)
+
+  // Row height SHRINKS so ALL rows fit the container — the grid fills the
+  // panel exactly and does NOT scroll for a reasonable number of widgets
+  // (they just get a little shorter, like the desktop containers). It only
+  // scrolls when fitting would drop below a readable row height.
+  const MIN_MOBILE_ROW_H = 56
+  const rowH = (fillContainer && innerH > 0)
+    ? Math.max(MIN_MOBILE_ROW_H, (innerH - (rows - 1) * MOBILE_GAP - 2) / rows)
+    : MOBILE_ROW_H
+  const stageH = rows * rowH + Math.max(0, rows - 1) * MOBILE_GAP
+
+  return (
+    <div className="db-mobile-content">
+      {hasCam && (
+        <div className="db-mobile-cam">
+          <CameraCard cameras={cameras} active={activeCamera} onSelect={onSelectCam} compact />
+        </div>
+      )}
+      {/* Widget container — its own panel below the camera, with a visible
+          cell grid that the cards snap to. The 1fr columns make every cell
+          scale to the phone width automatically. */}
+      <section className="db-mobile-widgets" ref={widgetsRef}>
+        <div className="db-mobile-grid-stage" style={{ height: stageH }}>
+          <CellGrid cols={MOBILE_COLS} rows={rows} rowH={rowH} gap={MOBILE_GAP} />
+          {components.length === 0 ? (
+            <div className="db-mobile-empty">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="6" y="2.5" width="12" height="19" rx="2.4" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M10.5 18.5h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+              </svg>
+              <p className="db-mobile-empty-title">No widgets added yet</p>
+              {editable && <p className="db-mobile-empty-sub">Turn widgets on from the list to add them here.</p>}
+            </div>
+          ) : (
+            <div className="db-c2-rgl-wrap">
+              <ResponsiveGrid
+                className="db-mobile-rgl db-c2-rgl"
+                layouts={{ lg: layout, md: layout }}
+                breakpoints={{ lg: 1, md: 0 }}
+                cols={{ lg: MOBILE_COLS, md: MOBILE_COLS }}
+                rowHeight={rowH}
+                margin={[MOBILE_GAP, MOBILE_GAP]}
+                containerPadding={[0, 0]}
+                transformScale={transformScale}
+                compactType="vertical"
+                preventCollision={false}
+                isDraggable={editable}
+                isResizable={editable}
+                resizeHandles={MOBILE_RESIZE_HANDLES}
+                draggableHandle=".db-c2-widget-drag"
+                draggableCancel=".row-btn, button"
+                onLayoutChange={(curr) => onLayoutChange?.(curr)}
+                onDragStop={(curr) => onPersistAll?.(curr)}
+                onResizeStop={(curr) => onPersistAll?.(curr)}
+              >
+                {components.map((c, idx) => {
+                  const dg = layout.find((l) => l.i === String(c.id)) || getMobileLayout(c, idx)
+                  return (
+                    <div key={String(c.id)} className="db-c2-rgl-item" data-grid={dg}>
+                      <DashWidgetView
+                        component={c}
+                        devicesById={devicesById}
+                        canUpdate={editable}
+                        canDelete={editable && canDelete}
+                        sendCommand={sendCommand}
+                        onEdit={() => onEdit?.(c)}
+                        onDelete={() => onDelete?.(c)}
+                      />
+                    </div>
+                  )
+                })}
+              </ResponsiveGrid>
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+/* Editor view — phone frame + the include-list the admin uses to pick
+   which widgets show on the phone. When not editable (Preview), the list
+   is hidden and the frame just renders the read-only stack. */
+function MobileEditorShell({
+  allComponents, mobileComponents, layout, devicesById, sendCommand, canDelete,
+  editable, mobileBusy, themeVars, cameras, activeCamera, onSelectCam,
+  onToggleInclude, onLayoutChange, onPersistAll, onEditWidget, onDeleteWidget,
+}) {
+  const [deviceId, setDeviceId] = useState('ip-15')
+  const [landscape, setLandscape] = useState(false)
+  const device = MOBILE_DEVICES.find((d) => d.id === deviceId) || MOBILE_DEVICES[0]
+  const w = landscape ? device.h : device.w
+  const h = landscape ? device.w : device.h
+  const pad = 12
+  const cutout = landscape ? 'none' : device.notch
+
+  // Render the device at its TRUE pixel size, then scale the whole frame
+  // uniformly to fit the available space — exactly how a phone simulator
+  // shows a real device on a laptop, with the precise aspect ratio.
+  const stageRef = useRef(null)
+  const [avail, setAvail] = useState({ w: 480, h: 800 })
+  useEffect(() => {
+    function measure() {
+      const el = stageRef.current
+      const w = el ? el.clientWidth : 480
+      const h = typeof window !== 'undefined' ? window.innerHeight : 800
+      setAvail((prev) => {
+        // On phones, scrolling shows/hides the browser URL bar, which nudges
+        // window.innerHeight and would otherwise rescale the simulator on
+        // every scroll. Ignore small height jitter (URL bar ≈ 60-110px) when
+        // the width is unchanged; still react to real resizes / rotation.
+        if (prev.w === w && Math.abs(prev.h - h) < 130) return prev
+        return { w, h }
+      })
+    }
+    measure()
+    const ro = (typeof ResizeObserver !== 'undefined' && stageRef.current) ? new ResizeObserver(measure) : null
+    if (ro && stageRef.current) ro.observe(stageRef.current)
+    if (typeof window !== 'undefined') window.addEventListener('resize', measure)
+    return () => { if (ro) ro.disconnect(); if (typeof window !== 'undefined') window.removeEventListener('resize', measure) }
+  }, [])
+
+  const frameW = w + pad * 2
+  const frameH = h + pad * 2
+  // Vertical room left after the page header + device bar + hint/margins.
+  const vRoom = avail.h - (editable ? 220 : 130)
+  // Fit the device to the room, then zoom ~15% so the phone reads larger in
+  // the config page (capped slightly above 1:1; the page scrolls if needed).
+  const fit = Math.min(vRoom / frameH, (avail.w - 8) / frameW)
+  const scale = Math.max(0.25, Math.min(1.12, fit * 1.15))
+
+  const frameStyle = {
+    width: frameW,
+    padding: pad,
+    borderRadius: device.radius,
+    transform: `scale(${scale})`,
+    transformOrigin: 'top left',
+  }
+  const screenStyle = { ...themeVars, width: w, height: h, maxHeight: 'none', borderRadius: Math.max(14, device.radius - pad) }
+  // The transformed frame keeps its un-scaled layout box, so reserve the
+  // SCALED footprint here to avoid huge empty gaps around the device.
+  const viewportStyle = { width: frameW * scale, height: frameH * scale }
+
+  return (
+    <div className="db-shell db-mobile-shell" style={themeVars}>
+      <div className={'db-mobile-editor' + (editable ? '' : ' is-preview')}>
+        {editable && (
+          <aside className="db-mobile-picker">
+            <div className="db-mobile-picker-head">
+              <h3>Phone widgets</h3>
+              <p>Pick widgets to show on the phone.</p>
+            </div>
+            {allComponents.length === 0 ? (
+              <div className="db-mobile-picker-empty">Build the desktop dashboard first.</div>
+            ) : (
+              <ul className="db-mobile-picker-list">
+                {allComponents.map((c) => {
+                  const on = !!c.config?.mobile?.show
+                  const title = c.config?.title || c.widget_name || 'Widget'
+                  return (
+                    <li key={c.id} className={'db-mobile-picker-item' + (on ? ' is-on' : '')}>
+                      <span className="db-mp-text">
+                        <span className="db-mp-name">{title}</span>
+                        <span className="db-mp-type">{c.config?.variant || c.widget_type}</span>
+                      </span>
+                      <button
+                        type="button"
+                        className={'db-mp-switch' + (on ? ' is-on' : '')}
+                        onClick={() => onToggleInclude(c)}
+                        disabled={mobileBusy === c.id}
+                        role="switch"
+                        aria-checked={on}
+                        aria-label={on ? `Remove ${title} from phone` : `Add ${title} to phone`}
+                      >
+                        <span className="db-mp-knob" />
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+            <div className="db-mobile-picker-foot">
+              {mobileComponents.length} on phone
+            </div>
+          </aside>
+        )}
+
+        <div className="db-mobile-stage" ref={stageRef}>
+          <div className="db-sim-area">
+          {/* Simulator device bar — choose any device + orientation, like a
+              mobile-simulator extension. Sits beside the phone so it doesn't
+              eat vertical room. The screen resizes to that exact device and
+              the widget grid re-flows live. */}
+          <div className="db-sim-bar db-sim-bar-side" role="group" aria-label="Simulated device">
+            <svg className="db-sim-bar-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="7" y="2.5" width="10" height="19" rx="2.4" stroke="currentColor" strokeWidth="1.6" />
+              <path d="M10.5 18.5h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
+            <select
+              className="db-sim-select"
+              value={deviceId}
+              onChange={(e) => setDeviceId(e.target.value)}
+              aria-label="Device"
+            >
+              {MOBILE_DEVICE_BRANDS.map((brand) => (
+                <optgroup key={brand} label={brand}>
+                  {MOBILE_DEVICES.filter((d) => d.brand === brand).map((d) => (
+                    <option key={d.id} value={d.id}>{d.label}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <button
+              type="button"
+              className={'db-sim-rotate' + (landscape ? ' is-active' : '')}
+              onClick={() => setLandscape((v) => !v)}
+              aria-pressed={landscape}
+              title={landscape ? 'Switch to portrait' : 'Switch to landscape'}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="6" width="12" height="12" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                <path d="M17 8a5 5 0 0 1 4 5m0 0 1.6-1.6M21 13l-1.6-1.6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+            <span className="db-sim-dims">{w} × {h}</span>
+          </div>
+
+          <div className="db-sim-viewport" style={viewportStyle}>
+          <div className={'db-mobile-frame db-sim-' + device.type + (landscape ? ' is-landscape' : '') + ' db-sim-notch-' + cutout} style={frameStyle}>
+            {!landscape && (
+              <>
+                <span className="db-mobile-frame-btn db-mobile-frame-btn-power" aria-hidden="true" />
+                <span className="db-mobile-frame-btn db-mobile-frame-btn-vol-up" aria-hidden="true" />
+                <span className="db-mobile-frame-btn db-mobile-frame-btn-vol-dn" aria-hidden="true" />
+              </>
+            )}
+            <div className="db-mobile-screen" style={screenStyle}>
+              <div className="db-mobile-statusbar" aria-hidden="true">
+                <span className="db-sb-time">9:41</span>
+                {cutout === 'island' && <span className="db-mobile-island" />}
+                {cutout === 'notch' && <span className="db-mobile-notch-bar" />}
+                {cutout === 'punch' && <span className="db-mobile-punch" />}
+                <span className="db-sb-icons">
+                  <svg width="17" height="11" viewBox="0 0 17 11" fill="none"><rect x="0" y="6" width="3" height="5" rx="1" fill="currentColor"/><rect x="4.5" y="4" width="3" height="7" rx="1" fill="currentColor"/><rect x="9" y="2" width="3" height="9" rx="1" fill="currentColor"/><rect x="13.5" y="0" width="3" height="11" rx="1" fill="currentColor"/></svg>
+                  <svg width="16" height="12" viewBox="0 0 16 12" fill="none"><path d="M8 11.2 1 4.5a9.8 9.8 0 0 1 14 0L8 11.2Z" stroke="currentColor" strokeWidth="1.2" fill="none"/><path d="M8 11.2 4.3 7.6a5.2 5.2 0 0 1 7.4 0L8 11.2Z" fill="currentColor"/></svg>
+                  <span className="db-sb-batt"><span className="db-sb-batt-fill" /></span>
+                </span>
+              </div>
+              <MobileGrid
+                components={mobileComponents}
+                layout={layout}
+                editable={editable}
+                devicesById={devicesById}
+                sendCommand={sendCommand}
+                canDelete={canDelete}
+                cameras={cameras}
+                activeCamera={activeCamera}
+                onSelectCam={onSelectCam}
+                onEdit={onEditWidget}
+                onDelete={onDeleteWidget}
+                onLayoutChange={onLayoutChange}
+                onPersistAll={onPersistAll}
+                fillContainer
+                transformScale={scale}
+              />
+              <div className="db-mobile-homebar" aria-hidden="true" />
+            </div>
+          </div>
+          </div>
+          </div>
+          {editable && (
+            <p className="db-mobile-hint">Drag a widget to move · pull an edge to resize · widgets stack automatically</p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Public / preview view — the real phone is the frame, so we render the
+   stack full-width in the actual viewport (read-only, controls still live).
+   `bounded` (mobile preview) wraps it in the SAME fixed-height screen the
+   simulator uses, so the camera stays pinned and the grid fills + scrolls
+   exactly like the in-editor simulator. The plain public end-user view
+   keeps the natural page scroll. */
+function MobilePublicShell({ components, layout, devicesById, sendCommand, cameras, activeCamera, onSelectCam, bounded = false }) {
+  const grid = (
+    <MobileGrid
+      components={components}
+      layout={layout}
+      editable={false}
+      devicesById={devicesById}
+      sendCommand={sendCommand}
+      cameras={cameras}
+      activeCamera={activeCamera}
+      onSelectCam={onSelectCam}
+      fillContainer={bounded}
+    />
+  )
+  if (bounded) {
+    return (
+      <div className="db-shell db-mobile-public is-bounded">
+        <div className="db-mobile-screen db-mobile-live">{grid}</div>
+      </div>
+    )
+  }
+  return <div className="db-shell db-mobile-public">{grid}</div>
 }
 
 /* =====================================================================
@@ -1715,6 +2746,36 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <FillPreview variant={variant} options={options} />
+        {(canUpdate || canDelete) && (
+          <div className="db-card-actions">
+            {canUpdate && (
+              <button type="button" className="db-card-action" onClick={onEdit} title="Edit">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+            {canDelete && (
+              <button type="button" className="db-card-action danger" onClick={onDelete} title="Delete">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (variant && LOG_VARIANT_DEFS[variant]) {
+    const options = {
+      title,
+      color: stat.card_color || 'snow',
+      iconColor: stat.icon_color || 'slate',
+      limit: stat.limit ?? 50,
+      bindings: cfg.bindings || [],
+      devicesById,
+    }
+    return (
+      <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
+        <LogPreview variant={variant} options={options} />
         {(canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && (
@@ -2054,7 +3115,7 @@ function DField({ label, error, children, full, required }) {
    Renders cols × rows pale-lavender squares matching the reference
    builder image. Pure visual surface — no interaction yet.
    ===================================================================== */
-function CellGrid({ cols = 10, rows = 7, fixedCols = false, cellW = null }) {
+function CellGrid({ cols = 10, rows = 7, fixedCols = false, cellW = null, rowH = C2_CELL_SIZE, gap = null }) {
   const cells = []
   for (let i = 0; i < cols * rows; i++) cells.push(<span key={i} className="db-cell" />)
   let colsCss
@@ -2066,7 +3127,8 @@ function CellGrid({ cols = 10, rows = 7, fixedCols = false, cellW = null }) {
       className="db-cell-grid"
       style={{
         gridTemplateColumns: colsCss,
-        gridTemplateRows: `repeat(${rows}, ${C2_CELL_SIZE}px)`,
+        gridTemplateRows: `repeat(${rows}, ${rowH}px)`,
+        ...(gap != null ? { gap: `${gap}px` } : {}),
       }}
     >
       {cells}
@@ -2077,7 +3139,7 @@ function CellGrid({ cols = 10, rows = 7, fixedCols = false, cellW = null }) {
 /* =====================================================================
    CameraCard  —  real cameras in a Smart-CCTV styled card
    ===================================================================== */
-function CameraCard({ cameras, active, onSelect }) {
+function CameraCard({ cameras, active, onSelect, compact = false }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const rootRef = useRef(null)
 
@@ -2104,15 +3166,23 @@ function CameraCard({ cameras, active, onSelect }) {
   const isOnline = !!active?.status
   const hasStream = active?.is_active && active?.webrtc_url
 
+  // Compact (mobile) mode drops the name/primary header. A header only
+  // renders when there's something to show: never in compact-single, and
+  // in compact-multi it shows just the prev/next arrows for switching.
+  const showHead = !compact || showDropdown
+
   return (
-    <article className="db-card db-cam-card" ref={rootRef}>
+    <article className={'db-card db-cam-card' + (compact ? ' is-compact' : '')} ref={rootRef}>
+      {showHead && (
       <div className="db-cam-head">
-        <div className="db-cam-head-title">
-          <h2>
-            {active?.camera_name || 'Live feed'}
-            {active?.is_primary && <span className="db-cam-head-badge">primary</span>}
-          </h2>
-        </div>
+        {!compact && (
+          <div className="db-cam-head-title">
+            <h2>
+              {active?.camera_name || 'Live feed'}
+              {active?.is_primary && <span className="db-cam-head-badge">primary</span>}
+            </h2>
+          </div>
+        )}
         {active && (
           <div className="db-cam-switcher">
             {showDropdown && (
@@ -2122,6 +3192,7 @@ function CameraCard({ cameras, active, onSelect }) {
                 </svg>
               </button>
             )}
+            {!compact && (
             <button
               type="button"
               className={'db-cam-select' + (menuOpen ? ' is-open' : '')}
@@ -2136,6 +3207,7 @@ function CameraCard({ cameras, active, onSelect }) {
                 </svg>
               )}
             </button>
+            )}
             {showDropdown && (
               <button type="button" className="db-cam-chev" onClick={() => cycle(1)} aria-label="Next camera">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -2143,7 +3215,7 @@ function CameraCard({ cameras, active, onSelect }) {
                 </svg>
               </button>
             )}
-            {menuOpen && showDropdown && (
+            {menuOpen && showDropdown && !compact && (
               <ul className="db-cam-menu" role="listbox" aria-label="Pick a camera">
                 {cameras.map((c) => {
                   const isActive = c.id === active.id
@@ -2171,6 +3243,7 @@ function CameraCard({ cameras, active, onSelect }) {
           </div>
         )}
       </div>
+      )}
       <div className="db-cam-player">
         {hasStream ? (
           <iframe
@@ -2593,6 +3666,7 @@ const PICKER_CATEGORIES = [
   { id: 'controls',    label: 'Controls' },
   { id: 'custom_fill', label: 'Custom Fill' },
   { id: 'dials',       label: 'Dials' },
+  { id: 'logs',        label: 'Logs' },
 ]
 
 function WidgetPickerModal({ onClose, devices, onSubmit, initialComponent, themeDefaults }) {
@@ -2602,7 +3676,7 @@ function WidgetPickerModal({ onClose, devices, onSubmit, initialComponent, theme
   // the bindings).
   const initVariant = initialComponent?.config?.variant || null
   const [selected, setSelected] = useState(
-    initVariant ? (isControlVariant(initVariant) ? 'controls' : isChartVariant(initVariant) ? 'charts' : isDialVariant(initVariant) ? 'dials' : isFillVariant(initVariant) ? 'custom_fill' : 'cards') : 'cards'
+    initVariant ? (isControlVariant(initVariant) ? 'controls' : isChartVariant(initVariant) ? 'charts' : isDialVariant(initVariant) ? 'dials' : isFillVariant(initVariant) ? 'custom_fill' : isLogVariant(initVariant) ? 'logs' : 'cards') : 'cards'
   )
   const [pickedVariant, setPickedVariant] = useState(initVariant)
 
@@ -2619,7 +3693,7 @@ function WidgetPickerModal({ onClose, devices, onSubmit, initialComponent, theme
       <div className="modal-card widget-picker" onMouseDown={(e) => e.stopPropagation()}>
         <header className="modal-head">
           <h2>
-            {isEditing ? 'Edit Widget' : inConfigure ? 'Configure Card Widget' : 'Add Widget'}
+            {isEditing ? 'Edit Widget' : inConfigure ? 'Configure Widget' : 'Add Widget'}
           </h2>
           <button type="button" className="modal-x" aria-label="Close" onClick={onClose}>×</button>
         </header>
@@ -2689,6 +3763,15 @@ function WidgetPickerModal({ onClose, devices, onSubmit, initialComponent, theme
                   onBack={isEditing ? null : () => setPickedVariant(null)}
                   onSubmit={onSubmit}
                 />
+              ) : isLogVariant(pickedVariant) ? (
+                <LogConfigure
+                  variant={pickedVariant}
+                  devices={devices}
+                  initial={initialComponent}
+                  themeDefaults={themeDefaults}
+                  onBack={isEditing ? null : () => setPickedVariant(null)}
+                  onSubmit={onSubmit}
+                />
               ) : (
                 <CardConfigure
                   variant={pickedVariant}
@@ -2707,6 +3790,8 @@ function WidgetPickerModal({ onClose, devices, onSubmit, initialComponent, theme
               <DialVariantGallery onPick={(variant) => setPickedVariant(variant)} />
             ) : selected === 'custom_fill' ? (
               <FillVariantGallery onPick={(variant) => setPickedVariant(variant)} />
+            ) : selected === 'logs' ? (
+              <LogVariantGallery onPick={(variant) => setPickedVariant(variant)} />
             ) : (
               <div className="widget-picker-empty">
                 <div className="widget-picker-empty-ic" aria-hidden="true">
@@ -2751,7 +3836,7 @@ const CONTROL_VARIANT_DEFS = {
     title: 'Toggle Card',
     // No allowedTypes — on/off values are configured per-binding
     // and auto-detect the type from the selected payload path.
-    fields: [{ key: 'target', label: 'Target binding', withToggleValues: true }],
+    fields: [{ key: 'target', label: 'Target binding', withToggleValues: true, noLabel: true, lockToggleType: true, keepToggleValuesOnLoad: true }],
     hasIcon: true,
     sampleTitle: 'Bedroom Light',
     sampleSub:   'Tap to toggle',
@@ -2760,8 +3845,8 @@ const CONTROL_VARIANT_DEFS = {
   dual_toggle: {
     title: 'Dual Toggle',
     fields: [
-      { key: 'target_a', label: 'Toggle A', withToggleValues: true },
-      { key: 'target_b', label: 'Toggle B', withToggleValues: true },
+      { key: 'target_a', label: 'Toggle A', withToggleValues: true, withStateLabels: true, lockToggleType: true, keepToggleValuesOnLoad: true },
+      { key: 'target_b', label: 'Toggle B', withToggleValues: true, withStateLabels: true, lockToggleType: true, keepToggleValuesOnLoad: true },
     ],
     hasIcon: true,
     sampleTitle: 'Room Control',
@@ -2770,7 +3855,7 @@ const CONTROL_VARIANT_DEFS = {
   // ── Press switch — momentary push button ──────────
   press_switch: {
     title: 'Press Switch',
-    fields: [{ key: 'target', label: 'Target binding', withToggleValues: true }],
+    fields: [{ key: 'target', label: 'Target binding', withToggleValues: true, noLabel: true, keepToggleValuesOnLoad: true, lockToggleType: true }],
     hasIcon: true,
     sampleTitle: 'Power',
     sampleSub:   'Push to toggle',
@@ -2778,16 +3863,15 @@ const CONTROL_VARIANT_DEFS = {
   // ── Single-shot action buttons ─────────────────────
   single_button: {
     title: 'Action Card',
-    fields: [{ key: 'target', label: 'Target binding', withToggleValues: true }],
+    fields: [{ key: 'target', label: 'Target binding', withToggleValues: true, withButtonLabels: true, lockToggleType: true, keepToggleValuesOnLoad: true, noLabel: true }],
     hasIcon: true,
-    hasButtonLabel: true,          // user-configurable button text
     sampleTitle: 'Room Light',
     sampleSub:   'Tap to toggle',
   },
   // ── Multiple actions in a single card ──────────────
   multi_button: {
     title: 'Multi Action',
-    fields: [{ key: 'target', label: 'Target binding' }],
+    fields: [{ key: 'target', label: 'Target binding', noLabel: true }],
     hasPerBindingActions: true,   // each binding has its own actions list
     hasIcon: true,
     sampleTitle: 'Quick Actions',
@@ -2799,7 +3883,7 @@ const CONTROL_VARIANT_DEFS = {
   // ── Numeric stepper (+ / − value) ───────────────────
   stepper: {
     title: 'Stepper',
-    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true,
     hasIcon: true,
     sampleTitle: 'Temperature',
@@ -2817,7 +3901,7 @@ const CONTROL_VARIANT_DEFS = {
   // ── Text entry ─────────────────────────────────────
   text_input: {
     title: 'Text Entry',
-    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['string'] }],
+    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['string'], noLabel: true }],
     hasIcon: true,
     sampleTitle: 'Device Name',
     sampleSub:   'Type + send',
@@ -2825,7 +3909,7 @@ const CONTROL_VARIANT_DEFS = {
   // ── Number entry (with unit) ───────────────────────
   number_input: {
     title: 'Number Entry',
-    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['int', 'float'], noLabel: true }],
     hasUnit: true,
     hasIcon: true,
     sampleTitle: 'Set Temperature',
@@ -2833,14 +3917,14 @@ const CONTROL_VARIANT_DEFS = {
   },
   list_input: {
     title: 'List Entry',
-    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['list'] }],
+    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['list'], noLabel: true }],
     hasIcon: true,
     sampleTitle: 'Config List',
     sampleSub:   'JSON array + send',
   },
   json_input: {
     title: 'JSON Entry',
-    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['dict'] }],
+    fields: [{ key: 'target', label: 'Target binding', allowedTypes: ['dict'], noLabel: true }],
     hasIcon: true,
     sampleTitle: 'Config Object',
     sampleSub:   'JSON object + send',
@@ -2883,19 +3967,19 @@ const CONTROL_LAYOUT_DEFAULTS = {
 const FILL_VARIANT_DEFS = {
   battery_fill: {
     title: 'Battery',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Battery', sampleVal: 80,
   },
   tank_rect_fill: {
     title: 'Level Tank 1',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Level Tank 1', sampleVal: 40,
   },
   tank_sphere_fill: {
     title: 'Level Tank 2',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Level Tank 2', sampleVal: 60,
   },
@@ -2911,6 +3995,76 @@ const FILL_LAYOUT_DEFAULTS = {
   tank_sphere_fill:  { w: 4, h: 4, minW: 3, minH: 3 },
 }
 function isFillVariant(v) { return !!(v && FILL_VARIANT_DEFS[v]) }
+
+/* =====================================================================
+   LOG VARIANT DEFINITIONS — read-only widgets that display a list of
+   log entries pulled from a device payload path. The bound value is
+   expected to be an array; each item is either a string or an object
+   like { time, level, message } (any subset works).
+   ===================================================================== */
+const LOG_VARIANT_DEFS = {
+  log_feed: {
+    title: 'Log Feed',
+    fields: [{ key: 'source', label: 'Log source (list)', allowedTypes: ['list'] }],
+    sampleTitle: 'Activity Log',
+  },
+  log_console: {
+    title: 'Console Log',
+    fields: [{ key: 'source', label: 'Log source (list)', allowedTypes: ['list'] }],
+    sampleTitle: 'System Console',
+  },
+  log_timeline: {
+    title: 'Event Timeline',
+    fields: [{ key: 'source', label: 'Log source (list)', allowedTypes: ['list'] }],
+    sampleTitle: 'Events',
+  },
+}
+const LOG_VARIANTS = [
+  { id: 'log_feed',     title: 'Log Feed' },
+  { id: 'log_console',  title: 'Console Log' },
+  { id: 'log_timeline', title: 'Event Timeline' },
+]
+const LOG_LAYOUT_DEFAULTS = {
+  log_feed:     { w: 6, h: 5, minW: 4, minH: 3 },
+  log_console:  { w: 6, h: 5, minW: 4, minH: 3 },
+  log_timeline: { w: 5, h: 6, minW: 4, minH: 4 },
+}
+function isLogVariant(v) { return !!(v && LOG_VARIANT_DEFS[v]) }
+
+/* Sample log rows shown in the gallery / configure preview before a
+   real source is bound. */
+const SAMPLE_LOGS = [
+  { time: '14:32:08', level: 'info',  message: 'Device connected' },
+  { time: '14:32:11', level: 'ok',    message: 'Payload synced · 14 keys' },
+  { time: '14:33:02', level: 'warn',  message: 'Battery below 20%' },
+  { time: '14:35:47', level: 'error', message: 'Motor stalled — retrying' },
+  { time: '14:36:01', level: 'info',  message: 'Reconnected' },
+]
+
+/* Normalize whatever the binding returns into [{ time, level, message }]. */
+function normalizeLogEntries(raw) {
+  if (!Array.isArray(raw)) return null
+  return raw.map((item) => {
+    if (item == null) return { message: '' }
+    if (typeof item === 'string' || typeof item === 'number') {
+      return { message: String(item) }
+    }
+    if (typeof item === 'object') {
+      const time = item.time ?? item.timestamp ?? item.ts ?? item.t ?? ''
+      const level = String(item.level ?? item.type ?? item.severity ?? '').toLowerCase()
+      const message = item.message ?? item.msg ?? item.text ?? item.event ?? JSON.stringify(item)
+      return { time: String(time), level, message: String(message) }
+    }
+    return { message: String(item) }
+  })
+}
+function logLevelClass(level) {
+  const l = String(level || '').toLowerCase()
+  if (l.startsWith('err') || l === 'critical' || l === 'fatal') return 'is-error'
+  if (l.startsWith('warn')) return 'is-warn'
+  if (l === 'ok' || l === 'success') return 'is-ok'
+  return 'is-info'
+}
 
 /* =====================================================================
    CHART VARIANT DEFINITIONS
@@ -2969,37 +4123,37 @@ const CHART_BAR_COLORS = ['#3B82F6', '#F59E0B', '#10B981', '#EF4444']
 const DIAL_VARIANT_DEFS = {
   solid_gauge: {
     title: 'Solid Gauge',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Vehicle Speed', sampleVal: 50,
   },
   semi_dial: {
     title: 'Semi Dial',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Vehicle Speed', sampleVal: 50,
   },
   full_dial: {
     title: 'Full Dial',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Motor Speed', sampleVal: 110,
   },
   progress_dial: {
     title: 'Progress Dial',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Engine Power', sampleVal: 3520,
   },
   threshold_dial: {
     title: 'Threshold Dial',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Engine Power', sampleVal: 2025,
   },
   full_circle_dial: {
     title: 'Full Circle Dial',
-    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] }],
+    fields: [{ key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true }],
     hasMinMax: true, hasUnit: true, hasIcon: false,
     sampleTitle: 'Mileage Summary', sampleVal: 680,
   },
@@ -3029,7 +4183,7 @@ function dialPercent(value, min, max) {
 const CARD_VARIANT_DEFS = {
   simple_value: {
     title: 'Simple Card 1',
-    fields: [{ key: 'value', label: 'Value source', withBoolLabels: true }],
+    fields: [{ key: 'value', label: 'Value source' }],
     hasIcon: false,
     hasUnit: false,
     sampleTitle: 'Engine Temperature',
@@ -3037,7 +4191,7 @@ const CARD_VARIANT_DEFS = {
   },
   simple_icon: {
     title: 'Simple Card 2',
-    fields: [{ key: 'value', label: 'Value source', withBoolLabels: true }],
+    fields: [{ key: 'value', label: 'Value source' }],
     hasIcon: true,
     hasUnit: false,
     sampleTitle: 'Total Workorders',
@@ -3056,31 +4210,31 @@ const CARD_VARIANT_DEFS = {
   multivalue_grid: {
     title: 'Multivalue Card 1',
     fields: [
-      { key: 'm1', label: 'Minimum',    allowedTypes: ['int', 'float', 'boolean'], withBoolLabels: true },
-      { key: 'm2', label: 'Last Value', allowedTypes: ['int', 'float', 'boolean'], withBoolLabels: true },
-      { key: 'm3', label: 'Maximum',    allowedTypes: ['int', 'float', 'boolean'], withBoolLabels: true },
-      { key: 'm4', label: 'Average',    allowedTypes: ['int', 'float', 'boolean'], withBoolLabels: true },
+      { key: 'm1', label: 'Minimum',    allowedTypes: ['int', 'float'], withUnit: true },
+      { key: 'm2', label: 'Last Value', allowedTypes: ['int', 'float'], withUnit: true },
+      { key: 'm3', label: 'Maximum',    allowedTypes: ['int', 'float'], withUnit: true },
+      { key: 'm4', label: 'Average',    allowedTypes: ['int', 'float'], withUnit: true },
     ],
     hasIcon: true,
-    hasUnit: true,
+    hasUnit: false,
     sampleTitle: 'Conf Room Data Trend',
   },
   multivalue_row: {
     title: 'Multivalue Card 2',
     fields: [
-      { key: 'm1', label: 'Metric 1', withIcon: true, withBoolLabels: true },
-      { key: 'm2', label: 'Metric 2', withIcon: true, withBoolLabels: true },
-      { key: 'm3', label: 'Metric 3', withIcon: true, withBoolLabels: true },
+      { key: 'm1', label: 'Metric 1', withIcon: true, withUnit: true, allowedTypes: ['int', 'float'] },
+      { key: 'm2', label: 'Metric 2', withIcon: true, withUnit: true, allowedTypes: ['int', 'float'] },
+      { key: 'm3', label: 'Metric 3', withIcon: true, withUnit: true, allowedTypes: ['int', 'float'] },
     ],
     hasIcon: false,
-    hasUnit: true,
+    hasUnit: false,
     sampleTitle: 'Conf Room Data Trend',
   },
   multivalue_assorted: {
     title: 'Multivalue Card 3 (Assorted)',
     fields: [
-      { key: 'm1', label: 'Metric 1', withIcon: true, withBoolLabels: true },
-      { key: 'm2', label: 'Metric 2', withIcon: true, withBoolLabels: true },
+      { key: 'm1', label: 'Metric 1', withIcon: true, withUnit: true, allowedTypes: ['int', 'float'] },
+      { key: 'm2', label: 'Metric 2', withIcon: true, withUnit: true, allowedTypes: ['int', 'float'] },
     ],
     hasIcon: false,
     hasUnit: false,
@@ -3089,12 +4243,12 @@ const CARD_VARIANT_DEFS = {
   trend: {
     title: 'Trend Card',
     fields: [
-      { key: 'value', label: 'Value source', allowedTypes: ['int', 'float'] },
+      { key: 'value', label: 'Value source', allowedTypes: ['int', 'float'], noLabel: true },
       // Trend / delta source must be the SAME numeric type as the value
       // source so percentage deltas are meaningful. The actual allowedTypes
       // here are narrowed at runtime in CardConfigure based on the first
       // binding's resolved type (see effectiveAllowedTypes).
-      { key: 'trend', label: 'Trend / delta source (optional)', allowedTypes: ['int', 'float'], matchTypeOfFirst: true },
+      { key: 'trend', label: 'Trend / delta source (optional)', allowedTypes: ['int', 'float'], matchTypeOfFirst: true, noLabel: true },
     ],
     hasIcon: true,
     hasUnit: true,
@@ -3103,8 +4257,8 @@ const CARD_VARIANT_DEFS = {
   progress: {
     title: 'Progress Card',
     fields: [
-      { key: 'value', label: 'Current value source', allowedTypes: ['int', 'float'] },
-      { key: 'total', label: 'Total / target value source', allowedTypes: ['int', 'float'], matchTypeOfFirst: true },
+      { key: 'value', label: 'Current value source', allowedTypes: ['int', 'float'], noLabel: true },
+      { key: 'total', label: 'Total / target value source', allowedTypes: ['int', 'float'], matchTypeOfFirst: true, noLabel: true, allowStatic: true },
     ],
     hasIcon: false,
     hasUnit: false,
@@ -3112,6 +4266,7 @@ const CARD_VARIANT_DEFS = {
     // live payload bindings, so the percentage is always derived from
     // real device values.
     hasBarColor: true,        // surfaces a colour picker for the bar fill
+    hasProgressLabels: true,  // custom labels for the "done" / "left" footers
     sampleTitle: 'Daily Target',
   },
 }
@@ -3147,6 +4302,8 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
   const [onLabel, setOnLabel]       = useState(initStat.on_label || '')
   const [offLabel, setOffLabel]     = useState(initStat.off_label || '')
   const [barColor, setBarColor]     = useState(initStat.bar_color || themeIconDefault)
+  const [doneLabel, setDoneLabel]   = useState(initStat.done_label || '')
+  const [leftLabel, setLeftLabel]   = useState(initStat.left_label || '')
   const [bindings, setBindings] = useState(() =>
     def.fields.map((_, i) => {
       const ex = initBindings[i]
@@ -3156,10 +4313,13 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
             payload_path: ex.payload_path || '',
             label: ex.label || '',
             icon: ex.icon || '',
+            unit: ex.unit || '',
+            use_static: !!ex.use_static,
+            static_value: ex.static_value != null ? String(ex.static_value) : '',
             on_label: ex.on_label || '',
             off_label: ex.off_label || '',
           }
-        : { device_id: '', payload_path: '', label: '', icon: '', on_label: '', off_label: '' }
+        : { device_id: '', payload_path: '', label: '', icon: '', unit: '', use_static: false, static_value: '', on_label: '', off_label: '' }
     }),
   )
   const [saving, setSaving] = useState(false)
@@ -3184,6 +4344,8 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
     onLabel,
     offLabel,
     barColor,
+    doneLabel,
+    leftLabel,
   }
 
   function setBinding(i, k, v) {
@@ -3201,6 +4363,11 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
     const fes = {}
     if (!widgetName.trim()) fes.widget_name = 'Widget name is required.'
     bindings.forEach((b, i) => {
+      if (b.use_static) {
+        if (String(b.static_value ?? '').trim() === '' || !Number.isFinite(Number(b.static_value)))
+          fes[`bindings.${i}.static_value`] = 'Enter a number.'
+        return
+      }
       if (!b.device_id)            fes[`bindings.${i}.device_id`]    = 'Pick a device.'
       if (!b.payload_path.trim())  fes[`bindings.${i}.payload_path`] = 'Required.'
     })
@@ -3211,16 +4378,27 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
       title: title || '',
       description: description || '',
       variant,
-      bindings: bindings.map((b, i) => ({
-        device_id: Number(b.device_id),
-        payload_path: b.payload_path.replace(/^\/+|\/+$/g, ''),
-        label: b.label || def.fields[i].label,
-        icon: b.icon || '',
-        // Custom labels for boolean values. Only meaningful when the
-        // field can resolve to a boolean (see field.withBoolLabels).
-        ...(b.on_label  ? { on_label: b.on_label }   : {}),
-        ...(b.off_label ? { off_label: b.off_label } : {}),
-      })),
+      bindings: bindings.map((b, i) => {
+        // Fixed-value binding (e.g. Progress card's target): store the number
+        // instead of a device/payload reference.
+        if (b.use_static) {
+          return {
+            use_static: true,
+            static_value: Number(b.static_value),
+            label: b.label || def.fields[i].label,
+            ...(b.unit ? { unit: b.unit } : {}),
+          }
+        }
+        return {
+          device_id: Number(b.device_id),
+          payload_path: b.payload_path.replace(/^\/+|\/+$/g, ''),
+          label: b.label || def.fields[i].label,
+          icon: b.icon || '',
+          ...(b.unit ? { unit: b.unit } : {}),
+          ...(b.on_label  ? { on_label: b.on_label }   : {}),
+          ...(b.off_label ? { off_label: b.off_label } : {}),
+        }
+      }),
       static: {
         ...(unit       ? { unit }       : {}),
         ...(icon       ? { icon }       : {}),
@@ -3229,6 +4407,8 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
         ...(onLabel    ? { on_label: onLabel }   : {}),
         ...(offLabel   ? { off_label: offLabel } : {}),
         ...(barColor   ? { bar_color: barColor } : {}),
+        ...(doneLabel  ? { done_label: doneLabel } : {}),
+        ...(leftLabel  ? { left_label: leftLabel } : {}),
         card_color: cardColor,
         icon_color: iconColor,
       },
@@ -3307,6 +4487,18 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
                   onChange={(e) => setTarget(e.target.value)} placeholder="5000" />
               </DField>
             )}
+            {def.hasProgressLabels && (
+              <>
+                <DField label="Done label">
+                  <input type="text" value={doneLabel} disabled={saving}
+                    onChange={(e) => setDoneLabel(e.target.value)} placeholder="done" />
+                </DField>
+                <DField label="Left label">
+                  <input type="text" value={leftLabel} disabled={saving}
+                    onChange={(e) => setLeftLabel(e.target.value)} placeholder="left" />
+                </DField>
+              </>
+            )}
             {def.hasBooleanLabels && (
               <>
                 <DField label="Label when true (optional)">
@@ -3328,60 +4520,18 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field">
             <span className="form-label">Card color</span>
-            <div className="color-swatches">
-              {CARD_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={'color-swatch' + (cardColor === c.id ? ' is-active' : '')}
-                  style={{ background: c.bg }}
-                  title={c.label}
-                  aria-label={c.label}
-                  aria-pressed={cardColor === c.id}
-                  onClick={() => setCardColor(c.id)}
-                  disabled={saving}
-                />
-              ))}
-            </div>
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
           </div>
           {hasAnyIcon && (
             <div className="form-field">
               <span className="form-label">Icon color</span>
-              <div className="color-swatches">
-                {ICON_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={'color-swatch color-swatch-solid' + (iconColor === c.id ? ' is-active' : '')}
-                    style={{ background: c.hex }}
-                    title={c.label}
-                    aria-label={c.label}
-                    aria-pressed={iconColor === c.id}
-                    onClick={() => setIconColor(c.id)}
-                    disabled={saving}
-                  />
-                ))}
-              </div>
+              <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
             </div>
           )}
           {def.hasBarColor && (
             <div className="form-field">
               <span className="form-label">Progress bar color</span>
-              <div className="color-swatches">
-                {ICON_COLORS.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={'color-swatch color-swatch-solid' + (barColor === c.id ? ' is-active' : '')}
-                    style={{ background: c.hex }}
-                    title={c.label}
-                    aria-label={c.label}
-                    aria-pressed={barColor === c.id}
-                    onClick={() => setBarColor(c.id)}
-                    disabled={saving}
-                  />
-                ))}
-              </div>
+              <IconColorPicker value={barColor} onChange={setBarColor} disabled={saving} />
             </div>
           )}
           <div className="form-field">
@@ -3456,6 +4606,7 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
                 errors={{
                   device_id:    errors[`bindings.${i}.device_id`],
                   payload_path: errors[`bindings.${i}.payload_path`],
+                  static_value: errors[`bindings.${i}.static_value`],
                 }}
                 onChange={(k, v) => setBinding(i, k, v)}
               />
@@ -3482,6 +4633,50 @@ const TOGGLE_DEFAULTS = {
   int:     { on: '1',     off: '0' },
   float:   { on: '1.0',   off: '0.0' },
   string:  { on: 'on',    off: 'off' },
+  list:    { on: '[1]',   off: '[]' },
+  dict:    { on: '{"state": "on"}', off: '{"state": "off"}' },
+}
+
+/* Human hint describing the expected input format for each payload type. */
+const TYPE_FORMAT_HINT = {
+  boolean: 'Enter true or false.',
+  int:     'Enter a whole number, e.g. 1.',
+  float:   'Enter a number, e.g. 1.5.',
+  string:  'Enter any text.',
+  list:    'Enter a JSON array, e.g. [1, 2].',
+  dict:    'Enter a JSON object, e.g. {"state": "on"}.',
+}
+
+/* Validate a toggle on/off value string against the bound payload type.
+   Returns an error message, or null when the value is well-formed. Used
+   to guarantee the configured ON/OFF payload actually matches the type
+   of the selected device field before it can be saved. */
+function validateToggleValue(raw, type) {
+  const v = String(raw ?? '').trim()
+  if (v === '') return 'Required.'
+  switch (type) {
+    case 'boolean':
+      return /^(true|false)$/i.test(v) ? null : 'Must be true or false.'
+    case 'int':
+      return /^-?\d+$/.test(v) ? null : 'Must be a whole number (e.g. 1).'
+    case 'float':
+      return /^-?(\d+(\.\d+)?|\.\d+)$/.test(v) ? null : 'Must be a number (e.g. 1.5).'
+    case 'string':
+      return null
+    case 'list': {
+      let parsed
+      try { parsed = JSON.parse(v) } catch { return 'Must be valid JSON (e.g. [1, 2]).' }
+      return Array.isArray(parsed) ? null : 'Must be a JSON array (e.g. [1, 2]).'
+    }
+    case 'dict': {
+      let parsed
+      try { parsed = JSON.parse(v) } catch { return 'Must be valid JSON (e.g. {"state": "on"}).' }
+      return (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        ? null : 'Must be a JSON object (e.g. {"state": "on"}).'
+    }
+    default:
+      return null
+  }
 }
 
 function BindingFields({ field, binding, devices, disabled, errors, onChange, allowedTypesOverride }) {
@@ -3498,11 +4693,23 @@ function BindingFields({ field, binding, devices, disabled, errors, onChange, al
   }, [selectedDevice?.payload, binding.payload_path])
 
   // ALWAYS reseed on/off values when the payload path changes (type
-  // changes). This covers both the first pick and subsequent picks —
-  // the user should never have to manually set the type after picking
-  // a new path; it adapts automatically.
+  // changes). This covers both the first pick and subsequent picks — the
+  // user should never have to manually set the type after picking a new
+  // path; it adapts automatically. The press switch opts out of clobbering
+  // saved values on load via keepToggleValuesOnLoad (see below).
+  const seededPathRef = useRef(binding.payload_path || '')
   useEffect(() => {
     if (!field.withToggleValues || !detectedType) return
+    // keepToggleValuesOnLoad (press switch only): an EXISTING binding's
+    // detectedType flips null -> list/dict after the async device load,
+    // even though the path never changed. Skip the reseed while the path
+    // is unchanged so saved JSON/list values survive the edit screen; a
+    // real user-driven path change still adapts the values.
+    if (field.keepToggleValuesOnLoad) {
+      const pathChanged = seededPathRef.current !== (binding.payload_path || '')
+      seededPathRef.current = binding.payload_path || ''
+      if (!pathChanged) return
+    }
     const defs = TOGGLE_DEFAULTS[detectedType] || TOGGLE_DEFAULTS.string
     onChange('on_value', defs.on)
     onChange('off_value', defs.off)
@@ -3511,10 +4718,32 @@ function BindingFields({ field, binding, devices, disabled, errors, onChange, al
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detectedType])
 
+  const useStatic = !!binding.use_static
   return (
     <div className="card-config-binding">
       <div className="card-config-binding-label">{field.label}</div>
+      {field.allowStatic && (
+        <div className="binding-source-toggle" role="group" aria-label="Value source">
+          <button type="button"
+            className={'binding-source-btn' + (!useStatic ? ' is-active' : '')}
+            onClick={() => onChange('use_static', false)} disabled={disabled}>
+            From device
+          </button>
+          <button type="button"
+            className={'binding-source-btn' + (useStatic ? ' is-active' : '')}
+            onClick={() => onChange('use_static', true)} disabled={disabled}>
+            Fixed value
+          </button>
+        </div>
+      )}
       <div className="form-grid-2">
+        {field.allowStatic && useStatic ? (
+          <DField label="Value" required error={errors.static_value} full>
+            <input type="text" inputMode="decimal" value={binding.static_value || ''} disabled={disabled}
+              onChange={(e) => onChange('static_value', e.target.value)} placeholder="5000" />
+          </DField>
+        ) : (
+        <>
         <DField label="Device" required error={errors.device_id}>
           <select value={binding.device_id} disabled={disabled}
             onChange={(e) => onChange('device_id', e.target.value)}>
@@ -3531,15 +4760,26 @@ function BindingFields({ field, binding, devices, disabled, errors, onChange, al
             allowedTypes={allowedTypes}
           />
         </DField>
-        <DField label="Label" full={!field.withIcon}>
-          <input type="text" value={binding.label} disabled={disabled}
-            onChange={(e) => onChange('label', e.target.value)}
-            placeholder={field.label} />
-        </DField>
+        </>
+        )}
+        {!field.noLabel && (
+          <DField label="Label" full={!field.withIcon}>
+            <input type="text" value={binding.label} disabled={disabled}
+              onChange={(e) => onChange('label', e.target.value)}
+              placeholder={field.label} />
+          </DField>
+        )}
         {field.withIcon && (
           <DField label="Icon">
             <IconPickerField value={binding.icon} disabled={disabled}
               onChange={(v) => onChange('icon', v)} />
+          </DField>
+        )}
+        {field.withUnit && (
+          <DField label="Unit (e.g. °C, Ltrs)">
+            <input type="text" value={binding.unit || ''} disabled={disabled}
+              onChange={(e) => onChange('unit', e.target.value)}
+              placeholder="°C" />
           </DField>
         )}
         {field.withBoolLabels && (
@@ -3556,35 +4796,97 @@ function BindingFields({ field, binding, devices, disabled, errors, onChange, al
             </DField>
           </>
         )}
-        {field.withToggleValues && (
+        {field.withToggleValues && (() => {
+          // When the field locks the type (toggle / dual toggle / press
+          // switch) AND the device has reported a payload, the ON/OFF type
+          // is pinned to the selected field's type and can't be edited —
+          // the values can only be of that one type. Falls back to an
+          // editable selector when the type can't be detected (custom path
+          // / device hasn't reported a payload yet).
+          const lockType = !!field.lockToggleType && !!detectedType
+          const lockedType = detectedType || 'boolean'
+          const renderType = (which) => {
+            const cur = binding[`${which}_type`] || detectedType || 'boolean'
+            if (lockType) {
+              return (
+                <DField label={which === 'on' ? 'ON type' : 'OFF type'}>
+                  <div className="ctrl-type-locked" title="Matches the selected payload field — not editable">
+                    <span>{lockedType}</span>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                </DField>
+              )
+            }
+            return (
+              <DField label={which === 'on' ? 'ON type' : 'OFF type'}>
+                <select value={cur} disabled={disabled}
+                  onChange={(e) => onChange(`${which}_type`, e.target.value)}>
+                  <option value="boolean">boolean</option>
+                  <option value="string">string</option>
+                  <option value="int">int</option>
+                  <option value="float">float</option>
+                  <option value="list">list</option>
+                  <option value="dict">dict</option>
+                </select>
+              </DField>
+            )
+          }
+          const fmtType = lockType ? lockedType : null
+          return (
+            <>
+              <DField label="Send when ON" error={errors.on_value}>
+                <input type="text" value={binding.on_value || ''} disabled={disabled}
+                  onChange={(e) => onChange('on_value', e.target.value)}
+                  placeholder={(TOGGLE_DEFAULTS[detectedType] || TOGGLE_DEFAULTS.boolean).on} />
+              </DField>
+              {renderType('on')}
+              <DField label="Send when OFF" error={errors.off_value}>
+                <input type="text" value={binding.off_value || ''} disabled={disabled}
+                  onChange={(e) => onChange('off_value', e.target.value)}
+                  placeholder={(TOGGLE_DEFAULTS[detectedType] || TOGGLE_DEFAULTS.boolean).off} />
+              </DField>
+              {renderType('off')}
+              {fmtType && (
+                <p className="ctrl-json-hint" style={{ gridColumn: '1 / -1', margin: '2px 0 0', fontSize: '11.5px', color: 'var(--ink-3, #8c8377)' }}>
+                  Locked to the <strong>{fmtType}</strong> field. {TYPE_FORMAT_HINT[fmtType] || ''}
+                </p>
+              )}
+              {!fmtType && (detectedType === 'list' || detectedType === 'dict') && (
+                <p className="ctrl-json-hint" style={{ gridColumn: '1 / -1', margin: '2px 0 0', fontSize: '11.5px', color: 'var(--ink-3, #8c8377)' }}>
+                  Enter the ON/OFF values as JSON ({detectedType === 'list' ? 'e.g. [1, 2]' : 'e.g. {"state": "on"}'}).
+                </p>
+              )}
+            </>
+          )
+        })()}
+        {field.withStateLabels && (
           <>
-            <DField label="Send when ON">
-              <input type="text" value={binding.on_value || ''} disabled={disabled}
-                onChange={(e) => onChange('on_value', e.target.value)}
-                placeholder={TOGGLE_DEFAULTS[detectedType || 'boolean'].on} />
+            <DField label="Display label · ON (optional)">
+              <input type="text" value={binding.on_label || ''} disabled={disabled}
+                onChange={(e) => onChange('on_label', e.target.value)}
+                placeholder="e.g. Open, Active, Running" />
             </DField>
-            <DField label="ON type">
-              <select value={binding.on_type || detectedType || 'boolean'} disabled={disabled}
-                onChange={(e) => onChange('on_type', e.target.value)}>
-                <option value="boolean">boolean</option>
-                <option value="string">string</option>
-                <option value="int">int</option>
-                <option value="float">float</option>
-              </select>
+            <DField label="Display label · OFF (optional)">
+              <input type="text" value={binding.off_label || ''} disabled={disabled}
+                onChange={(e) => onChange('off_label', e.target.value)}
+                placeholder="e.g. Closed, Idle, Stopped" />
             </DField>
-            <DField label="Send when OFF">
-              <input type="text" value={binding.off_value || ''} disabled={disabled}
-                onChange={(e) => onChange('off_value', e.target.value)}
-                placeholder={TOGGLE_DEFAULTS[detectedType || 'boolean'].off} />
+          </>
+        )}
+        {field.withButtonLabels && (
+          <>
+            <DField label="Button label · ON" error={errors.on_label}>
+              <input type="text" value={binding.on_label || ''} disabled={disabled}
+                onChange={(e) => onChange('on_label', e.target.value)}
+                placeholder="e.g. Turn Off" />
             </DField>
-            <DField label="OFF type">
-              <select value={binding.off_type || detectedType || 'boolean'} disabled={disabled}
-                onChange={(e) => onChange('off_type', e.target.value)}>
-                <option value="boolean">boolean</option>
-                <option value="string">string</option>
-                <option value="int">int</option>
-                <option value="float">float</option>
-              </select>
+            <DField label="Button label · OFF" error={errors.off_label}>
+              <input type="text" value={binding.off_label || ''} disabled={disabled}
+                onChange={(e) => onChange('off_label', e.target.value)}
+                placeholder="e.g. Turn On" />
             </DField>
           </>
         )}
@@ -4078,7 +5380,7 @@ function CardVariantGallery({ onPick }) {
    ===================================================================== */
 function ControlVariantGallery({ onPick }) {
   return (
-    <div className="card-gallery">
+    <div className="card-gallery card-gallery-controls">
       {CONTROL_VARIANTS.map((v) => (
         <button
           key={v.id}
@@ -4146,7 +5448,39 @@ function useDialData(options, defaults) {
   const display = typeof live === 'number'
     ? (isFloat ? abbreviateNum(parseFloat(live.toFixed(1))) : abbreviateNum(Number.isInteger(live) ? live : parseFloat(live.toFixed(1))))
     : (options.devicesById ? '-' : abbreviateNum(Math.round((min + max) / 2)))
-  return { title, style, hex, min, max, unit, value, pct, display, icon: options.icon }
+  return { title, style, hex, min, max, unit, value, pct, display, isFloat, live, icon: options.icon }
+}
+
+/* Smoothly eases a numeric value toward its target with requestAnimationFrame
+   so gauges/dials glide to a new reading instead of snapping to it. */
+function useAnimatedNumber(target, { duration = 700 } = {}) {
+  const valid = typeof target === 'number' && Number.isFinite(target)
+  const [val, setVal] = useState(valid ? target : 0)
+  const fromRef = useRef(valid ? target : 0)
+  const rafRef = useRef(null)
+
+  useEffect(() => {
+    if (!valid) return
+    const from = fromRef.current
+    const to = target
+    if (from === to) { setVal(to); return }
+    const dur = Math.max(1, duration)
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3)
+    let start = null
+    const tick = (ts) => {
+      if (start == null) start = ts
+      const p = Math.min(1, (ts - start) / dur)
+      const cur = from + (to - from) * easeOutCubic(p)
+      fromRef.current = cur
+      setVal(cur)
+      if (p < 1) rafRef.current = requestAnimationFrame(tick)
+      else { fromRef.current = to; setVal(to) }
+    }
+    rafRef.current = requestAnimationFrame(tick)
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [target, valid, duration])
+
+  return valid ? val : target
 }
 
 function abbreviateNum(n) {
@@ -4175,48 +5509,104 @@ function pointOnArc(cx, cy, r, deg) {
 /* ── 1. Solid Gauge — thick 180° arc fill + tapered needle ── */
 function PreviewSolidGauge({ options = {} }) {
   const d = useDialData(options, { title: 'Vehicle Speed' })
-  const cx = 50, cy = 50, r = 40, sw = 10
+  const uid = useId().replace(/:/g, '')
+  const fillId = `gaugeFill-${uid}`
+  const shadowId = `gaugeShadow-${uid}`
+  // Ease the reading so the needle, fill and number glide gradually
+  // toward a new value instead of snapping to it.
+  const animValue = useAnimatedNumber(d.value, { duration: 700 })
+  const isLive = typeof d.live === 'number'
+  const pct = dialPercent(animValue, d.min, d.max)
+  const display = isLive
+    ? abbreviateNum(d.isFloat ? parseFloat(animValue.toFixed(1)) : Math.round(animValue))
+    : d.display
+
+  const cx = 50, cy = 52, r = 38, sw = 10
   const startDeg = 180, sweepDeg = 180
   const arcPath = svgArc(cx, cy, r, startDeg, startDeg + sweepDeg)
-  const totalLen = (sweepDeg / 360) * 2 * Math.PI * r
-  const fillLen = totalLen * (d.pct / 100)
   const toRad = (deg) => (deg * Math.PI) / 180
-  const valDeg = startDeg + (sweepDeg * d.pct / 100)
-  const needleLen = r - 4
+  const valDeg = startDeg + (sweepDeg * pct / 100)
+  // Flat (butt) caps: the bar begins / ends exactly at its centerline endpoints
+  // (no rounded blob bulging perpendicular to the needle), and the fill stops
+  // flush on the needle angle — so the needle tip lines up precisely with the
+  // start (0%) and end (100%) of the bar.
+  const fillEndDeg = startDeg + (sweepDeg * pct / 100)
+  const showFill = pct > 0 && fillEndDeg > startDeg + 0.01
+  const fillPath = showFill ? svgArc(cx, cy, r, startDeg, fillEndDeg) : null
+  // Needle tip lands on the bar's centerline endpoint, exactly where the flat
+  // bar starts / ends.
+  const needleLen = r
   const needleAngle = toRad(valDeg)
   const tipX = cx + needleLen * Math.cos(needleAngle)
   const tipY = cy + needleLen * Math.sin(needleAngle)
-  const baseSpread = 2.5
+  const baseSpread = 2.7
   const perpAngle = needleAngle + Math.PI / 2
   const b1x = cx + baseSpread * Math.cos(perpAngle)
   const b1y = cy + baseSpread * Math.sin(perpAngle)
   const b2x = cx - baseSpread * Math.cos(perpAngle)
   const b2y = cy - baseSpread * Math.sin(perpAngle)
+  // Counterweight tail so the needle reads as a balanced pointer.
+  const tailLen = 8
+  const tailX = cx - tailLen * Math.cos(needleAngle)
+  const tailY = cy - tailLen * Math.sin(needleAngle)
+  // Subtle tick marks around the arc for a polished gauge feel.
+  const tickCount = 10
+  const ticks = []
+  for (let i = 0; i <= tickCount; i++) {
+    const a = toRad(startDeg + (sweepDeg * i) / tickCount)
+    const major = i % 5 === 0
+    const inR = r + sw / 2 + 1.5
+    const outR = inR + (major ? 3 : 1.8)
+    ticks.push(
+      <line key={i}
+        x1={cx + inR * Math.cos(a)} y1={cy + inR * Math.sin(a)}
+        x2={cx + outR * Math.cos(a)} y2={cy + outR * Math.sin(a)}
+        stroke={hexToRgba(d.hex, major ? 0.5 : 0.28)}
+        strokeWidth={major ? 1.4 : 0.8} strokeLinecap="round" />
+    )
+  }
   return (
     <CvCard style={d.style}>
       <div className="cv-title">{d.title}</div>
       {options.description && <div className="cv-desc">{options.description}</div>}
       <div className="dial-wrap">
-        <svg className="dial-svg" viewBox="0 0 100 64">
-          <path d={arcPath} fill="none" stroke={hexToRgba(d.hex, 0.12)}
-            strokeWidth={sw} strokeLinecap="round" />
-          <path d={arcPath} fill="none" stroke={d.hex}
-            strokeWidth={sw} strokeLinecap="round"
-            strokeDasharray={`${fillLen} ${totalLen}`}
-            style={{ transition: 'stroke-dasharray 0.6s ease' }} />
-          <polygon
-            points={`${tipX},${tipY} ${b1x},${b1y} ${b2x},${b2y}`}
-            fill="#2D3436"
-            style={{ transition: 'all 0.6s ease' }} />
-          <circle cx={cx} cy={cy} r={3.5} fill="#2D3436" />
-          <circle cx={cx} cy={cy} r={1.5} fill="#fff" opacity={0.6} />
-          <text x={cx - r - sw / 2} y={cy + sw + 4} textAnchor="start"
-            className="dial-svg-label">{abbreviateNum(d.min)}</text>
-          <text x={cx + r + sw / 2} y={cy + sw + 4} textAnchor="end"
-            className="dial-svg-label">{abbreviateNum(d.max)}</text>
+        <svg className="dial-svg" viewBox="-6 -2 112 71">
+          <defs>
+            <linearGradient id={fillId} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={d.hex} stopOpacity="0.62" />
+              <stop offset="100%" stopColor={d.hex} stopOpacity="1" />
+            </linearGradient>
+            <filter id={shadowId} x="-50%" y="-50%" width="200%" height="200%">
+              <feDropShadow dx="0" dy="1.1" stdDeviation="1" floodColor="#0b1220" floodOpacity="0.28" />
+            </filter>
+          </defs>
+          {ticks}
+          {/* Flat (butt) ends keep the bar's 0 / 100 edges square so the needle
+              tip aligns precisely with the start / end of the bar. */}
+          <path d={arcPath} fill="none" stroke={hexToRgba(d.hex, 0.13)}
+            strokeWidth={sw} strokeLinecap="butt" />
+          {showFill && (
+            <path d={fillPath} fill="none" stroke={`url(#${fillId})`}
+              strokeWidth={sw} strokeLinecap="butt" />
+          )}
+          <g filter={`url(#${shadowId})`}>
+            <line x1={cx} y1={cy} x2={tailX} y2={tailY}
+              stroke="#2D3436" strokeWidth={2.6} strokeLinecap="round" />
+            <polygon
+              points={`${tipX},${tipY} ${b1x},${b1y} ${b2x},${b2y}`}
+              fill="#2D3436" />
+          </g>
+          <circle cx={cx} cy={cy} r={4.6} fill="#2D3436" />
+          <circle cx={cx} cy={cy} r={4.6} fill="none"
+            stroke={d.hex} strokeWidth={1.1} opacity={0.85} />
+          <circle cx={cx} cy={cy} r={1.9} fill="#fff" opacity={0.92} />
+          <text x={cx - r} y={cy + 12} textAnchor="middle"
+            className="dial-svg-label dial-gauge-label">{abbreviateNum(d.min)}</text>
+          <text x={cx + r} y={cy + 12} textAnchor="middle"
+            className="dial-svg-label dial-gauge-label">{abbreviateNum(d.max)}</text>
         </svg>
         <div className="dial-readout">
-          <span className="dial-value">{d.display}</span>
+          <span className="dial-value">{display}</span>
           {d.unit && <span className="dial-unit">{d.unit}</span>}
         </div>
       </div>
@@ -4227,10 +5617,17 @@ function PreviewSolidGauge({ options = {} }) {
 /* ── 2. Semi Dial — 180° arc with tick marks, numbers, needle ── */
 function PreviewSemiDial({ options = {} }) {
   const d = useDialData(options, { title: 'Vehicle Speed' })
+  // Ease the reading so the needle glides along the arc instead of jumping.
+  const animValue = useAnimatedNumber(d.value, { duration: 700 })
+  const isLive = typeof d.live === 'number'
+  const pct = dialPercent(animValue, d.min, d.max)
+  const display = isLive
+    ? abbreviateNum(d.isFloat ? parseFloat(animValue.toFixed(1)) : Math.round(animValue))
+    : d.display
   const cx = 50, cy = 52, r = 38, sw = 5
   const startDeg = 180, sweepDeg = 180
   const toRad = (deg) => (deg * Math.PI) / 180
-  const needleAngle = startDeg + (sweepDeg * d.pct / 100)
+  const needleAngle = startDeg + (sweepDeg * pct / 100)
   const trackPath = svgArc(cx, cy, r, startDeg, startDeg + sweepDeg)
   const tickCount = 10
   const ticks = []
@@ -4247,7 +5644,9 @@ function PreviewSemiDial({ options = {} }) {
         stroke={hexToRgba(d.hex, isMajor ? 0.5 : 0.25)}
         strokeWidth={isMajor ? 1.5 : 0.8} strokeLinecap="round" />
     )
-    if (isMajor) {
+    // Endpoint (0 / max) labels are drawn at the bottom like the solid gauge;
+    // intermediate majors stay around the arc.
+    if (isMajor && i !== 0 && i !== tickCount) {
       const labelR = r + 10
       const lx = cx + labelR * Math.cos(rad)
       const ly = cy + labelR * Math.sin(rad)
@@ -4261,7 +5660,9 @@ function PreviewSemiDial({ options = {} }) {
     }
   }
   const needleRad = toRad(needleAngle)
-  const needleLen = r - 4
+  // Tip reaches the arc's centerline endpoint so it lands exactly on the start /
+  // end points (matches the solid gauge).
+  const needleLen = r
   const tipX = cx + needleLen * Math.cos(needleRad)
   const tipY = cy + needleLen * Math.sin(needleRad)
   const baseSpread = 2.2
@@ -4275,19 +5676,25 @@ function PreviewSemiDial({ options = {} }) {
       <div className="cv-title">{d.title}</div>
       {options.description && <div className="cv-desc">{options.description}</div>}
       <div className="dial-wrap">
-        <svg className="dial-svg" viewBox="-6 -2 112 66">
+        <svg className="dial-svg" viewBox="-6 -2 112 71">
+          {/* Flat (butt) arc ends so the start / end align exactly with the
+              needle tip — matches the solid gauge. */}
           <path d={trackPath} fill="none" stroke={hexToRgba(d.hex, 0.12)}
-            strokeWidth={sw} strokeLinecap="round" />
+            strokeWidth={sw} strokeLinecap="butt" />
           {ticks}
           <polygon
             points={`${tipX},${tipY} ${b1x},${b1y} ${b2x},${b2y}`}
-            fill="#2D3436"
-            style={{ transition: 'all 0.6s ease' }} />
+            fill="#2D3436" />
           <circle cx={cx} cy={cy} r={3.5} fill="#2D3436" />
           <circle cx={cx} cy={cy} r={1.5} fill="#fff" opacity={0.7} />
+          {/* Start / end labels at the bottom under the arc ends — matches the solid gauge */}
+          <text x={cx - r} y={cy + 12} textAnchor="middle"
+            className="dial-svg-label dial-gauge-label">{abbreviateNum(d.min)}</text>
+          <text x={cx + r} y={cy + 12} textAnchor="middle"
+            className="dial-svg-label dial-gauge-label">{abbreviateNum(d.max)}</text>
         </svg>
         <div className="dial-readout">
-          <span className="dial-value">{d.display}</span>
+          <span className="dial-value">{display}</span>
           {d.unit && <span className="dial-unit">{d.unit}</span>}
         </div>
       </div>
@@ -4345,6 +5752,13 @@ function PreviewFullDial({ options = {} }) {
 /* ── 4. Progress Dial — 270° with color zones + needle ── */
 function PreviewProgressDial({ options = {} }) {
   const d = useDialData(options, { title: 'Engine Power' })
+  // Ease the reading so the needle glides along the arc instead of jumping.
+  const animValue = useAnimatedNumber(d.value, { duration: 700 })
+  const isLive = typeof d.live === 'number'
+  const pct = dialPercent(animValue, d.min, d.max)
+  const display = isLive
+    ? abbreviateNum(d.isFloat ? parseFloat(animValue.toFixed(1)) : Math.round(animValue))
+    : d.display
   const cx = 50, cy = 50, r = 38, sw = 8
   const startDeg = 135, sweepDeg = 270
   const toRad = (deg) => (deg * Math.PI) / 180
@@ -4356,11 +5770,12 @@ function PreviewProgressDial({ options = {} }) {
   const zoneArcs = zones.map((z, i) => {
     const a1 = startDeg + sweepDeg * (z.from / 100)
     const a2 = startDeg + sweepDeg * (z.to / 100)
+    // Flat (butt) caps on every zone so the arc's start matches its flat end.
     return <path key={i} d={svgArc(cx, cy, r, a1, a2)} fill="none"
-      stroke={z.color} strokeWidth={sw} strokeLinecap={i === 0 ? 'round' : 'butt'} />
+      stroke={z.color} strokeWidth={sw} strokeLinecap="butt" />
   })
   const unfilled = startDeg + sweepDeg * (Math.max(zones[zones.length - 1].to, 100) / 100)
-  const needleAngle = startDeg + (sweepDeg * d.pct / 100)
+  const needleAngle = startDeg + (sweepDeg * pct / 100)
   const needleRad = toRad(needleAngle)
   const needleLen = r - 6
   const tipX = cx + needleLen * Math.cos(needleRad)
@@ -4378,12 +5793,11 @@ function PreviewProgressDial({ options = {} }) {
       <div className="dial-wrap">
         <svg className="dial-svg" viewBox="0 0 100 100">
           <path d={svgArc(cx, cy, r, startDeg, startDeg + sweepDeg)} fill="none"
-            stroke={hexToRgba(d.hex, 0.08)} strokeWidth={sw} strokeLinecap="round" />
+            stroke={hexToRgba(d.hex, 0.08)} strokeWidth={sw} strokeLinecap="butt" />
           {zoneArcs}
           <polygon
             points={`${tipX},${tipY} ${b1x},${b1y} ${b2x},${b2y}`}
-            fill="#2D3436"
-            style={{ transition: 'all 0.6s ease' }} />
+            fill="#2D3436" />
           <circle cx={cx} cy={cy} r={4} fill="#2D3436" />
           <circle cx={cx} cy={cy} r={1.8} fill="#fff" opacity={0.7} />
           {(() => {
@@ -4396,7 +5810,7 @@ function PreviewProgressDial({ options = {} }) {
           })()}
         </svg>
         <div className="dial-readout">
-          <span className="dial-value">{d.display}</span>
+          <span className="dial-value">{display}</span>
           {d.unit && <span className="dial-unit">{d.unit}</span>}
         </div>
       </div>
@@ -4407,10 +5821,16 @@ function PreviewProgressDial({ options = {} }) {
 /* ── 5. Threshold Dial — 180° arc, color zones fill up to the value ── */
 function PreviewThresholdDial({ options = {} }) {
   const d = useDialData(options, { title: 'Engine Power' })
-  const cx = 50, cy = 52, r = 40, sw = 12
+  // Ease the reading so the coloured arc grows / shrinks gradually.
+  const animValue = useAnimatedNumber(d.value, { duration: 700 })
+  const isLive = typeof d.live === 'number'
+  const display = isLive
+    ? abbreviateNum(d.isFloat ? parseFloat(animValue.toFixed(1)) : Math.round(animValue))
+    : d.display
+  const cx = 50, cy = 52, r = 38, sw = 12
   const startDeg = 180, sweepDeg = 180
   const endDeg = startDeg + sweepDeg
-  const valPct = d.pct
+  const valPct = dialPercent(animValue, d.min, d.max)
   const zones = [
     { from: 0,  to: 50, color: '#27AE60' },
     { from: 50, to: 75, color: '#F39C12' },
@@ -4425,8 +5845,7 @@ function PreviewThresholdDial({ options = {} }) {
     return <path key={i} d={arcPath} fill="none"
       stroke={z.color} strokeWidth={sw}
       strokeLinecap={i === 0 && zoneFill > 0 ? 'round' : 'butt'}
-      strokeDasharray={`0 ${zoneStart} ${Math.max(0, zoneFill)} ${totalLen}`}
-      style={{ transition: 'stroke-dasharray 0.6s ease' }} />
+      strokeDasharray={`0 ${zoneStart} ${Math.max(0, zoneFill)} ${totalLen}`} />
   })
   const rotateDeg = startDeg + (sweepDeg * valPct / 100)
   const tipColor = valPct >= 75 ? '#E74C3C' : valPct >= 50 ? '#F39C12' : '#27AE60'
@@ -4435,7 +5854,7 @@ function PreviewThresholdDial({ options = {} }) {
       <div className="cv-title">{d.title}</div>
       {options.description && <div className="cv-desc">{options.description}</div>}
       <div className="dial-wrap">
-        <svg className="dial-svg" viewBox="0 0 100 72">
+        <svg className="dial-svg" viewBox="-6 -2 112 71">
           <path d={arcPath} fill="none" stroke="rgba(0,0,0,0.08)"
             strokeWidth={sw} strokeLinecap="round" />
           {zoneArcs}
@@ -4443,15 +5862,15 @@ function PreviewThresholdDial({ options = {} }) {
             style={{
               transformOrigin: `${cx}px ${cy}px`,
               transform: `rotate(${rotateDeg}deg)`,
-              transition: 'transform 0.6s ease, fill 0.3s ease',
+              transition: 'fill 0.3s ease',
             }} />
-          <text x={cx - r - sw / 2} y={cy + sw / 2 + 10} textAnchor="start"
-            className="dial-svg-label">{abbreviateNum(d.min)}</text>
-          <text x={cx + r + sw / 2} y={cy + sw / 2 + 10} textAnchor="end"
-            className="dial-svg-label">{abbreviateNum(d.max)}</text>
+          <text x={cx - r} y={cy + 12} textAnchor="middle"
+            className="dial-svg-label dial-gauge-label">{abbreviateNum(d.min)}</text>
+          <text x={cx + r} y={cy + 12} textAnchor="middle"
+            className="dial-svg-label dial-gauge-label">{abbreviateNum(d.max)}</text>
         </svg>
         <div className="dial-readout">
-          <span className="dial-value dial-value-lg">{d.display}</span>
+          <span className="dial-value">{display}</span>
           {d.unit && <span className="dial-unit">{d.unit}</span>}
         </div>
       </div>
@@ -4608,27 +6027,11 @@ function DialConfigure({ variant, devices, initial, onBack, onSubmit, themeDefau
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field">
             <span className="form-label">Card color</span>
-            <div className="color-swatches">
-              {CARD_COLORS.map((c) => (
-                <button key={c.id} type="button"
-                  className={'color-swatch' + (cardColor === c.id ? ' is-active' : '')}
-                  style={{ background: c.bg }} title={c.label}
-                  aria-pressed={cardColor === c.id}
-                  onClick={() => setCardColor(c.id)} disabled={saving} />
-              ))}
-            </div>
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
           </div>
           <div className="form-field">
             <span className="form-label">Gauge color</span>
-            <div className="color-swatches">
-              {ICON_COLORS.map((c) => (
-                <button key={c.id} type="button"
-                  className={'color-swatch color-swatch-solid' + (iconColor === c.id ? ' is-active' : '')}
-                  style={{ background: c.hex }} title={c.label}
-                  aria-pressed={iconColor === c.id}
-                  onClick={() => setIconColor(c.id)} disabled={saving} />
-              ))}
-            </div>
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
           </div>
         </div>
         <div className="card-config-section">
@@ -4925,7 +6328,7 @@ function ChartConfigure({ variant, devices, initial, onBack, onSubmit, themeDefa
         <div className="card-config-section">
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field"><span className="form-label">Card color</span>
-            <div className="color-swatches">{CARD_COLORS.map((c) => (<button key={c.id} type="button" className={'color-swatch' + (cardColor === c.id ? ' is-active' : '')} style={{ background: c.bg }} title={c.label} aria-pressed={cardColor === c.id} onClick={() => setCardColor(c.id)} disabled={saving} />))}</div>
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
           </div>
         </div>
         <div className="card-config-section">
@@ -4947,7 +6350,7 @@ function ChartConfigure({ variant, devices, initial, onBack, onSubmit, themeDefa
 
 function FillVariantGallery({ onPick }) {
   return (
-    <div className="card-gallery">
+    <div className="card-gallery card-gallery-fill">
       {FILL_VARIANTS.map((v) => (
         <button key={v.id} type="button" className="card-variant"
           onClick={() => onPick?.(v.id)} aria-label={`Use ${v.title}`}>
@@ -5181,10 +6584,10 @@ function FillConfigure({ variant, devices, initial, onBack, onSubmit, themeDefau
         <div className="card-config-section">
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field"><span className="form-label">Card color</span>
-            <div className="color-swatches">{CARD_COLORS.map((c) => (<button key={c.id} type="button" className={'color-swatch' + (cardColor === c.id ? ' is-active' : '')} style={{ background: c.bg }} title={c.label} aria-pressed={cardColor === c.id} onClick={() => setCardColor(c.id)} disabled={saving} />))}</div>
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
           </div>
           <div className="form-field"><span className="form-label">Fill color</span>
-            <div className="color-swatches">{ICON_COLORS.map((c) => (<button key={c.id} type="button" className={'color-swatch color-swatch-solid' + (iconColor === c.id ? ' is-active' : '')} style={{ background: c.hex }} title={c.label} aria-pressed={iconColor === c.id} onClick={() => setIconColor(c.id)} disabled={saving} />))}</div>
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
           </div>
         </div>
         <div className="card-config-section">
@@ -5195,6 +6598,207 @@ function FillConfigure({ variant, devices, initial, onBack, onSubmit, themeDefau
             <DField label="Max"><input type="text" inputMode="decimal" value={max} disabled={saving} onChange={(e) => setMax(e.target.value)} /></DField>
             {def.hasUnit && <DField label="Unit" full><input type="text" value={unit} disabled={saving} onChange={(e) => setUnit(e.target.value)} placeholder="%, ltr, °C…" /></DField>}
           </div></div>
+        </div>
+        <div className="modal-foot">
+          {!isEditing && onBack && <button type="button" className="btn-secondary" onClick={onBack} disabled={saving}>Back</button>}
+          <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving}>{saving ? 'Saving…' : (isEditing ? 'Save Changes' : 'Add Widget')}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+/* =====================================================================
+   LOG WIDGETS — read-only. Gallery + previews + configure.
+   ===================================================================== */
+function LogVariantGallery({ onPick }) {
+  return (
+    <div className="card-gallery">
+      {LOG_VARIANTS.map((v) => (
+        <button key={v.id} type="button" className="card-variant"
+          onClick={() => onPick?.(v.id)} aria-label={`Use ${v.title}`}>
+          <div className="card-variant-title">{v.title}</div>
+          <div className="card-variant-preview">
+            <LogPreview variant={v.id} />
+          </div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function LogPreview({ variant, options = {} }) {
+  switch (variant) {
+    case 'log_feed':     return <PreviewLogFeed     options={options} />
+    case 'log_console':  return <PreviewLogConsole  options={options} />
+    case 'log_timeline': return <PreviewLogTimeline options={options} />
+    default: return null
+  }
+}
+
+/* Resolve the bound log list (or fall back to sample rows for the
+   gallery / unconfigured state). Honors a `limit` (max rows shown). */
+function useLogData(options, defaults) {
+  const title = options.title || defaults.title
+  const style = cardStyleFor(options.color || 'slate')
+  const hex   = getIconColor(options.iconColor || 'slate').hex
+  const raw   = resolveBindingRawValue(options.bindings?.[0], options.devicesById)
+  const normalized = normalizeLogEntries(raw)
+  const entries = (normalized && normalized.length ? normalized : SAMPLE_LOGS)
+  const limit = Number(options.limit) > 0 ? Number(options.limit) : 50
+  // Newest last in the source; show the most recent `limit`.
+  const shown = entries.slice(-limit)
+  const isSample = !normalized || normalized.length === 0
+  return { title, style, hex, entries: shown, isSample }
+}
+
+function PreviewLogFeed({ options = {} }) {
+  const d = useLogData(options, { title: 'Activity Log' })
+  return (
+    <div className="cv-card log-card log-card-feed" style={d.style}>
+      <div className="log-head">
+        <span className="cv-title">{d.title}</span>
+        <span className="log-count">{d.entries.length}{d.isSample ? ' · sample' : ''}</span>
+      </div>
+      <ul className="log-feed-list">
+        {d.entries.map((e, i) => (
+          <li key={i} className={'log-feed-row ' + logLevelClass(e.level)}>
+            <span className="log-dot" aria-hidden="true" />
+            {e.time && <span className="log-time">{e.time}</span>}
+            <span className="log-msg">{e.message}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function PreviewLogConsole({ options = {} }) {
+  const d = useLogData(options, { title: 'System Console' })
+  return (
+    <div className="cv-card log-card log-card-console" style={d.style}>
+      <div className="log-head log-head-console">
+        <span className="log-console-dots" aria-hidden="true"><i /><i /><i /></span>
+        <span className="cv-title">{d.title}</span>
+      </div>
+      <div className="log-console-body">
+        {d.entries.map((e, i) => (
+          <div key={i} className={'log-console-line ' + logLevelClass(e.level)}>
+            {e.time && <span className="log-console-time">{e.time}</span>}
+            {e.level && <span className="log-console-level">{(e.level || 'log').toUpperCase()}</span>}
+            <span className="log-console-msg">{e.message}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PreviewLogTimeline({ options = {} }) {
+  const d = useLogData(options, { title: 'Events' })
+  return (
+    <div className="cv-card log-card log-card-timeline" style={d.style}>
+      <div className="log-head">
+        <span className="cv-title">{d.title}</span>
+        <span className="log-count">{d.entries.length}{d.isSample ? ' · sample' : ''}</span>
+      </div>
+      <ul className="log-timeline-list">
+        {d.entries.map((e, i) => (
+          <li key={i} className={'log-timeline-row ' + logLevelClass(e.level)}>
+            <span className="log-timeline-marker" aria-hidden="true"><span className="log-timeline-dot" /></span>
+            <div className="log-timeline-content">
+              <div className="log-timeline-msg">{e.message}</div>
+              {e.time && <div className="log-timeline-time">{e.time}</div>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function LogConfigure({ variant, devices, initial, onBack, onSubmit, themeDefaults }) {
+  const def = LOG_VARIANT_DEFS[variant] || LOG_VARIANT_DEFS.log_feed
+  const isEditing = !!initial
+  const initCfg  = initial?.config || {}
+  const initStat = initCfg.static || {}
+  const initBindings = Array.isArray(initCfg.bindings) ? initCfg.bindings : []
+  const themeCardDefault = themeDefaults?.cardColor || 'snow'
+  const themeIconDefault = themeDefaults?.iconColor || 'slate'
+  const [widgetName, setWidgetName]   = useState(initial?.widget_name || '')
+  const [title, setTitle]             = useState(initCfg.title || '')
+  const [limit, setLimit]             = useState(initStat.limit != null ? String(initStat.limit) : '50')
+  const [cardColor, setCardColor]     = useState(initStat.card_color || themeCardDefault)
+  const [iconColor, setIconColor]     = useState(initStat.icon_color || themeIconDefault)
+  const [binding, setBindingState]    = useState(() => {
+    const ex = initBindings[0]
+    return ex ? { device_id: ex.device_id != null ? String(ex.device_id) : '', payload_path: ex.payload_path || '', label: ex.label || '' }
+              : { device_id: '', payload_path: '', label: '' }
+  })
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState({})
+  const [banner, setBanner] = useState(null)
+  function setBinding(k, v) {
+    setBindingState((b) => ({ ...b, [k]: v }))
+    setErrors((e) => { const nk = `bindings.0.${k}`; if (!e[nk]) return e; const next = { ...e }; delete next[nk]; return next })
+  }
+  const devicesById = useMemo(() => {
+    const m = new Map(); for (const d of devices || []) m.set(Number(d.id), d); return m
+  }, [devices])
+  const previewOptions = { title: title || def.title, color: cardColor, iconColor, limit: Number(limit), bindings: [binding], devicesById }
+
+  function submit(e) {
+    e.preventDefault(); setBanner(null)
+    const fes = {}
+    if (!widgetName.trim()) fes.widget_name = 'Widget name is required.'
+    if (!binding.device_id) fes['bindings.0.device_id'] = 'Pick a device.'
+    if (!binding.payload_path.trim()) fes['bindings.0.payload_path'] = 'Required.'
+    setErrors(fes); if (Object.keys(fes).length > 0) return
+    const config = {
+      title: title || '', variant,
+      bindings: [{ device_id: Number(binding.device_id), payload_path: binding.payload_path.replace(/^\/+|\/+$/g, ''), label: binding.label || def.fields[0].label }],
+      static: { limit: Math.max(1, Number(limit) || 50), card_color: cardColor, icon_color: iconColor },
+      ui: {},
+    }
+    onSubmit?.({ widget_name: widgetName, widget_type: 'log', config }, setSaving, setErrors, setBanner)
+  }
+  return (
+    <div className="card-config">
+      <div className="card-config-preview-col">
+        <div className="card-config-example-label">{isEditing ? 'Editing' : 'Example'}</div>
+        <div className="card-config-preview-frame card-config-preview-frame-log"><LogPreview variant={variant} options={previewOptions} /></div>
+        {!isEditing && onBack && (
+          <button type="button" className="card-config-change" onClick={onBack}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            Change Style
+          </button>
+        )}
+      </div>
+      <form className="card-config-form" onSubmit={submit} noValidate>
+        {banner && <div className={'admin-banner ' + banner.type}>{banner.text}</div>}
+        <div className="card-config-section">
+          <div className="card-config-section-head">Widget</div>
+          <div className="form-grid-2">
+            <DField label="Widget name" required error={errors.widget_name}>
+              <input type="text" value={widgetName} disabled={saving} autoFocus onChange={(e) => { setWidgetName(e.target.value); if (errors.widget_name) setErrors((x) => ({ ...x, widget_name: undefined })) }} placeholder="device_log" />
+            </DField>
+            <DField label="Title"><input type="text" value={title} disabled={saving} onChange={(e) => setTitle(e.target.value)} placeholder={def.title} /></DField>
+            <DField label="Rows to show"><input type="text" inputMode="numeric" value={limit} disabled={saving} onChange={(e) => setLimit(e.target.value)} placeholder="50" /></DField>
+          </div>
+        </div>
+        <div className="card-config-section">
+          <div className="card-config-section-head">Appearance</div>
+          <div className="form-field"><span className="form-label">Card color</span>
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+          </div>
+          <div className="form-field"><span className="form-label">Accent color</span>
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
+          </div>
+        </div>
+        <div className="card-config-section">
+          <div className="card-config-section-head">Log source</div>
+          <p className="log-config-hint">Bind to a payload path that holds a <strong>list</strong> of log entries. Each entry can be a string or an object with <code>time</code>, <code>level</code>, and <code>message</code>.</p>
+          <BindingFields field={def.fields[0]} binding={binding} devices={devices} disabled={saving} errors={{ device_id: errors['bindings.0.device_id'], payload_path: errors['bindings.0.payload_path'] }} onChange={(k, v) => setBinding(k, v)} />
         </div>
         <div className="modal-foot">
           {!isEditing && onBack && <button type="button" className="btn-secondary" onClick={onBack} disabled={saving}>Back</button>}
@@ -5275,6 +6879,14 @@ function dispatchWrite(onCommand, binding, type, rawValue, devicesById) {
   if (sendType === 'int')     value = parseInt(rawValue, 10)
   else if (sendType === 'float') value = parseFloat(rawValue)
   else if (sendType === 'boolean') value = (rawValue === true || String(rawValue).toLowerCase() === 'true')
+  else if (sendType === 'list' || sendType === 'dict') {
+    // List / dict values are authored as JSON strings — parse them so we
+    // send the actual array / object, matching the bound field's type.
+    try { value = typeof rawValue === 'string' ? JSON.parse(rawValue) : rawValue }
+    catch { return false }
+    if (sendType === 'list' && !Array.isArray(value)) return false
+    if (sendType === 'dict' && (typeof value !== 'object' || value === null || Array.isArray(value))) return false
+  }
   if ((sendType === 'int' || sendType === 'float') && !Number.isFinite(value)) return false
   return onCommand(binding.device_id, 'put', binding.payload_path, { type: sendType, value })
 }
@@ -5301,12 +6913,26 @@ function getToggleConfig(binding) {
   }
 }
 function isToggleOn(live, onVal) {
-  return live != null && String(live) === String(onVal)
+  if (live == null) return false
+  // List / dict states: compare structurally against the JSON on-value.
+  if (typeof live === 'object') {
+    try { return JSON.stringify(live) === JSON.stringify(JSON.parse(onVal)) }
+    catch { return false }
+  }
+  // Numeric states: compare by value so "1.0" matches a live 1, "0.0"
+  // matches 0, etc. (string comparison would wrongly fail 1 vs "1.0").
+  if (typeof live === 'number' && onVal != null && String(onVal).trim() !== '') {
+    const rn = Number(onVal)
+    if (Number.isFinite(rn)) return live === rn
+  }
+  return String(live) === String(onVal)
 }
 
 function PreviewSwitchControl({ options = {}, onCommand }) {
   const b    = options.bindings?.[0]
-  const live = resolveBindingValue(b, options.devicesById)
+  // Raw value so list/dict states resolve (resolveBindingValue returns null
+  // for objects). Scalars behave identically.
+  const live = resolveBindingRawValue(b, options.devicesById)
   const { onVal, onType, offVal, offType } = getToggleConfig(b)
   const isOn = isToggleOn(live, onVal)
   const isLive = !!onCommand
@@ -5355,18 +6981,22 @@ function PreviewDualToggleControl({ options = {}, onCommand }) {
   const liveB = resolveBindingValue(bB, options.devicesById)
   const cfgA = getToggleConfig(bA)
   const cfgB = getToggleConfig(bB)
+  // State is derived purely from the live device value — the switch only
+  // flips AFTER the device's value actually updates (the command round-trips
+  // and the device echoes the new value back). No optimistic flip.
   const isOnA = isToggleOn(liveA, cfgA.onVal)
   const isOnB = isToggleOn(liveB, cfgB.onVal)
   const isLive = !!onCommand
+
   function toggleA() {
-    if (!isLive || !bA) return
+    if (!isLive || !bA?.device_id || !bA?.payload_path) return
     if (isOnA) dispatchWrite(onCommand, bA, cfgA.offType, cfgA.offVal, options.devicesById)
-    else       dispatchWrite(onCommand, bA, cfgA.onType,  cfgA.onVal, options.devicesById)
+    else       dispatchWrite(onCommand, bA, cfgA.onType,  cfgA.onVal,  options.devicesById)
   }
   function toggleB() {
-    if (!isLive || !bB) return
+    if (!isLive || !bB?.device_id || !bB?.payload_path) return
     if (isOnB) dispatchWrite(onCommand, bB, cfgB.offType, cfgB.offVal, options.devicesById)
-    else       dispatchWrite(onCommand, bB, cfgB.onType,  cfgB.onVal, options.devicesById)
+    else       dispatchWrite(onCommand, bB, cfgB.onType,  cfgB.onVal,  options.devicesById)
   }
   const labelA = options.bindings?.[0]?.label || 'Switch A'
   const labelB = options.bindings?.[1]?.label || 'Switch B'
@@ -5383,7 +7013,7 @@ function PreviewDualToggleControl({ options = {}, onCommand }) {
         <div className="ctrl-dual-item">
           <div>
             <div className="ctrl-dual-label">{labelA}</div>
-            <div className="ctrl-dual-sub">{isLive ? (isOnA ? cfgA.onVal : cfgA.offVal) : 'Toggle'}</div>
+            <div className="ctrl-dual-sub">{(isOnA ? bA?.on_label : bA?.off_label) ?? ''}</div>
           </div>
           <button
             type="button"
@@ -5398,7 +7028,7 @@ function PreviewDualToggleControl({ options = {}, onCommand }) {
         <div className="ctrl-dual-item">
           <div>
             <div className="ctrl-dual-label">{labelB}</div>
-            <div className="ctrl-dual-sub">{isLive ? (isOnB ? cfgB.onVal : cfgB.offVal) : 'Toggle'}</div>
+            <div className="ctrl-dual-sub">{(isOnB ? bB?.on_label : bB?.off_label) ?? ''}</div>
           </div>
           <button
             type="button"
@@ -5419,7 +7049,10 @@ function PreviewDualToggleControl({ options = {}, onCommand }) {
    recessed when "off". Click toggles between on_value / off_value. */
 function PreviewPressSwitchControl({ options = {}, onCommand }) {
   const b    = options.bindings?.[0]
-  const live = resolveBindingValue(b, options.devicesById)
+  // Raw value so list/dict states resolve (resolveBindingValue returns null
+  // for objects, which would pin the switch to OFF and never send the OFF
+  // value on the second press). Scalars behave identically.
+  const live = resolveBindingRawValue(b, options.devicesById)
   const { onVal, onType, offVal, offType } = getToggleConfig(b)
   const isOn = isToggleOn(live, onVal)
   const isLive = !!onCommand
@@ -5433,11 +7066,14 @@ function PreviewPressSwitchControl({ options = {}, onCommand }) {
   // colour) so the user can pick the button's hue via the Icon Color
   // swatch. The icon glyph stays white for contrast.
   const iconHex = getIconColor(options.iconColor).hex
+  // Drive the colour through CSS vars so the stylesheet can animate the
+  // ON / OFF states differently (idle-raised vs lit-pulsing) instead of a
+  // single static box-shadow.
   const pressStyle = {
     background: `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.30), transparent 50%), linear-gradient(180deg, ${iconHex} 0%, color-mix(in srgb, ${iconHex} 70%, black) 100%)`,
-    boxShadow: isOn
-      ? `inset 0 2px 4px rgba(255,255,255,0.30), inset 0 -3px 6px rgba(0,0,0,0.22), 0 4px 8px rgba(0,0,0,0.18), 0 0 0 6px ${hexToRgba(iconHex, 0.22)}, 0 0 0 10px ${hexToRgba(iconHex, 0.10)}, 0 0 32px ${hexToRgba(iconHex, 0.40)}`
-      : undefined,
+    '--press-glow':   hexToRgba(iconHex, 0.45),
+    '--press-glow-2': hexToRgba(iconHex, 0.24),
+    '--press-glow-3': hexToRgba(iconHex, 0.12),
   }
   return (
     <div className={'cv-card ctrl-card ctrl-card-press' + (isOn ? ' is-on' : '')} style={ctrlCardStyle(options.color)}>
@@ -5473,22 +7109,29 @@ function PreviewPressSwitchControl({ options = {}, onCommand }) {
           </svg>
         )}
       </button>
+      <div className={'ctrl-press-status' + (isOn ? ' is-on' : '')}>
+        <span className="ctrl-press-dot" />
+        {isLive ? (isOn ? 'ON' : 'OFF') : '—'}
+      </div>
     </div>
   )
 }
 
-/* ── Single Action Card — looks the same on preview and dashboard:
-   icon + title + description + one full-width button with the user's
-   custom label. Click toggles between on_value / off_value; active
-   state is shown via the button's visual style (inverted colours),
-   not by changing the button text. */
+/* ── Single Action Card — icon + title + description + one full-width
+   button. The button text is state-driven: it shows the user's ON label
+   while the device reads ON, and the OFF label while it reads OFF. Click
+   toggles between on_value / off_value. */
 function PreviewSingleButtonControl({ options = {}, onCommand }) {
   const b    = options.bindings?.[0]
-  const live = resolveBindingValue(b, options.devicesById)
+  // Raw value so list/dict states resolve (resolveBindingValue returns
+  // null for objects). Scalars behave identically.
+  const live = resolveBindingRawValue(b, options.devicesById)
   const { onVal, onType, offVal, offType } = getToggleConfig(b)
   const isOn = isToggleOn(live, onVal)
   const isLive = !!onCommand
-  const label  = options.buttonLabel || 'Toggle'
+  const onLabel  = b?.on_label  || 'On'
+  const offLabel = b?.off_label || 'Off'
+  const label  = isOn ? onLabel : offLabel
   function toggle() {
     if (!isLive || !b) return
     if (isOn) dispatchWrite(onCommand, b, offType, offVal, options.devicesById)
@@ -5511,11 +7154,6 @@ function PreviewSingleButtonControl({ options = {}, onCommand }) {
       >
         {label}
       </button>
-      {isLive && (
-        <div className="ctrl-send-hint">
-          {isOn ? `ON → sends ${offVal}` : `OFF → sends ${onVal}`}
-        </div>
-      )}
     </div>
   )
 }
@@ -5565,16 +7203,34 @@ function PreviewMultiButtonControl({ options = {}, onCommand }) {
               className={'ctrl-action-btn ctrl-btn-sm' + (active ? ' is-active' : '')}
               onClick={() => fire(a)}
               disabled={!isLive}
-              title={`Sends ${a.value}`}
+              title={a.label}
             >
               {a.label}
-              {isLive && <span className="ctrl-send-hint">→ {a.value}</span>}
             </button>
           )
         })}
       </div>
     </div>
   )
+}
+
+/* Press feedback for +/− steppers — tracks which direction was last
+   pressed so the UI can flash that button (and pop the value in that
+   direction) for a moment, giving the user an unmistakable cue about
+   what they just pressed. `pulse` increments on every press so a repeated
+   tap of the SAME button still replays the animation (via React key). */
+function usePressFlash() {
+  const [pressed, setPressed] = useState(null) // 'up' | 'down' | null
+  const [pulse, setPulse] = useState(0)
+  const timer = useRef(null)
+  function flash(dir) {
+    setPressed(dir)
+    setPulse((n) => n + 1)
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setPressed(null), 460)
+  }
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+  return { pressed, pulse, flash }
 }
 
 /* ── Stepper — title + value display + minus / plus buttons. */
@@ -5589,8 +7245,10 @@ function PreviewStepperControl({ options = {}, onCommand }) {
   const step = Number(options.step ?? (isFloat ? 0.1 : 1))
   const value = typeof live === 'number' ? live : (isFloat ? (min + max) / 2 : Math.round((min + max) / 2))
   const isLive = !!onCommand
+  const { pressed, pulse, flash } = usePressFlash()
   function bump(d) {
     if (!isLive || !b) return
+    flash(d > 0 ? 'up' : 'down')   // immediate cue — which button was pressed
     const raw = value + d * step
     const next = Math.max(min, Math.min(max, raw))
     // Float fields → always send as float with 2 decimal precision.
@@ -5613,12 +7271,12 @@ function PreviewStepperControl({ options = {}, onCommand }) {
         </div>
       </div>
       <div className="ctrl-stepper-row">
-        <button type="button" className="ctrl-step-btn" onClick={() => bump(-1)} disabled={!isLive || value <= min} aria-label="decrease">−</button>
+        <button type="button" className={'ctrl-step-btn ctrl-step-minus' + (pressed === 'down' ? ' is-pressed' : '')} onClick={() => bump(-1)} disabled={!isLive || value <= min} aria-label="decrease">−</button>
         <div className="ctrl-step-value">
-          <span className="cv-big">{displayValue}</span>
+          <span key={pulse} className={'cv-big ctrl-bump-num' + (pressed ? ' bump-' + pressed : '')}>{displayValue}</span>
           {options.unit && <span className="cv-unit">{options.unit}</span>}
         </div>
-        <button type="button" className="ctrl-step-btn" onClick={() => bump(1)} disabled={!isLive || value >= max} aria-label="increase">+</button>
+        <button type="button" className={'ctrl-step-btn ctrl-step-plus' + (pressed === 'up' ? ' is-pressed' : '')} onClick={() => bump(1)} disabled={!isLive || value >= max} aria-label="increase">+</button>
       </div>
     </div>
   )
@@ -5746,9 +7404,11 @@ function PreviewSliderControl({ options = {}, onCommand }) {
   const value = typeof live === 'number' ? live : (isFloat ? (min + max) / 2 : Math.round((min + max) / 2))
   const displayValue = isFloat ? Number(value).toFixed(2) : String(Math.round(value))
   const pct = max > min ? Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100)) : 0
+  const { pressed, pulse, flash } = usePressFlash()
 
   function bump(d) {
     if (!isLive || !b) return
+    flash(d > 0 ? 'up' : 'down')   // immediate cue — which button was pressed
     const raw = value + d * step
     const next = Math.max(min, Math.min(max, raw))
     if (isFloat) {
@@ -5766,16 +7426,16 @@ function PreviewSliderControl({ options = {}, onCommand }) {
           <div className="cv-sub">{options.description || (isLive ? `${displayValue}${options.unit ? ' ' + options.unit : ''}` : `Tap +/− · ${min}–${max}`)}</div>
         </div>
         <span className="ctrl-card-readout">
-          <span className="cv-big">{displayValue}</span>
+          <span key={pulse} className={'cv-big ctrl-bump-num' + (pressed ? ' bump-' + pressed : '')}>{displayValue}</span>
           {options.unit && <span className="cv-unit">{options.unit}</span>}
         </span>
       </div>
-      <div className="ctrl-level-row">
-        <button type="button" className="ctrl-step-btn" onClick={() => bump(-1)} disabled={!isLive || value <= min} aria-label="decrease">−</button>
+      <div className={'ctrl-level-row' + (pressed ? ' is-bumped bump-' + pressed : '')}>
+        <button type="button" className={'ctrl-step-btn ctrl-step-minus' + (pressed === 'down' ? ' is-pressed' : '')} onClick={() => bump(-1)} disabled={!isLive || value <= min} aria-label="decrease">−</button>
         <div className="ctrl-level-track">
           <div className="ctrl-level-fill" style={{ width: `${pct}%` }} />
         </div>
-        <button type="button" className="ctrl-step-btn" onClick={() => bump(1)} disabled={!isLive || value >= max} aria-label="increase">+</button>
+        <button type="button" className={'ctrl-step-btn ctrl-step-plus' + (pressed === 'up' ? ' is-pressed' : '')} onClick={() => bump(1)} disabled={!isLive || value >= max} aria-label="increase">+</button>
       </div>
     </div>
   )
@@ -6107,8 +7767,9 @@ function ControlConfigure({ variant, devices, initial, onBack, onSubmit, themeDe
           label: ex.label || '',
           on_value: ex.on_value ?? '', off_value: ex.off_value ?? '',
           on_type: ex.on_type || '', off_type: ex.off_type || '',
+          on_label: ex.on_label || '', off_label: ex.off_label || '',
         }
-      : { device_id: '', payload_path: '', label: '', on_value: '', off_value: '', on_type: '', off_type: '' }
+      : { device_id: '', payload_path: '', label: '', on_value: '', off_value: '', on_type: '', off_type: '', on_label: '', off_label: '' }
     // Per-binding actions (if this variant supports them)
     if (def.hasPerBindingActions) {
       base.actions = Array.isArray(ex?.actions) && ex.actions.length > 0
@@ -6234,8 +7895,25 @@ function ControlConfigure({ variant, devices, initial, onBack, onSubmit, themeDe
     const fes = {}
     if (!widgetName.trim()) fes.widget_name = 'Widget name is required.'
     bindings.forEach((b, i) => {
+      const fieldDef = def.fields[Math.min(i, def.fields.length - 1)] || def.fields[0]
       if (!b.device_id)            fes[`bindings.${i}.device_id`]    = 'Pick a device.'
       if (!b.payload_path.trim())  fes[`bindings.${i}.payload_path`] = 'Required.'
+      // Toggle / dual-toggle / press-switch: the ON/OFF payload must
+      // match the type of the selected device field. The detected type
+      // (bindingTypes[i]) is authoritative; fall back to the binding's
+      // own type when the device hasn't reported a payload.
+      if (fieldDef?.withToggleValues) {
+        const vType = bindingTypes[i] || b.on_type || 'boolean'
+        const onErr  = validateToggleValue(b.on_value,  bindingTypes[i] || b.on_type  || vType)
+        const offErr = validateToggleValue(b.off_value, bindingTypes[i] || b.off_type || vType)
+        if (onErr)  fes[`bindings.${i}.on_value`]  = onErr
+        if (offErr) fes[`bindings.${i}.off_value`] = offErr
+      }
+      // Action Card — both ON/OFF button labels are required.
+      if (fieldDef?.withButtonLabels) {
+        if (!String(b.on_label  ?? '').trim()) fes[`bindings.${i}.on_label`]  = 'Required.'
+        if (!String(b.off_label ?? '').trim()) fes[`bindings.${i}.off_label`] = 'Required.'
+      }
       if (def.hasPerBindingActions && Array.isArray(b.actions)) {
         const bType = bindingTypes[i]
         b.actions.forEach((a, j) => {
@@ -6254,17 +7932,27 @@ function ControlConfigure({ variant, devices, initial, onBack, onSubmit, themeDe
       title: title || '',
       description: description || '',
       variant,
-      bindings: bindings.map((b, i) => ({
+      bindings: bindings.map((b, i) => {
+        const fieldDef = def.fields[Math.min(i, def.fields.length - 1)] || def.fields[0]
+        // When the field locks the type to the selected payload field,
+        // persist that detected type as authoritative so the saved ON/OFF
+        // payload can only ever be of the selected field's type.
+        const lockedType = (fieldDef?.lockToggleType && bindingTypes[i]) || null
+        return ({
         device_id: Number(b.device_id),
         payload_path: b.payload_path.replace(/^\/+|\/+$/g, ''),
         label: b.label || (def.fields[i]?.label ?? 'Target'),
-        ...(b.on_value  ? { on_value: b.on_value, on_type: b.on_type || 'boolean' } : {}),
-        ...(b.off_value ? { off_value: b.off_value, off_type: b.off_type || 'boolean' } : {}),
+        ...(b.on_value  ? { on_value: b.on_value, on_type: lockedType || b.on_type || 'boolean' } : {}),
+        ...(b.off_value ? { off_value: b.off_value, off_type: lockedType || b.off_type || 'boolean' } : {}),
+        // Optional per-state display labels (dual_toggle).
+        ...(b.on_label  ? { on_label: b.on_label }   : {}),
+        ...(b.off_label ? { off_label: b.off_label } : {}),
         // Per-binding actions (multi_button).
         ...(Array.isArray(b.actions) && b.actions.length > 0
           ? { actions: b.actions.map((a) => ({ label: a.label, value: a.value, type: bindingTypes[i] || a.type || 'string' })) }
           : {}),
-      })),
+        })
+      }),
       static: {
         ...(unit ? { unit } : {}),
         ...(def.hasIcon && icon ? { icon } : {}),
@@ -6363,37 +8051,11 @@ function ControlConfigure({ variant, devices, initial, onBack, onSubmit, themeDe
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field">
             <span className="form-label">Card color</span>
-            <div className="color-swatches">
-              {CARD_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={'color-swatch' + (cardColor === c.id ? ' is-active' : '')}
-                  style={{ background: c.bg }}
-                  title={c.label}
-                  aria-pressed={cardColor === c.id}
-                  onClick={() => setCardColor(c.id)}
-                  disabled={saving}
-                />
-              ))}
-            </div>
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
           </div>
           <div className="form-field">
             <span className="form-label">Icon color</span>
-            <div className="color-swatches">
-              {ICON_COLORS.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={'color-swatch color-swatch-solid' + (iconColor === c.id ? ' is-active' : '')}
-                  style={{ background: c.hex }}
-                  title={c.label}
-                  aria-pressed={iconColor === c.id}
-                  onClick={() => setIconColor(c.id)}
-                  disabled={saving}
-                />
-              ))}
-            </div>
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
           </div>
         </div>
 
@@ -6419,6 +8081,10 @@ function ControlConfigure({ variant, devices, initial, onBack, onSubmit, themeDe
                   errors={{
                     device_id:    errors[`bindings.${i}.device_id`],
                     payload_path: errors[`bindings.${i}.payload_path`],
+                    on_value:     errors[`bindings.${i}.on_value`],
+                    off_value:    errors[`bindings.${i}.off_value`],
+                    on_label:     errors[`bindings.${i}.on_label`],
+                    off_label:    errors[`bindings.${i}.off_label`],
                   }}
                   onChange={(k, v) => setBinding(i, k, v)}
                 />
@@ -6508,6 +8174,13 @@ function useCardChrome(options, defaults) {
 function bLabel(options, i, fallback) {
   return options.bindings?.[i]?.label || fallback
 }
+// Per-binding unit. Falls back to the sample only in the picker preview
+// (no live devices); on the real dashboard an unset unit shows nothing.
+function bUnit(options, i, fallback) {
+  const u = options.bindings?.[i]?.unit
+  if (u) return u
+  return options.devicesById ? '' : fallback
+}
 function bIcon(options, i, fallback) {
   return options.bindings?.[i]?.icon || fallback
 }
@@ -6551,6 +8224,12 @@ function applyPayloadAt(payload, path, action, value) {
    wrappers produced by the Payload editor so the widget gets the scalar
    directly. Returns null if the path doesn't resolve to a scalar. */
 function resolveBindingValue(binding, devicesById) {
+  // A binding can hold a fixed value instead of a device/payload (e.g. the
+  // Progress card's target). Use it directly when present.
+  if (binding?.use_static) {
+    const n = Number(binding.static_value)
+    return Number.isFinite(n) ? n : null
+  }
   if (!binding?.device_id || !binding?.payload_path || !devicesById) return null
   const device = devicesById.get(Number(binding.device_id))
   if (!device?.payload) return null
@@ -6672,6 +8351,16 @@ function PreviewSimpleIcon({ options = {} }) {
   )
 }
 
+/* Format a percent-change delta into { sign, text }, capping the magnitude
+   so an extreme change can't overflow the card. Beyond ±999% it shows
+   "+999%+" / "-999%+" instead of a runaway number. */
+function formatDeltaPct(pct) {
+  const CAP = 999
+  const sign = pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat'
+  if (Math.abs(pct) > CAP) return { sign, text: `${pct > 0 ? '+' : '-'}${CAP}%+` }
+  return { sign, text: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` }
+}
+
 function PreviewComparison({ options = {} }) {
   const { title, style, iconColor, icon, unit } = useCardChrome(options, {
     title: 'Fuel Consumption', icon: '', unit: 'Ltrs',
@@ -6693,7 +8382,7 @@ function PreviewComparison({ options = {} }) {
     } else {
       const pct = ((cur - prev) / Math.abs(prev)) * 100
       if (pct === 0) delta = { sign: 'flat', text: '0%' }
-      else delta = { sign: pct > 0 ? 'up' : 'down', text: `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%` }
+      else delta = formatDeltaPct(pct)
     }
   }
   return (
@@ -6703,6 +8392,9 @@ function PreviewComparison({ options = {} }) {
       <div className="cv-inline">
         <CvIcon name="fuel" iconId={icon} color={iconColor} />
         <div className="cv-inline-body">
+          <div className="cv-row-mini">
+            <span className="cv-sub">{bLabel(options, 0, 'Current')}</span>
+          </div>
           <div className="cv-row">
             <span className="cv-big">{bValue(options, 0, '18.4')}</span>
             <span className="cv-unit">{unit}</span>
@@ -6724,8 +8416,9 @@ function PreviewComparison({ options = {} }) {
 }
 
 function PreviewMultivalueGrid({ options = {} }) {
-  const { title, style, iconColor, icon, unit } = useCardChrome(options, {
-    title: 'Conf Room Data Trend', icon: '', unit: 'Celcius',
+  // Multivalue Card 1 carries a unit PER binding (no card-level unit).
+  const { title, style, iconColor, icon } = useCardChrome(options, {
+    title: 'Conf Room Data Trend', icon: '',
   })
   return (
     <CvCard style={style} pattern={options.pattern}>
@@ -6734,10 +8427,10 @@ function PreviewMultivalueGrid({ options = {} }) {
       <div className="cv-inline">
         <CvIcon name="thermometer" iconId={icon} color={iconColor} size="lg" />
         <div className="cv-grid-2x2">
-          <Stat label={bLabel(options, 0, 'Minimum')}    value={bValue(options, 0, '14.2')} unit={unit} />
-          <Stat label={bLabel(options, 1, 'Last Value')} value={bValue(options, 1, '14.4')} unit={unit} />
-          <Stat label={bLabel(options, 2, 'Maximum')}    value={bValue(options, 2, '30.2')} unit={unit} />
-          <Stat label={bLabel(options, 3, 'Average')}    value={bValue(options, 3, '18.4')} unit={unit} />
+          <Stat label={bLabel(options, 0, 'Minimum')}    value={bValue(options, 0, '14.2')} unit={bUnit(options, 0, 'Celcius')} />
+          <Stat label={bLabel(options, 1, 'Last Value')} value={bValue(options, 1, '14.4')} unit={bUnit(options, 1, 'Celcius')} />
+          <Stat label={bLabel(options, 2, 'Maximum')}    value={bValue(options, 2, '30.2')} unit={bUnit(options, 2, 'Celcius')} />
+          <Stat label={bLabel(options, 3, 'Average')}    value={bValue(options, 3, '18.4')} unit={bUnit(options, 3, 'Celcius')} />
         </div>
       </div>
     </CvCard>
@@ -6745,8 +8438,9 @@ function PreviewMultivalueGrid({ options = {} }) {
 }
 
 function PreviewMultivalueRow({ options = {} }) {
-  const { title, style, iconColor, unit } = useCardChrome(options, {
-    title: 'Conf Room Data Trend', unit: 'Celcius',
+  // Multivalue Card 2 carries a unit PER binding (no card-level unit).
+  const { title, style, iconColor } = useCardChrome(options, {
+    title: 'Conf Room Data Trend',
   })
   return (
     <CvCard style={style} pattern={options.pattern}>
@@ -6754,11 +8448,11 @@ function PreviewMultivalueRow({ options = {} }) {
       {options.description && <div className="cv-desc">{options.description}</div>}
       <div className="cv-row-3">
         <StatStacked icon="bolt"        iconId={bIcon(options, 0, '')} color={iconColor}
-          label={bLabel(options, 0, 'Odometer - Last Value')} value={bValue(options, 0, '14.4')} unit={unit} />
+          label={bLabel(options, 0, 'Odometer - Last Value')} value={bValue(options, 0, '14.4')} unit={bUnit(options, 0, 'Celcius')} />
         <StatStacked icon="drop"        iconId={bIcon(options, 1, '')} color={iconColor}
-          label={bLabel(options, 1, 'Heat Level - Maximum')} value={bValue(options, 1, '18.4')} unit={unit} />
+          label={bLabel(options, 1, 'Heat Level - Maximum')} value={bValue(options, 1, '18.4')} unit={bUnit(options, 1, 'Celcius')} />
         <StatStacked icon="speedometer" iconId={bIcon(options, 2, '')} color={iconColor}
-          label={bLabel(options, 2, 'RPM- Average')} value={bValue(options, 2, '30.2')} unit={unit} />
+          label={bLabel(options, 2, 'RPM- Average')} value={bValue(options, 2, '30.2')} unit={bUnit(options, 2, 'Celcius')} />
       </div>
     </CvCard>
   )
@@ -6773,11 +8467,11 @@ function PreviewMultivalueAssorted({ options = {} }) {
       <div className="cv-row-2">
         <div className="cv-inline">
           <CvIcon name="thermometer" iconId={bIcon(options, 0, '')} color={iconColor} />
-          <Stat label={bLabel(options, 0, 'Sum (Today)')} value={bValue(options, 0, '14.4')} unit="Celcius" />
+          <Stat label={bLabel(options, 0, 'Sum (Today)')} value={bValue(options, 0, '14.4')} unit={bUnit(options, 0, 'Celcius')} unitBelow />
         </div>
         <div className="cv-inline">
           <CvIcon name="bell" iconId={bIcon(options, 1, '')} color={iconColor} />
-          <Stat label={bLabel(options, 1, 'Alarms')} value={bValue(options, 1, '12')} />
+          <Stat label={bLabel(options, 1, 'Alarms')} value={bValue(options, 1, '12')} unit={bUnit(options, 1, 'Count')} unitBelow />
         </div>
       </div>
     </CvCard>
@@ -6793,8 +8487,10 @@ function PreviewTrend({ options = {} }) {
   const trend = resolveBindingValue(options.bindings?.[1], options.devicesById)
   let delta = null
   if (typeof cur === 'number' && typeof trend === 'number' && trend !== 0) {
-    const pct = ((cur - trend) / trend) * 100
-    delta = { sign: pct >= 0 ? 'up' : 'down', text: `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%` }
+    // Divide by the magnitude so the sign always reflects the direction:
+    // current greater than previous → +, smaller → −.
+    const pct = ((cur - trend) / Math.abs(trend)) * 100
+    delta = formatDeltaPct(pct)
   }
   return (
     <CvCard style={style} pattern={options.pattern}>
@@ -6832,17 +8528,19 @@ function PreviewProgress({ options = {} }) {
   const barFill = `linear-gradient(90deg, ${barHex} 0%, color-mix(in srgb, ${barHex} 65%, white) 100%)`
   // Picker preview defaults — replaced by computed values when both
   // bindings resolve to numbers on the dashboard.
+  const doneLbl = options.doneLabel || 'done'
+  const leftLbl = options.leftLabel || 'left'
   let percent      = 68
   let valueText    = '68%'
   let targetText   = '5,000'
-  let doneText     = '3,400 done'
-  let leftText     = '1,600 left'
+  let doneText     = `3,400 ${doneLbl}`
+  let leftText     = `1,600 ${leftLbl}`
   if (typeof liveVal === 'number' && typeof totalVal === 'number' && totalVal > 0) {
     percent    = Math.max(0, Math.min(100, (liveVal / totalVal) * 100))
     valueText  = `${percent.toFixed(0)}%`
     targetText = formatValue(totalVal)
-    doneText   = `${formatValue(liveVal)} done`
-    leftText   = `${formatValue(Math.max(0, totalVal - liveVal))} left`
+    doneText   = `${formatValue(liveVal)} ${doneLbl}`
+    leftText   = `${formatValue(Math.max(0, totalVal - liveVal))} ${leftLbl}`
   } else if (isLive) {
     // At least one binding doesn't resolve — show "-" instead of
     // sample values so the user can tell the card has no live data.
@@ -6871,13 +8569,13 @@ function PreviewProgress({ options = {} }) {
   )
 }
 
-function Stat({ label, value, unit }) {
+function Stat({ label, value, unit, unitBelow = false }) {
   return (
     <div className="cv-stat">
       <div className="cv-stat-label">{label}</div>
-      <div className="cv-stat-line">
+      <div className={'cv-stat-line' + (unitBelow ? ' cv-stat-line-stacked' : '')}>
         <span className="cv-mid">{value}</span>
-        {unit && <span className="cv-unit">{unit}</span>}
+        {unit && <span className={'cv-unit' + (unitBelow ? ' cv-unit-below' : '')}>{unit}</span>}
       </div>
     </div>
   )
@@ -6888,9 +8586,9 @@ function StatStacked({ icon, iconId, color, label, value, unit }) {
     <div className="cv-stat-stacked">
       <CvIcon name={icon} iconId={iconId} color={color} />
       <div className="cv-stat-label cv-stat-label-center">{label}</div>
-      <div className="cv-stat-line">
+      <div className="cv-stat-line cv-stat-line-stacked">
         <span className="cv-mid">{value}</span>
-        {unit && <span className="cv-unit">{unit}</span>}
+        {unit && <span className="cv-unit cv-unit-below">{unit}</span>}
       </div>
     </div>
   )
@@ -7010,6 +8708,12 @@ function PickerIcon({ name }) {
         <circle cx="12" cy="12" r="8.5" stroke={stroke} strokeWidth={sw} />
         <path d="M12 12l4-3" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
         <circle cx="12" cy="12" r="1.2" fill={stroke} />
+      </svg>
+    )
+    case 'logs': return (
+      <svg {...s}>
+        <rect x="3.5" y="4.5" width="17" height="15" rx="2" stroke={stroke} strokeWidth={sw} />
+        <path d="M7 9h7M7 12h10M7 15h6" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
       </svg>
     )
     case 'image_cards': return (

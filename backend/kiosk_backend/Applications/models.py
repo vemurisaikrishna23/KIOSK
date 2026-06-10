@@ -242,6 +242,19 @@ class Dashboard(models.Model):
         help_text="If true, dashboard is visible to end users"
     )
 
+    # Per-viewport publish state. The admin activates the desktop and the
+    # mobile layout independently from the dashboard editor. `publish`
+    # (above) is kept in sync as desktop OR mobile so existing public
+    # filters (dashboards__publish=True) keep working.
+    publish_desktop = models.BooleanField(
+        default=False,
+        help_text="If true, the desktop layout is published to end users"
+    )
+    publish_mobile = models.BooleanField(
+        default=False,
+        help_text="If true, the mobile layout is published to end users"
+    )
+
     created_by = models.ForeignKey(
         'UserAccounts.User',
         on_delete=models.SET_NULL,
@@ -263,6 +276,13 @@ class Dashboard(models.Model):
     class Meta:
         unique_together = ("application", "name")
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        # Keep the legacy `publish` flag in sync with the per-viewport flags:
+        # a dashboard counts as published when either its desktop or mobile
+        # layout is published, so existing public filters keep working.
+        self.publish = bool(self.publish_desktop or self.publish_mobile)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.application.name} → {self.name}"
@@ -347,3 +367,37 @@ class DashboardComponent(models.Model):
 
     def __str__(self):
         return f"{self.dashboard.name} → {self.widget_name}"
+
+
+# =====================================================================
+# SSL Certificate (singleton-style — only one is "active" at a time
+# and that one is what hardware downloads from /cert/server.crt).
+# =====================================================================
+def ssl_cert_upload_path(instance, filename):
+    return f"ssl_certificates/{filename}"
+
+class SSLCertificate(models.Model):
+    name = models.CharField(max_length=120)
+    file = models.FileField(upload_to=ssl_cert_upload_path)
+    description = models.TextField(blank=True, default="")
+    uploaded_by = models.ForeignKey(
+        'UserAccounts.User',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='uploaded_ssl_certificates',
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True, help_text="The currently-served certificate. Only one can be active.")
+
+    class Meta:
+        ordering = ['-uploaded_at']
+
+    def __str__(self):
+        return f"{self.name} ({self.uploaded_at:%Y-%m-%d %H:%M})"
+
+    def save(self, *args, **kwargs):
+        # Singleton behaviour: when a new cert is saved as active,
+        # demote every other active certificate.
+        super().save(*args, **kwargs)
+        if self.is_active:
+            SSLCertificate.objects.exclude(pk=self.pk).filter(is_active=True).update(is_active=False)

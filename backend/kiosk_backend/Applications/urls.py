@@ -11,6 +11,7 @@ router.register(r'devices', DeviceViewSet, basename='device')
 router.register(r'device-events', DeviceEventViewSet, basename='device-event')
 router.register(r'dashboards',DashboardViewSet,basename='dashboard')
 router.register(r"dashboard-components", DashboardComponentViewSet, basename="dashboard-components")
+router.register(r"ssl-certificates",     SSLCertificateViewSet,    basename="ssl-certificates")
 router.register(
     r'public/applications',
     PublicApplicationViewSet,

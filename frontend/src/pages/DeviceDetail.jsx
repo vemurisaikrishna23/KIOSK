@@ -388,10 +388,11 @@ export default function DeviceDetail() {
                 <span className={'connection-dot' + (device.is_connected ? ' is-on' : '')} aria-hidden="true" />
                 <div>
                   <h1>{device.device_name}</h1>
-                  <div className="device-page-head-sub">
-                    <code>{device.device_uid}</code>
-                    {device.firmware_version && <span>· fw {device.firmware_version}</span>}
-                  </div>
+                  {device.description && (
+                    <div className="device-page-head-sub">
+                      <span>{device.description}</span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="device-page-head-actions">
@@ -420,7 +421,6 @@ export default function DeviceDetail() {
               <div className="device-detail-body">
                 <dl className="device-meta-grid">
                   <div><dt>Device UID</dt><dd><code>{device.device_uid || '—'}</code></dd></div>
-                  <div><dt>Protocol</dt><dd>{device.protocol || '—'}</dd></div>
                   <div><dt>Firmware</dt><dd>{device.firmware_version || '—'}</dd></div>
                   <div><dt>Last payload</dt><dd title={formatAbsolute(device.last_payload_update)}>{device.last_payload_update ? formatRelative(device.last_payload_update) : 'never'}</dd></div>
                   <div><dt>Created</dt><dd>{formatAbsolute(device.created_at)}</dd></div>
@@ -436,9 +436,9 @@ export default function DeviceDetail() {
                 <h3 className="card-title">Integration endpoints</h3>
               </div>
               <div className="device-detail-body">
-                <CopyRow label="HTTP push URL"     value={device.http_url} />
-                <CopyRow label="WebSocket URL"     value={device.websocket_url} />
-                <CopyRow label="Device auth token" value={device.device_token} secret />
+                <CopyRow label="HTTPS URL" value={toHttps(device.http_url)} />
+                <CopyRow label="WSS URL"   value={toWss(device.websocket_url)} />
+                <CertDownloadRow />
               </div>
             </section>
 
@@ -592,6 +592,156 @@ export default function DeviceDetail() {
       )}
 
       <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
+    </div>
+  )
+}
+
+/* ----------------------- URL scheme helpers -----------------------
+   Force the displayed endpoints to TLS schemes regardless of whatever
+   the backend returned. http:// → https:// and ws:// → wss://. Leaves
+   already-secure URLs untouched. */
+function toHttps(url) {
+  if (!url) return url
+  return String(url).replace(/^http:\/\//i, 'https://')
+}
+function toWss(url) {
+  if (!url) return url
+  return String(url).replace(/^ws:\/\//i, 'wss://')
+}
+/* Mirrors lib/api.js's resolveApiBase() logic so a localhost dev session
+   and a LAN/phone session both reach the right backend host. */
+function resolveCertUrl() {
+  const port = '8001'
+  const loc = typeof window !== 'undefined' ? window.location : null
+  const host = loc?.hostname || 'localhost'
+  const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  const apiHost = isLoopback ? 'localhost' : host
+  return `https://${apiHost}:${port}/cert/server.crt`
+}
+
+/* ----------------------- SSL certificate download row -----------------------
+   Lazy click → fetch the active cert's file URL from the admin API,
+   then trigger a direct `<a href={file_url} download>` click — exactly
+   how the SSL Certificate page downloads each row. No probe on mount.
+   If there's no active cert, surface the inline warning instead. */
+function CertDownloadRow() {
+  const [busy, setBusy]       = useState(false)
+  const [previewing, setPreviewing] = useState(false)
+  const [error, setError]     = useState(null)
+  const [preview, setPreview] = useState(null) // { name, text }
+
+  // Resolve the currently-active cert (same shape the SSL Cert page uses).
+  async function getActive() {
+    const resp = await api.listSSLCertificates()
+    return resp?.active || null
+  }
+
+  async function onDownload() {
+    setBusy(true); setError(null)
+    try {
+      const active = await getActive()
+      if (!active || !active.file_url) {
+        setError('No active certificate to download. Upload one on the SSL Certificate page first.')
+        return
+      }
+      const a = document.createElement('a')
+      a.href = active.file_url
+      a.download = active.filename || 'server.crt'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+    } catch (e) {
+      setError(e?.status === 403
+        ? 'You do not have permission to download the certificate.'
+        : 'Could not reach the server to download the certificate.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onPreview() {
+    setPreviewing(true); setError(null)
+    try {
+      const active = await getActive()
+      if (!active || !active.file_url) {
+        setError('No active certificate to preview. Upload one on the SSL Certificate page first.')
+        return
+      }
+      const resp = await fetch(active.file_url)
+      if (!resp.ok) {
+        setError(`Could not load certificate (HTTP ${resp.status}).`)
+        return
+      }
+      const text = await resp.text()
+      setPreview({ name: active.filename || active.name || 'server.crt', text })
+    } catch {
+      setError('Could not reach the server to preview the certificate.')
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
+  return (
+    <div className="copy-row cert-row">
+      <div className="copy-row-label">SSL certificate</div>
+      <div className="copy-row-value">
+        {error && (
+          <span className="cert-row-desc cert-row-desc-warn">{error}</span>
+        )}
+        <div className="copy-row-actions">
+          <button
+            type="button"
+            className="row-btn ghost"
+            onClick={onPreview}
+            disabled={previewing}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ marginRight: 6, verticalAlign: '-2px' }}>
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+            </svg>
+            {previewing ? 'Loading…' : 'Preview'}
+          </button>
+          <button
+            type="button"
+            className="row-btn"
+            onClick={onDownload}
+            disabled={busy}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" style={{ marginRight: 6, verticalAlign: '-2px' }}>
+              <path d="M12 4v12M6 12l6 6 6-6M5 20h14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            {busy ? 'Downloading…' : 'Download certificate'}
+          </button>
+        </div>
+      </div>
+
+      {preview && (
+        <div className="modal-overlay" onMouseDown={() => setPreview(null)}>
+          <div className="modal-card modal-wide" onMouseDown={(e) => e.stopPropagation()}>
+            <header className="modal-head">
+              <h2>Certificate preview</h2>
+              <button type="button" className="modal-x" aria-label="Close" onClick={() => setPreview(null)}>×</button>
+            </header>
+            <div className="modal-body">
+              <div className="cert-preview-meta">
+                <code>{preview.name}</code>
+                <button
+                  type="button"
+                  className="row-btn ghost"
+                  onClick={() => { try { navigator.clipboard.writeText(preview.text) } catch {} }}
+                >
+                  Copy
+                </button>
+              </div>
+              <pre className="cert-preview-text">{preview.text}</pre>
+              <div className="modal-foot">
+                <button type="button" className="btn-secondary" onClick={() => setPreview(null)}>Close</button>
+                <button type="button" className="btn-primary" onClick={onDownload}>Download</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -893,7 +1043,9 @@ function PayloadTreeRoot({ data, canUpdate, wsLive, onCommand, onError, onReques
       )}
 
       {!isEmpty && (
-        <PayloadTree data={data} path="" {...childProps} />
+        <div className="tree-scroll">
+          <PayloadTree data={data} path="" {...childProps} />
+        </div>
       )}
     </div>
   )

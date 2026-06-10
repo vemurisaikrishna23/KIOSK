@@ -18,12 +18,15 @@ from django.contrib import admin
 from django.urls import path,include
 from django.conf import settings
 from django.conf.urls.static import static
+from Applications.views import PublicSSLCertificateDownloadView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('UserAccounts.urls')),
     path('cameraapi/', include('Cameras.urls')),
-    path('applications/',include('Applications.urls'))
+    path('applications/',include('Applications.urls')),
+    # Public, no-auth SSL certificate download — hardware fetches this.
+    path('cert/server.crt', PublicSSLCertificateDownloadView.as_view(), name='public-ssl-cert'),
 ]
 
 if settings.DEBUG:

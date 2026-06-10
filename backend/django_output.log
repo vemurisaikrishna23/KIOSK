@@ -1,0 +1,214 @@
+Performing system checks...
+
+System check identified no issues (0 silenced).
+June 04, 2026 - 13:53:45
+Django version 5.2.7, using settings 'kiosk_backend.settings'
+Starting ASGI/Daphne version 4.2.1 development server at http://0.0.0.0:8001/
+Quit the server with CTRL-BREAK.
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=22 devices=[3] groups=['device_TEST_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3] groups=['device_TEST_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=22 devices=[3] groups=['device_TEST_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=23 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+[dashboard-ws] forward dashboard=2 device=3 path='humidity' action=put src=dashboard
+[dashboard-ws] forward dashboard=2 device=3 path='config' action=put src=dashboard
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=ssl_certificate_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+
+=== DASHBOARD WS CONNECT ===
+PATH: /ws/dashboards/2/
+KWARGS: {'dashboard_id': '2'}
+=== DASHBOARD WS CONNECTED dashboard=2 bindings=24 devices=[3, 4] groups=['device_TEST_web', 'device_fgdhfhjgkhkjk_web'] ===
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[PERMISSION CHECK] user=jaideepmalla@yopmail.com, action=list, required=camera_view, has={'role_view', 'camera_view', 'user_update', 'ssl_certificate_upload', 'user_view', 'ssl_certificate_view', 'role_create', 'camera_delete'}
+[dashboard-ws] forward dashboard=2 device=3 path='tags' action=put src=dashboard

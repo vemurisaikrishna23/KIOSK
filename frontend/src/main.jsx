@@ -7,6 +7,7 @@ import App from './App.jsx'
 import 'react-grid-layout/css/styles.css'
 import 'react-resizable/css/styles.css'
 import './styles/index.css'
+import './styles/mobile-edit.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

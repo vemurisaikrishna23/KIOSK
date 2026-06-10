@@ -491,4 +491,28 @@ export const api = {
   //   { totals: {...}, applications: [{id, name, dashboards, devices, cameras, ...}] }
   publicAnalytics: () =>
     request(`${APPS_BASE}/public/analytics/`),
+
+  /* -------- SSL Certificate management (admin) -------- */
+  listSSLCertificates: () =>
+    request(`${APPS_BASE}/ssl-certificates/`, { withAuth: true }),
+  uploadSSLCertificate: ({ name, description, file, isActive = true }) => {
+    const fd = new FormData()
+    fd.append('name', name)
+    if (description) fd.append('description', description)
+    fd.append('file', file)
+    fd.append('is_active', isActive ? 'true' : 'false')
+    return request(`${APPS_BASE}/ssl-certificates/`, {
+      method: 'POST',
+      body: fd,
+      withAuth: true,
+    })
+  },
+  deleteSSLCertificate: (id) =>
+    request(`${APPS_BASE}/ssl-certificates/${id}/`, { method: 'DELETE', withAuth: true }),
+  setActiveSSLCertificate: (id) =>
+    request(`${APPS_BASE}/ssl-certificates/${id}/`, {
+      method: 'PATCH',
+      json: { is_active: true },
+      withAuth: true,
+    }),
 }

@@ -28,6 +28,11 @@ def create_default_permissions():
         {"name": "Create Application", "short_name": "application_create", "policy": "Application"},
         {"name": "Update Application", "short_name": "application_update", "policy": "Application"},
         {"name": "Delete Application", "short_name": "application_delete", "policy": "Application"},
+
+                # ------------------ SSL CERTIFICATE MANAGEMENT ------------------
+        {"name": "View SSL Certificate",   "short_name": "ssl_certificate_view",   "policy": "SSLCertificate"},
+        {"name": "Upload SSL Certificate", "short_name": "ssl_certificate_upload", "policy": "SSLCertificate"},
+        {"name": "Delete SSL Certificate", "short_name": "ssl_certificate_delete", "policy": "SSLCertificate"},
     ]
 
     for perm in permissions:

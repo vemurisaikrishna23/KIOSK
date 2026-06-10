@@ -4,11 +4,12 @@ import Avatar from './Avatar.jsx'
 import { auth } from '../lib/api.js'
 
 const NAV = [
-  { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Users',     to: '/users'     },
-  { label: 'Roles',     to: '/roles'     },
+  { label: 'Dashboard',    to: '/dashboard' },
+  { label: 'Users',        to: '/users'     },
+  { label: 'Roles',        to: '/roles'     },
   { label: 'Cameras',      to: '/cameras' },
   { label: 'Applications', to: '/applications' },
+  { label: 'SSL Cert',     to: '/ssl-certificate', perm: 'ssl_certificate_view' },
 ]
 
 /**
@@ -54,7 +55,7 @@ export default function TopBar({ centerSlot = null }) {
       </Link>
 
       <nav className={'kiosk-nav' + (menuOpen ? ' is-open' : '')}>
-        {NAV.map((n) =>
+        {NAV.filter((n) => !n.perm || auth.hasPerm(n.perm)).map((n) =>
           n.to === '#' ? (
             <span
               key={n.label}

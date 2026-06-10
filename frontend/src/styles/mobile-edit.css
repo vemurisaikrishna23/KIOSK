@@ -1,0 +1,418 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Mobile-dashboard EDITOR tweaks.
+
+   IMPORTANT: phone browsers (≤768px) must look EXACTLY like before. Anything
+   that changes the editor layout is gated behind `@media (min-width: 769px)`
+   (laptop / tablet only). The one un-gated rule below only restores the
+   centering the original `.db-mobile-stage` gave its children, because we now
+   wrap them in `.db-sim-area`.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Base: make the new wrapper behave like the old stage did (centered column)
+   so MOBILE is byte-for-byte unchanged — bar on top, phone centered below. */
+.db-mobile-stage .db-sim-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Rotate button removed everywhere (desktop card + mobile pill). */
+.db-sim-rotate {
+  display: none;
+}
+
+/* Binding source toggle (Progress card target: device vs fixed value). */
+.binding-source-toggle {
+  display: inline-flex;
+  gap: 2px;
+  margin-bottom: 10px;
+  padding: 3px;
+  background: rgba(20, 22, 28, 0.05);
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  border-radius: 10px;
+}
+.binding-source-btn {
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #6B6258;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.binding-source-btn.is-active {
+  background: #fff;
+  color: #14161C;
+  box-shadow: 0 1px 3px rgba(20, 22, 28, 0.12);
+}
+.binding-source-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Multivalue Card 2 — stack each metric's unit BELOW the value (each binding
+   carries its own unit, so inline gets cramped). */
+.cv-stat-line-stacked {
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+/* Multivalue Card 3 uses the inline <Stat> with a left-aligned label, so its
+   stacked value/unit should left-align too (Card 2's StatStacked stays
+   centered). */
+.cv-stat .cv-stat-line-stacked {
+  align-items: flex-start;
+}
+.cv-unit-below {
+  font-size: 11px;
+  line-height: 1.2;
+  opacity: 0.85;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Configure-Widget modal: kill horizontal scrolling. A `1fr` grid track has
+   an implicit min-width:auto (min-content), so wide children (selects, the
+   pattern row, the color row) push the column past the modal and trigger a
+   horizontal scrollbar. Let the tracks + their contents shrink instead.
+   ────────────────────────────────────────────────────────────────────────── */
+.card-config {
+  grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+}
+.card-config > * { min-width: 0; }
+.card-config .form-grid-2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.card-config .form-grid-2 > * { min-width: 0; }
+.card-config .form-field { min-width: 0; }
+.card-config input,
+.card-config select,
+.card-config textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+/* Pattern swatches wrap within the column rather than forcing a wide row. */
+.card-config .pattern-swatches { flex-wrap: wrap; }
+/* Final safety net: the modal's main panel never scrolls sideways. */
+.widget-picker-main { overflow-x: hidden; }
+
+/* Icon picker inside a binding's narrow column: the 320px popover with
+   left:0;right:0 was forced past the column edge (and clipped by the modal's
+   overflow). Anchor it to the trigger's right edge so it grows LEFTward and
+   stays inside the modal — no horizontal scroll, properly aligned. */
+.card-config .icon-picker-popover {
+  left: auto;
+  right: 0;
+  min-width: 0;
+  width: 288px;
+  max-width: min(320px, 76vw);
+}
+.card-config .icon-picker-grid {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Card color picker (Appearance section) — a single clipped row of swatches
+   by default with a rainbow custom-color chip and a "More" toggle for the
+   full palette.
+   ────────────────────────────────────────────────────────────────────────── */
+.card-color-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Swatches keep their fixed size — they must NOT shrink into thin slivers. */
+.card-color-picker .color-swatch {
+  flex: 0 0 auto;
+}
+/* Collapsed: one clipped row — only the swatches that fit are shown (the rest,
+   including the custom chip at the end, are clipped). The "More" button stays
+   pinned and visible. A soft fade on the right hints there's more. */
+.card-color-picker .card-color-swatches {
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+          mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+}
+/* Expanded: the full palette wraps onto multiple rows and the custom chip
+   shows as the LAST swatch; the toggle ("Less") sits at the top-right. */
+.card-color-picker.is-expanded {
+  align-items: flex-start;
+}
+.card-color-picker.is-expanded .card-color-swatches {
+  flex-wrap: wrap;
+  overflow: visible;
+  -webkit-mask-image: none;
+          mask-image: none;
+}
+
+/* Rainbow custom-color chip — holds a hidden native color input that fills
+   it; once a custom color is chosen the chip shows that color. */
+.color-swatch-custom {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: #fff;
+  background: conic-gradient(from 0deg,
+    #F87171, #FBBF24, #34D399, #22D3EE, #60A5FA, #A78BFA, #F472B6, #F87171);
+}
+.color-swatch-custom .color-swatch-custom-ic {
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+.color-swatch-custom input[type="color"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* "More / Less" toggle. */
+.color-more-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(20, 22, 28, 0.12);
+  background: #fff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5C6378;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.color-more-btn:hover:not(:disabled) {
+  border-color: rgba(243, 106, 30, 0.55);
+  color: #14161C;
+  background: #FFF8F2;
+}
+.color-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Real-phone PREVIEW of the mobile dashboard (`.is-mobile-fullscreen`,
+   bounded shell). Make it read exactly like the in-editor simulator: content
+   inset from the screen edges, a rounded camera banner, and the same tidy
+   translucent widget panel — instead of the raw edge-to-edge stack.
+   ────────────────────────────────────────────────────────────────────────── */
+.db-page.is-mobile-fullscreen .db-mobile-screen.db-mobile-live > .db-mobile-content {
+  padding: 10px 12px calc(env(safe-area-inset-bottom, 0px) + 12px);
+  gap: 12px;
+}
+/* Rounded, cohesive camera banner like the simulator's compact feed. */
+.db-page.is-mobile-fullscreen .db-cam-card.is-compact .db-cam-player {
+  border-radius: 18px;
+}
+/* Widget grid sits in its own framed panel (matches the simulator), not bare
+   on the screen background. */
+.db-page.is-mobile-fullscreen .db-mobile-widgets {
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.26);
+  border: 1px solid var(--db-cell-border, rgba(244, 212, 175, 0.45));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+@media (min-width: 769px) {
+  /* Toolbar: Desktop / Mobile / Preview stay on the top row; the Theme
+     swatches drop to a second row right below them. */
+  .db-page.is-mobile-edit .db-page-actions-row {
+    margin-bottom: 6px;
+    padding-top: 2px;
+    flex-wrap: wrap;
+    align-items: center;
+    row-gap: 8px;
+  }
+  .db-page.is-mobile-edit .back-link { order: 1; }
+  .db-page.is-mobile-edit .db-viewport-toggle { order: 2; margin-left: auto; }
+  /* Publish sits between the Desktop/Mobile toggle and Preview on the top row
+     (without an explicit order it defaults to 0 and jumps to the far left). */
+  .db-page.is-mobile-edit .db-publish-btn { order: 3; }
+  .db-page.is-mobile-edit .db-preview-btn { order: 4; }
+  /* Zero-height full-width break forces the theme picker onto its own line. */
+  .db-page.is-mobile-edit .db-page-actions-row::after {
+    content: '';
+    order: 5;
+    flex-basis: 100%;
+    height: 0;
+  }
+  .db-page.is-mobile-edit .db-theme-picker {
+    order: 6;
+    margin-left: auto;   /* right-align the pill under the buttons */
+    margin-right: 0;
+  }
+
+  /* Remove the dashboard title band entirely in mobile-edit view. */
+  .db-page.is-mobile-edit .db-head {
+    display: none;
+  }
+
+  /* Phone-widgets picker: wider column + tighter rows so the whole panel
+     fits within one screen height. */
+  .db-page.is-mobile-edit .db-mobile-editor {
+    grid-template-columns: 360px 1fr;
+    gap: 22px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker {
+    position: static;
+    align-self: center;     /* vertically center the panel in its column */
+    margin-top: 0;
+    /* Shorter panel, but keep the SAME top: it's centered, so removing 80px
+       of height would drop the top 40px — compensate with +40px of lift
+       (60 -> 100) so the starting point stays fixed. */
+    transform: translateY(-72px);
+    padding: 14px;
+    height: auto;
+    max-height: calc(100dvh - 230px);
+  }
+  /* List grows to fill the panel and scrolls; footer stays pinned at bottom. */
+  .db-page.is-mobile-edit .db-mobile-picker-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* Slim, rounded, subtle scrollbar instead of the chunky default. */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(20, 22, 28, 0.22) transparent;
+    padding-right: 4px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-list::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 4px 0;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-list::-webkit-scrollbar-thumb {
+    background: rgba(20, 22, 28, 0.18);
+    border-radius: 999px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(20, 22, 28, 0.32);
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-head p {
+    margin-bottom: 10px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-list {
+    gap: 5px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-item {
+    padding: 6px 11px;
+  }
+  .db-page.is-mobile-edit .db-mobile-picker-foot {
+    margin-top: 9px;
+    padding-top: 8px;
+  }
+
+  /* Laptop / tablet: device picker moves BESIDE the phone (to its right) as a
+     polished vertical control card, instead of a pill above it. */
+  .db-mobile-stage .db-sim-area {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 22px;
+  }
+  .db-mobile-stage .db-sim-area .db-sim-viewport {
+    order: 1;
+  }
+
+  /* Keep the toolbar painting above the simulator we pull up into its band,
+     so the Desktop/Mobile/Theme controls stay visible and clickable. */
+  .db-page.is-mobile-edit .db-page-actions-row {
+    position: relative;
+    z-index: 5;
+  }
+  /* Lift the simulator up so its top sits level with the Desktop row. The
+     editor normally starts below the whole two-row toolbar; pull the phone
+     stage back up by about that toolbar height. */
+  .db-page.is-mobile-edit .db-mobile-stage {
+    padding-top: 0;
+    margin-top: -120px;
+    justify-content: flex-start;
+  }
+  .db-page.is-mobile-edit .db-mobile-stage .db-sim-area {
+    margin-top: 0;
+  }
+  /* Center the hint under the PHONE, not the phone+card pair. Offset it left
+     by the side card's footprint (card width 208 + gap 22 = 230). */
+  .db-page.is-mobile-edit .db-mobile-stage .db-mobile-hint {
+    margin-right: 230px;
+    text-align: center;
+  }
+
+  .db-mobile-stage .db-sim-bar-side {
+    order: 2;
+    flex: 0 0 auto;
+    align-self: center;
+    margin-top: 0;
+    width: 208px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 16px 16px 18px;
+    /* Override the pill shape + flat fill with a soft layered card. */
+    border-radius: 20px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 252, 247, 0.9));
+    border: 1px solid rgba(20, 22, 28, 0.07);
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.7) inset,
+      0 18px 40px -22px rgba(20, 22, 28, 0.5),
+      0 4px 12px -8px rgba(20, 22, 28, 0.3);
+  }
+
+  /* Accent device badge at the top of the card. */
+  .db-mobile-stage .db-sim-bar-side .db-sim-bar-icon {
+    align-self: center;
+    width: 44px;
+    height: 44px;
+    padding: 11px;
+    margin-bottom: 12px;
+    border-radius: 14px;
+    color: var(--db-accent, #F36A1E);
+    background: rgba(243, 106, 30, 0.1);
+    box-shadow: 0 0 0 1px rgba(243, 106, 30, 0.16) inset;
+  }
+
+  /* Device dropdown rendered as a real field. */
+  .db-mobile-stage .db-sim-bar-side .db-sim-select {
+    width: 100%;
+    max-width: none;
+    font-size: 13.5px;
+    font-weight: 700;
+    padding: 9px 12px;
+    border-radius: 11px;
+    background: #fff;
+    border: 1px solid rgba(20, 22, 28, 0.12);
+    box-shadow: 0 1px 2px rgba(20, 22, 28, 0.04);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .db-mobile-stage .db-sim-bar-side .db-sim-select:hover {
+    border-color: rgba(243, 106, 30, 0.5);
+  }
+
+  /* Rotate button removed from the side device card. */
+  .db-mobile-stage .db-sim-bar-side .db-sim-rotate {
+    display: none;
+  }
+
+  .db-mobile-stage .db-sim-bar-side .db-sim-dims {
+    order: 4;
+    margin-top: 12px;
+    padding: 6px 0 0;
+    text-align: center;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--ink-3, #8c8377);
+    border-top: 1px solid rgba(20, 22, 28, 0.07);
+  }
+}

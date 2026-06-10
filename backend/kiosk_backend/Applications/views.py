@@ -921,3 +921,54 @@ class PublicAnalyticsAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+# =====================================================================
+# SSL Certificate management
+# =====================================================================
+from django.http import FileResponse, Http404
+from django.views import View
+
+class SSLCertificateViewSet(viewsets.ModelViewSet):
+    """
+    Admin CRUD for SSL certificates. Uploading a new certificate
+    automatically deactivates the previous one (singleton pattern in
+    the model's save()).
+    """
+    queryset = SSLCertificate.objects.all()
+    serializer_class = SSLCertificateSerializer
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {
+        "list":           "ssl_certificate_view",
+        "retrieve":       "ssl_certificate_view",
+        "create":         "ssl_certificate_upload",
+        "update":         "ssl_certificate_upload",
+        "partial_update": "ssl_certificate_upload",
+        "destroy":        "ssl_certificate_delete",
+    }
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        active = qs.filter(is_active=True).first()
+        return Response({
+            "count":   qs.count(),
+            "active":  SSLCertificateSerializer(active, context={"request": request}).data if active else None,
+            "certificates": SSLCertificateSerializer(qs, many=True, context={"request": request}).data,
+        }, status=status.HTTP_200_OK)
+
+
+class PublicSSLCertificateDownloadView(View):
+    """
+    Public, no-auth download of the currently-active SSL certificate.
+    This is the file hardware devices fetch to trust the backend over
+    HTTPS / WSS. Served at /cert/server.crt at the project root.
+    """
+    def get(self, request):
+        cert = SSLCertificate.objects.filter(is_active=True).order_by("-uploaded_at").first()
+        if not cert or not cert.file:
+            raise Http404("No active SSL certificate is available for download.")
+        resp = FileResponse(cert.file.open("rb"), content_type="application/x-x509-ca-cert")
+        resp["Content-Disposition"] = 'attachment; filename="server.crt"'
+        return resp
