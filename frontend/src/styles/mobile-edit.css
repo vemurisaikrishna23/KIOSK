@@ -200,6 +200,109 @@
 }
 .color-more-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* Stack the swatch row above the gradient + recents controls. */
+.color-field {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.color-field-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+/* Linear-gradient on/off pill switch. */
+.color-grad-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #5C6378;
+  cursor: pointer;
+}
+.color-grad-toggle.is-on { color: #14161C; }
+.color-grad-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.color-grad-track {
+  position: relative;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.16);
+  transition: background 0.15s ease;
+  flex: 0 0 auto;
+}
+.color-grad-toggle.is-on .color-grad-track {
+  background: linear-gradient(90deg, #F36A1E, #FF8A47);
+}
+.color-grad-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(20, 22, 28, 0.3);
+  transition: transform 0.15s ease;
+}
+.color-grad-toggle.is-on .color-grad-knob { transform: translateX(14px); }
+/* Direction arrow chips — shown when the gradient is on. */
+.color-dir-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(20, 22, 28, 0.05);
+  border-radius: 10px;
+}
+.color-dir-btn {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #5C6378;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, box-shadow 0.12s ease;
+}
+.color-dir-btn:hover:not(:disabled) { color: #14161C; }
+.color-dir-btn.is-active {
+  background: #fff;
+  color: #14161C;
+  box-shadow: 0 1px 2px rgba(20, 22, 28, 0.18);
+}
+.color-dir-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Recently-used color chips. */
+.color-recents {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.color-recents-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #8A8170;
+  margin-right: 2px;
+}
+.color-recents-empty {
+  font-size: 11.5px;
+  color: #A8A092;
+  font-style: italic;
+}
+.color-swatch-recent {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Real-phone PREVIEW of the mobile dashboard (`.is-mobile-fullscreen`,
    bounded shell). Make it read exactly like the in-editor simulator: content

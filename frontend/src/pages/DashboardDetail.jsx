@@ -203,7 +203,7 @@ function getWidgetLayout(c, idx, cols = 11) {
    in the same family so dashboards can vary without clashing. */
 const CARD_COLORS = [
   // Warm peaches & creams
-  { id: 'peach',    label: 'Peach',    bg: 'linear-gradient(135deg, #FFE9CE 0%, #FBC890 100%)', text: '#4A2E18', sub: '#9A6A40' },
+  { id: 'peach',    label: 'Peach',    bg: 'linear-gradient(180deg, #FED4B9 0%, #FFF0E7 100%)', text: '#4A2E18', sub: '#9A6A40' },
   { id: 'apricot',  label: 'Apricot',  bg: 'linear-gradient(135deg, #FFE0B8 0%, #F8B373 100%)', text: '#4A2A0E', sub: '#9F6730' },
   { id: 'coral',    label: 'Coral',    bg: 'linear-gradient(135deg, #FFD3C0 0%, #F8A78D 100%)', text: '#4A1E14', sub: '#9B5849' },
   { id: 'rose',     label: 'Rose',     bg: 'linear-gradient(135deg, #FCDDE2 0%, #F4B0BB 100%)', text: '#4A1A26', sub: '#9F5566' },
@@ -280,7 +280,7 @@ const DASHBOARD_THEMES = [
     accent:     '#F36A1E',
     accentLight:'#FF8A47',
     accentDeep: '#D85510',
-    defaultCardColor: '#FDD6BD',
+    defaultCardColor: 'peach',
     defaultIconColor: 'orange',
   },
   // Smart-home reference palette: soft cream-peach page, light peach panels,
@@ -633,20 +633,82 @@ function buildCustomTheme(hex, mode) {
     defaultIconColor: hex,
   }
 }
+// A plain hex card color renders as a FLAT solid fill (the gradient is opt-in
+// via the picker's gradient toggle, which stores a full linear-gradient string
+// instead). Text color is chosen for contrast against the solid fill.
 function customCardStyle(hex) {
   const rgb = hexToRgb(hex)
-  const light = mixWhite(rgb, 0.62)
-  const lightCss = `rgb(${light.r}, ${light.g}, ${light.b})`
-  const lum = (0.299 * light.r + 0.587 * light.g + 0.114 * light.b) / 255
-  const text = lum > 0.55 ? '#1C1407' : '#FFFFFF'
-  const sub = lum > 0.55 ? 'rgba(28, 20, 7, 0.66)' : 'rgba(255, 255, 255, 0.78)'
+  const lum = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255
+  const text = lum > 0.6 ? '#1C1407' : '#FFFFFF'
+  const sub = lum > 0.6 ? 'rgba(28, 20, 7, 0.66)' : 'rgba(255, 255, 255, 0.78)'
   return {
-    background: `linear-gradient(135deg, ${hex} 0%, ${lightCss} 100%)`,
+    background: hex,
     color: text,
     '--cv-sub-color': sub,
   }
 }
+// Wrap a base hex into a linear gradient (chosen color at the start, fading to
+// a near-white tint of itself). Direction defaults to 180deg (top → bottom).
+function gradientFromHex(hex, deg = 180) {
+  const light = rgbCss(mixWhite(hexToRgb(hex), 0.78))
+  return `linear-gradient(${deg}deg, ${hex} 0%, ${light} 100%)`
+}
+// Pull the direction (degrees) out of a stored gradient string.
+function gradientDirOf(value, fallback = 180) {
+  if (typeof value === 'string') {
+    const m = value.match(/linear-gradient\(\s*(-?\d+(?:\.\d+)?)deg/)
+    if (m) return Number(m[1])
+  }
+  return fallback
+}
+// Pull the base hex out of a stored card color (a gradient string OR a hex).
+function baseHexOf(value, fallback = '#FED4B9') {
+  if (typeof value === 'string') {
+    const m = value.match(/#[0-9a-fA-F]{6}/)
+    if (m) return m[0]
+  }
+  return fallback
+}
+// Selectable gradient directions, shown as arrow chips when gradient is on.
+const GRADIENT_DIRS = [
+  { deg: 180, label: '↓', title: 'Top → bottom' },
+  { deg: 0,   label: '↑', title: 'Bottom → top' },
+  { deg: 90,  label: '→', title: 'Left → right' },
+  { deg: 270, label: '←', title: 'Right → left' },
+  { deg: 135, label: '↘', title: 'Diagonal ↘' },
+  { deg: 45,  label: '↗', title: 'Diagonal ↗' },
+]
+
+// Recently-used colors, shared across every color picker in the dashboard
+// editor ("recent across the theme"). Persisted in localStorage as base hexes.
+const RECENT_COLORS_KEY = 'kiosk-recent-colors'
+function loadRecentColors() {
+  try {
+    const a = JSON.parse(localStorage.getItem(RECENT_COLORS_KEY) || '[]')
+    return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x.charAt(0) === '#').slice(0, 12) : []
+  } catch { return [] }
+}
+function pushRecentColor(hex) {
+  if (typeof hex !== 'string' || hex.charAt(0) !== '#') return loadRecentColors()
+  try {
+    const cur = loadRecentColors().filter((c) => c.toLowerCase() !== hex.toLowerCase())
+    const next = [hex, ...cur].slice(0, 12)
+    localStorage.setItem(RECENT_COLORS_KEY, JSON.stringify(next))
+    return next
+  } catch { return loadRecentColors() }
+}
 function cardStyleFor(colorId) {
+  // A full CSS gradient can be stored verbatim (e.g. a top→bottom
+  // "linear-gradient(180deg, #FED4B9 0%, #FFF0E7 100%)"). Used as-is for the
+  // card surface; text defaults to the warm-dark ink that reads on the light
+  // peach gradients.
+  if (typeof colorId === 'string' && colorId.slice(0, 15) === 'linear-gradient') {
+    return {
+      background: colorId,
+      color: '#3D2A18',
+      '--cv-sub-color': 'rgba(61, 42, 24, 0.66)',
+    }
+  }
   // A custom color is stored as a raw hex string (e.g. "#3E7D52").
   if (typeof colorId === 'string' && colorId.charAt(0) === '#') {
     return customCardStyle(colorId)
@@ -673,71 +735,153 @@ function cardStyleFor(colorId) {
    reveals the full palette, plus a rainbow custom-color chip that opens the
    native color picker. Shared by every card config form's Appearance section.
    The value is either a built-in color id or a raw hex string (custom). */
-function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, fallbackCustom = '#F4A261' }) {
+function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, fallbackCustom = '#F4A261', gradientToggle = false, showRecents = false }) {
   const [expanded, setExpanded] = useState(false)
-  const isCustom = typeof value === 'string' && value.charAt(0) === '#'
+  const isGradientVal = typeof value === 'string' && value.slice(0, 15) === 'linear-gradient'
+  const isHexVal = typeof value === 'string' && value.charAt(0) === '#'
+  const isCustom = isHexVal || isGradientVal
+  const baseHex = baseHexOf(value, fallbackCustom)
+  // Whether a picked custom color is wrapped in a gradient, and in which
+  // direction. Defaults ON (gradient is the house style) unless the value is
+  // already a flat hex. Only meaningful when gradientToggle is on (card bg).
+  const [gradientOn, setGradientOn] = useState(gradientToggle ? (isGradientVal || !isCustom) : false)
+  const [dir, setDir] = useState(() => gradientDirOf(value, 180))
+  const [recentList, setRecentList] = useState(() => (showRecents ? loadRecentColors() : []))
+
+  // Apply a base hex, wrapping it in a gradient (with the chosen direction)
+  // when the toggle is on. Always remembers the color as recent.
+  const applyCustom = (hex) => {
+    onChange(gradientToggle && gradientOn ? gradientFromHex(hex, dir) : hex)
+    if (showRecents) setRecentList(pushRecentColor(hex))
+  }
+  const toggleGradient = () => {
+    const next = !gradientOn
+    setGradientOn(next)
+    if (isCustom) onChange(next ? gradientFromHex(baseHex, dir) : baseHex)
+  }
+  const pickDir = (deg) => {
+    setDir(deg)
+    if (isCustom && gradientOn) onChange(gradientFromHex(baseHex, deg))
+  }
+
   return (
-    <div className={'card-color-picker' + (expanded ? ' is-expanded' : '')}>
-      <div className="color-swatches card-color-swatches">
-        {colors.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className={'color-swatch' + (solid ? ' color-swatch-solid' : '') + (value === c.id ? ' is-active' : '')}
-            style={{ background: c.bg || c.hex }}
-            title={c.label}
-            aria-label={c.label}
-            aria-pressed={value === c.id}
-            onClick={() => onChange(c.id)}
-            disabled={disabled}
-          />
-        ))}
-        {/* Custom-color palette chip — last item, so it only appears once the
-            row is expanded via "More" (it's clipped off in the collapsed row). */}
-        <label
-          className={'color-swatch color-swatch-custom' + (isCustom ? ' is-active' : '')}
-          title="Custom color"
-          style={isCustom ? { background: value } : undefined}
+    <div className="color-field">
+      <div className={'card-color-picker' + (expanded ? ' is-expanded' : '')}>
+        <div className="color-swatches card-color-swatches">
+          {colors.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              className={'color-swatch' + (solid ? ' color-swatch-solid' : '') + (value === c.id ? ' is-active' : '')}
+              style={{ background: c.bg || c.hex }}
+              title={c.label}
+              aria-label={c.label}
+              aria-pressed={value === c.id}
+              onClick={() => onChange(c.id)}
+              disabled={disabled}
+            />
+          ))}
+          {/* Custom-color palette chip — last item, so it only appears once the
+              row is expanded via "More" (it's clipped off in the collapsed row). */}
+          <label
+            className={'color-swatch color-swatch-custom' + (isCustom ? ' is-active' : '')}
+            title="Custom color"
+            style={isCustom ? { background: value } : undefined}
+          >
+            <input
+              type="color"
+              value={baseHex}
+              disabled={disabled}
+              onChange={(e) => applyCustom(e.target.value)}
+            />
+            {!isCustom && (
+              <svg className="color-swatch-custom-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 2.5a9.5 9.5 0 1 0 0 19c1 0 1.6-.8 1.6-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.7-1.6 1.6-1.6h1.9A4.4 4.4 0 0 0 22 11.5C22 6.5 17.5 2.5 12 2.5Z" stroke="currentColor" strokeWidth="1.6"/>
+                <circle cx="7.5" cy="11" r="1.2" fill="currentColor"/>
+                <circle cx="11" cy="7" r="1.2" fill="currentColor"/>
+                <circle cx="15.5" cy="8" r="1.2" fill="currentColor"/>
+              </svg>
+            )}
+          </label>
+        </div>
+        <button
+          type="button"
+          className="color-more-btn"
+          onClick={() => setExpanded((v) => !v)}
+          disabled={disabled}
+          aria-expanded={expanded}
         >
-          <input
-            type="color"
-            value={isCustom ? value : fallbackCustom}
-            disabled={disabled}
-            onChange={(e) => onChange(e.target.value)}
-          />
-          {!isCustom && (
-            <svg className="color-swatch-custom-ic" width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M12 2.5a9.5 9.5 0 1 0 0 19c1 0 1.6-.8 1.6-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.7-1.6 1.6-1.6h1.9A4.4 4.4 0 0 0 22 11.5C22 6.5 17.5 2.5 12 2.5Z" stroke="currentColor" strokeWidth="1.6"/>
-              <circle cx="7.5" cy="11" r="1.2" fill="currentColor"/>
-              <circle cx="11" cy="7" r="1.2" fill="currentColor"/>
-              <circle cx="15.5" cy="8" r="1.2" fill="currentColor"/>
-            </svg>
-          )}
-        </label>
+          {expanded ? 'Less' : 'More'}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"
+            style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
+            <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
-      <button
-        type="button"
-        className="color-more-btn"
-        onClick={() => setExpanded((v) => !v)}
-        disabled={disabled}
-        aria-expanded={expanded}
-      >
-        {expanded ? 'Less' : 'More'}
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true"
-          style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}>
-          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
+
+      {gradientToggle && (
+        <div className="color-field-row">
+          <button
+            type="button"
+            className={'color-grad-toggle' + (gradientOn ? ' is-on' : '')}
+            onClick={toggleGradient}
+            disabled={disabled}
+            aria-pressed={gradientOn}
+            title="Render the custom color as a linear gradient"
+          >
+            <span className="color-grad-track"><span className="color-grad-knob" /></span>
+            Linear gradient
+          </button>
+          {gradientOn && (
+            <div className="color-dir-picker" role="group" aria-label="Gradient direction">
+              {GRADIENT_DIRS.map((d) => (
+                <button
+                  key={d.deg}
+                  type="button"
+                  className={'color-dir-btn' + (dir === d.deg ? ' is-active' : '')}
+                  onClick={() => pickDir(d.deg)}
+                  disabled={disabled}
+                  title={d.title}
+                  aria-label={d.title}
+                  aria-pressed={dir === d.deg}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showRecents && (
+        <div className="color-recents" aria-label="Recently used colors">
+          <span className="color-recents-label">Recent</span>
+          {recentList.length === 0 && <span className="color-recents-empty">Pick a custom color to start a history</span>}
+          {recentList.map((hex) => (
+            <button
+              key={hex}
+              type="button"
+              className={'color-swatch color-swatch-recent' + (isCustom && baseHex.toLowerCase() === hex.toLowerCase() ? ' is-active' : '')}
+              style={{ background: hex }}
+              title={hex}
+              aria-label={hex}
+              onClick={() => applyCustom(hex)}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 // Card colors use gradient backgrounds (c.bg); icon/bar/gauge colors are solid
-// hex chips (c.hex). Both get the same collapse + custom-palette behavior.
+// hex chips (c.hex). Both get the same collapse + custom-palette behavior. Card
+// backgrounds additionally get the gradient on/off + direction controls.
 function CardColorPicker(props) {
-  return <ColorSwatchPicker {...props} colors={CARD_COLORS} fallbackCustom="#F4A261" />
+  return <ColorSwatchPicker {...props} colors={CARD_COLORS} fallbackCustom="#FED4B9" gradientToggle showRecents />
 }
 function IconColorPicker(props) {
-  return <ColorSwatchPicker {...props} colors={ICON_COLORS} solid fallbackCustom="#F36A1E" />
+  return <ColorSwatchPicker {...props} colors={ICON_COLORS} solid fallbackCustom="#F36A1E" showRecents />
 }
 
 /* =====================================================================
@@ -6830,6 +6974,9 @@ function ControlPreview({ variant, options, onCommand }) {
    colour. Uses the control's configured iconColor (from ICON_COLORS
    palette) so it matches the card palette. */
 function CtrlIcon({ iconId, fallbackName = 'bolt', iconColor }) {
+  // 'none' is the explicit "no icon" sentinel — render nothing (not even the
+  // fallback glyph) so a widget can opt out of an icon entirely.
+  if (iconId === 'none') return null
   const hex = getIconColor(iconColor || 'orange').hex
   if (iconId) {
     return (
@@ -8595,6 +8742,9 @@ function StatStacked({ icon, iconId, color, label, value, unit }) {
 }
 
 function CvIcon({ name, iconId, color, size = 'md' }) {
+  // 'none' is the explicit "no icon" sentinel — render nothing (not even the
+  // fallback glyph) so a widget can opt out of an icon entirely.
+  if (iconId === 'none' || name === 'none') return null
   const hex = color || '#F36A1E'
   const chipStyle = { background: hexToRgba(hex, 0.16), color: hex }
   if (iconId) {
