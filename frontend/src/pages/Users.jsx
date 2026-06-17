@@ -39,6 +39,9 @@ export default function Users() {
   const canUpdate  = auth.hasPerm('user_update')
   const canDelete  = auth.hasPerm('user_delete')
   const canRestore = auth.hasPerm('user_restore')
+  // Per-user Activity is hidden for now. Restore by switching this back to
+  // auth.hasPerm('user_activity_view').
+  const canViewActivity = false
 
   // Paginated server-side.
   //  - `results`     → visible page rows.
@@ -372,6 +375,15 @@ export default function Users() {
   }, [toast])
 
   /* ----------------------- render ----------------------- */
+  if (!canView) {
+    return (
+      <div className="kiosk-app">
+        <TopBar />
+        <div className="admin-page"><PermissionDenied resource="users" /></div>
+      </div>
+    )
+  }
+
   return (
     <div className="kiosk-app kiosk-app-fixed">
       <TopBar />
@@ -501,10 +513,20 @@ export default function Users() {
                   </div>
                   <div className="user-sub" data-col="Created">{formatDate(u.created_at)}</div>
                   <div className="user-actions" data-col="Actions">
+                    {canViewActivity && (
+                      <button
+                        type="button"
+                        className="row-btn"
+                        onClick={() => navigate(`/users/${u.id}/activity`)}
+                        title={`View ${u.name || 'this user'}'s activity`}
+                      >
+                        Activity
+                      </button>
+                    )}
                     {isDeleted ? (
                       canRestore
                         ? <button type="button" className="row-btn" onClick={() => onRestore(u)}>Restore</button>
-                        : <span className="row-actions-none">View only</span>
+                        : (!canViewActivity && <span className="row-actions-none">View only</span>)
                     ) : (
                       <>
                         {canUpdate && (
@@ -513,7 +535,7 @@ export default function Users() {
                         {canDelete && (
                           <button type="button" className="row-btn danger" onClick={() => onDelete(u)}>Delete</button>
                         )}
-                        {!canUpdate && !canDelete && (
+                        {!canUpdate && !canDelete && !canViewActivity && (
                           <span className="row-actions-none">View only</span>
                         )}
                       </>
@@ -654,7 +676,7 @@ export default function Users() {
               )}
             </div>
 
-            <Field label="Roles" required error={formErrors.roles}>
+            <Field group label="Roles" required error={formErrors.roles}>
               <div className="role-picker">
                 {roles.length === 0 ? (
                   <p className="user-sub">No roles defined yet. Create one in <a href="/roles">Roles</a>.</p>
@@ -740,16 +762,21 @@ export default function Users() {
 }
 
 /* ----------------------- shared bits ----------------------- */
-function Field({ label, error, children, full, required }) {
+function Field({ label, error, children, full, required, group }) {
+  // `group` renders a <div> instead of <label>. A <label> forwards empty-space
+  // clicks to its first labelable descendant (e.g. the first role chip button),
+  // which would wrongly toggle it. Use group for fields holding a set of
+  // buttons/chips rather than a single input.
+  const Tag = group ? 'div' : 'label'
   return (
-    <label className={'form-field' + (full ? ' full' : '') + (error ? ' has-error' : '')}>
+    <Tag className={'form-field' + (full ? ' full' : '') + (error ? ' has-error' : '')}>
       <span className="form-label">
         {label}
         {required && <span className="required-star" aria-hidden="true">*</span>}
       </span>
       {children}
       {error && <span className="form-err">{error}</span>}
-    </label>
+    </Tag>
   )
 }
 

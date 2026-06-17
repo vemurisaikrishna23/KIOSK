@@ -10,6 +10,13 @@ import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
 // for them in the first place.
 const PROTECTED_ROLE_NAMES = new Set(['SuperAdmin', 'Default'])
 
+// Permission policies hidden from the UI for now (the Activity Log + per-user
+// Activity features are not exposed yet). They're filtered out of the catalog,
+// the assignment picker and the per-role chip lists — but any assignment a role
+// already has is left untouched on save, so re-enabling later loses nothing.
+const HIDDEN_POLICIES = new Set(['ActivityLog', 'UserActivity'])
+const visiblePerms = (list) => (list || []).filter((p) => !HIDDEN_POLICIES.has(p.policy))
+
 function groupByPolicy(permissions) {
   const m = new Map()
   for (const p of permissions || []) {
@@ -76,7 +83,7 @@ export default function Roles() {
       const rolesList = r?.results ?? (Array.isArray(r) ? r : [])
       setRoles(rolesList)
       setRolesCount(typeof r?.count === 'number' ? r.count : rolesList.length)
-      setPermissions(Array.isArray(p) ? p : (p?.results || []))
+      setPermissions(visiblePerms(Array.isArray(p) ? p : (p?.results || [])))
     } catch (e) {
       setError(e?.network ? 'Could not reach the server.' : 'Failed to load roles.')
     } finally {
@@ -267,6 +274,15 @@ export default function Roles() {
   }, [toast])
 
   /* ---------- render ---------- */
+  if (!canView) {
+    return (
+      <div className="kiosk-app">
+        <TopBar />
+        <div className="admin-page"><PermissionDenied resource="roles" /></div>
+      </div>
+    )
+  }
+
   return (
     <div className="kiosk-app kiosk-app-fixed">
       <TopBar />
@@ -319,7 +335,7 @@ export default function Roles() {
             ) : (
               <div className="role-list">
                 {filtered.map((r) => {
-                  const perms = r.permission_details || []
+                  const perms = visiblePerms(r.permission_details || [])
                   const policies = groupByPolicy(perms)
                   const isOpen = expanded.has(r.id)
                   return (
@@ -467,7 +483,7 @@ export default function Roles() {
               </Field>
             </div>
 
-            <Field label={`Permissions (${form.permissions.length} selected)`} required error={formErrors.permissions}>
+            <Field group label={`Permissions (${form.permissions.length} selected)`} required error={formErrors.permissions}>
               {permsByPolicy.length === 0 ? (
                 <p className="user-sub">No permissions available.</p>
               ) : (
@@ -599,16 +615,22 @@ function RoleActions({ role, isProtected, canUpdate, canDelete, onEdit, onDelete
   )
 }
 
-function Field({ label, error, children, full, required }) {
+function Field({ label, error, children, full, required, group }) {
+  // `group` renders a <div> instead of a <label>. A <label> forwards any click
+  // on its empty space to its first labelable descendant (here the first
+  // "Select all"/chip <button>), which would wrongly toggle that control when
+  // the user clicks blank space. Use group for fields that hold a set of
+  // buttons/chips rather than a single input.
+  const Tag = group ? 'div' : 'label'
   return (
-    <label className={'form-field' + (full ? ' full' : '') + (error ? ' has-error' : '')}>
+    <Tag className={'form-field' + (full ? ' full' : '') + (error ? ' has-error' : '')}>
       <span className="form-label">
         {label}
         {required && <span className="required-star" aria-hidden="true">*</span>}
       </span>
       {children}
       {error && <span className="form-err">{error}</span>}
-    </label>
+    </Tag>
   )
 }
 function Modal({ title, children, onClose }) {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import Avatar from './Avatar.jsx'
 import { auth } from '../lib/api.js'
@@ -10,6 +10,10 @@ const NAV = [
   { label: 'Cameras',      to: '/cameras' },
   { label: 'Applications', to: '/applications' },
   { label: 'SSL Cert',     to: '/ssl-certificate', perm: 'ssl_certificate_view' },
+  { label: 'Contact',      to: '/contact-submissions', perm: 'contact_submission_view' },
+  { label: 'Company',      to: '/company-information', perm: 'company_info_view' },
+  // Hidden for now — Activity Log page. Re-enable by uncommenting.
+  // { label: 'Activity',     to: '/activity-logs', perm: 'activity_log_view' },
 ]
 
 /**
@@ -28,6 +32,8 @@ export default function TopBar({ centerSlot = null }) {
 
   // Hamburger / drawer state for narrow viewports.
   const [menuOpen, setMenuOpen] = useState(false)
+  const navRef = useRef(null)
+  const burgerRef = useRef(null)
 
   // Auto-close the drawer when navigating to a different route, when the
   // viewport grows back to desktop size, or when Escape is pressed.
@@ -43,6 +49,21 @@ export default function TopBar({ centerSlot = null }) {
     }
   }, [])
 
+  // Close the drawer on any click/tap outside the menu (and outside the
+  // burger, so the burger's own toggle keeps working). This is the reliable
+  // close path — it doesn't depend on the dimming backdrop's z-index/coverage.
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    function onPointerDown(e) {
+      const t = e.target
+      if (navRef.current?.contains(t)) return
+      if (burgerRef.current?.contains(t)) return
+      setMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [menuOpen])
+
   function logout() {
     auth.clear()
     navigate('/signin', { replace: true })
@@ -54,7 +75,7 @@ export default function TopBar({ centerSlot = null }) {
         <img src="/logos/myaccess.svg" alt="myaccess" className="logo-wordmark" />
       </Link>
 
-      <nav className={'kiosk-nav' + (menuOpen ? ' is-open' : '')}>
+      <nav ref={navRef} id="kiosk-nav-drawer" className={'kiosk-nav' + (menuOpen ? ' is-open' : '')}>
         {NAV.filter((n) => !n.perm || auth.hasPerm(n.perm)).map((n) =>
           n.to === '#' ? (
             <span
@@ -97,6 +118,7 @@ export default function TopBar({ centerSlot = null }) {
         </Link>
         <button type="button" className="btn-logout" onClick={logout}>Log out</button>
         <button
+          ref={burgerRef}
           type="button"
           className="kiosk-burger"
           aria-label={menuOpen ? 'Close menu' : 'Open menu'}

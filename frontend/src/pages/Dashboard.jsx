@@ -1,456 +1,540 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
-import { auth } from '../lib/api.js'
+import { api, auth } from '../lib/api.js'
 
-/* ----------------------- Mock data (UI shell, KIOSK domain) ----------------------- */
-// Once the dashboard is wired to real endpoints these constants get replaced by
-// fetches against /api/applications, /cameraapi/, etc. Names + counts here are
-// shaped to match the real backend models (Application, Camera, Device, User).
-
-const TRENDING = [
-  { id: 'app-lobby',  name: 'ATM Lobby',       state: 'v2.4.1',  metric: '243 sessions', delta: 'Active',    icon: 'app'    },
-  { id: 'app-mall',   name: 'Mall Kiosk',      state: 'v2.3.7',  metric: '982 sessions', delta: 'Deploying', icon: 'app'    },
-  { id: 'cam-front',  name: 'Front Cam #14',   state: '4K',      metric: '12 viewers',   delta: 'Live',      icon: 'camera' },
-  { id: 'dev-rtu',    name: 'Drive-Thru RTU',  state: 'Online',  metric: 'fw 8.2.0',     delta: '+1d',       icon: 'device' },
-]
-
-// 24h smoothed sessions series (relative units, 1400–1900 = active sessions).
-const ACTIVITY = [
-  18, 14, 12, 11, 13, 18, 26, 38, 52, 71, 86, 82,
-  68, 58, 49, 47, 53, 64, 78, 72, 60, 48, 33, 24,
-]
-
-const ACTIVITY_LOG = [
-  { entity: 'ATM Lobby',      type: 'Application', action: 'Deployed v2.4.1',    actor: 'CI · pipeline #482', value: '243 sessions', time: '4d 19h ago',  state: 'ok'    },
-  { entity: 'Front Cam #14',  type: 'Camera',      action: 'Person detected',    actor: 'AI · confidence 0.83', value: '12 viewers',   time: '10d 9h ago',  state: 'warn'  },
-  { entity: 'Mall Kiosk',     type: 'Application', action: 'Service restarted',  actor: 'Manual · Sai',         value: '982 sessions', time: '12d 8h ago',  state: 'ok'    },
-  { entity: 'Drive-Thru RTU', type: 'Device',      action: 'Firmware updated',   actor: 'Schedule · 02:00',     value: 'fw 8.2.0',     time: '12d 8h ago',  state: 'ok'    },
-  { entity: 'Site B Gateway', type: 'Device',      action: 'Heartbeat missed',   actor: 'Monitor · 60s',        value: 'offline 4m',   time: '12d 8h ago',  state: 'err'   },
-]
-
-const TIMEFRAMES = ['1H', '4H', '1D', '1W', '1M', '6M']
+/* =====================================================================
+   Main dashboard — a READ-ONLY analytics overview of the whole platform.
+   Every number is pulled live from the real backend (applications,
+   dashboards, devices, cameras, users) and aggregated client-side. The
+   hero is a views-over-time graph (last 7 / 30 days), optionally scoped to
+   a single application. There are no actions here on purpose.
+   ===================================================================== */
 
 /* ----------------------- Helpers ----------------------- */
 
-/** Tiny inline icon set so each tile/row is self-contained. */
-function MiniIcon({ name, size = 18 }) {
-  const s = size
-  const stroke = '#F36A1E'
+// Compact letter notation (1.2K, 3.4M, 1B) for anything ≥ 1000; full
+// comma-grouped value for 0–999. Keeps big KPI/view numbers from overflowing.
+const compactNf = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 })
+const nf = (n) => {
+  if (n == null) return '—'
+  const num = Number(n)
+  if (!Number.isFinite(num)) return '—'
+  return Math.abs(num) < 1000 ? num.toLocaleString() : compactNf.format(num)
+}
+const fk = (v) => (v && typeof v === 'object' ? v.id : v)
+const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0)
+
+function timeAgo(iso) {
+  if (!iso) return '—'
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return '—'
+  const s = Math.floor((Date.now() - t) / 1000)
+  if (s < 60) return 'just now'
+  const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24); if (d < 30) return `${d}d ago`
+  const mo = Math.floor(d / 30); if (mo < 12) return `${mo}mo ago`
+  return `${Math.floor(mo / 12)}y ago`
+}
+
+/** Format an ISO date (YYYY-MM-DD) as "Jun 9" without timezone drift. */
+function fmtDay(iso) {
+  if (!iso) return ''
+  const [y, m, d] = String(iso).split('-').map(Number)
+  if (!y) return iso
+  return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+/** Today as a local YYYY-MM-DD string (no UTC drift). */
+function todayISO() {
+  const d = new Date()
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+/** Date portion (YYYY-MM-DD) of an ISO datetime. */
+const toDateStr = (iso) => (iso ? String(iso).slice(0, 10) : '')
+
+/** Tiny inline icon set. */
+function Ic({ name, size = 18, color = '#F36A1E' }) {
   const sw = 1.7
+  const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none' }
   switch (name) {
-    case 'lock':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <rect x="4.5" y="10.5" width="15" height="10" rx="2.2" stroke={stroke} strokeWidth={sw} />
-          <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
-          <circle cx="12" cy="15.4" r="1.4" fill={stroke} />
-        </svg>
-      )
-    case 'camera':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="7" width="14" height="11" rx="2.2" stroke={stroke} strokeWidth={sw} />
-          <path d="M17 11 L21 8.5 V16.5 L17 14" stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
-        </svg>
-      )
-    case 'leaf':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="M5 19 Q5 8 19 5 Q18 17 7 19 Z" stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
-          <path d="M5 19 L13 11" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
-        </svg>
-      )
-    case 'bulb':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="M9 17h6M10 20h4" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
-          <path d="M7 11a5 5 0 1 1 9 3l-1 2H9l-1-2A5 5 0 0 1 7 11Z" stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
-        </svg>
-      )
-    case 'rocket':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="M5 19 L8 16 M19 5l-9 9 1.5 4-7-1.5L13 4z" stroke={stroke} strokeWidth={sw} strokeLinejoin="round" strokeLinecap="round" />
-        </svg>
-      )
-    case 'app':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.6" stroke={stroke} strokeWidth={sw} />
-          <rect x="13" y="3.5" width="7.5" height="7.5" rx="1.6" stroke={stroke} strokeWidth={sw} />
-          <rect x="3.5" y="13" width="7.5" height="7.5" rx="1.6" stroke={stroke} strokeWidth={sw} />
-          <rect x="13" y="13" width="7.5" height="7.5" rx="1.6" stroke={stroke} strokeWidth={sw} />
-        </svg>
-      )
-    case 'device':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <rect x="3.5" y="5.5" width="17" height="11" rx="2" stroke={stroke} strokeWidth={sw} />
-          <path d="M9 20h6M12 16.5V20" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
-          <circle cx="7" cy="11" r="1.2" fill={stroke} />
-          <path d="M10.5 11h7" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
-        </svg>
-      )
-    case 'search':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <circle cx="11" cy="11" r="6.5" stroke="#6b6258" strokeWidth={sw} />
-          <path d="m16 16 4 4" stroke="#6b6258" strokeWidth={sw} strokeLinecap="round" />
-        </svg>
-      )
-    case 'swap':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="M7 5v14m0 0-3-3m3 3 3-3M17 19V5m0 0-3 3m3-3 3 3" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'refresh':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="M4 12a8 8 0 0 1 14.5-4.7M20 12a8 8 0 0 1-14.5 4.7M18 4v4h-4M6 20v-4h4" stroke="#6b6258" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'info':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="9" stroke="#9c9389" strokeWidth="1.5" />
-          <path d="M12 11v5M12 8v.5" stroke="#9c9389" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      )
-    case 'chevron':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="m6 9 6 6 6-6" stroke="#6b6258" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-    case 'arrow':
-      return (
-        <svg width={s} height={s} viewBox="0 0 24 24" fill="none">
-          <path d="M5 12h14m-5-5 5 5-5 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-    default:
-      return null
+    case 'app': return (<svg {...p}><rect x="3.5" y="3.5" width="7.5" height="7.5" rx="1.6" stroke={color} strokeWidth={sw} /><rect x="13" y="3.5" width="7.5" height="7.5" rx="1.6" stroke={color} strokeWidth={sw} /><rect x="3.5" y="13" width="7.5" height="7.5" rx="1.6" stroke={color} strokeWidth={sw} /><rect x="13" y="13" width="7.5" height="7.5" rx="1.6" stroke={color} strokeWidth={sw} /></svg>)
+    case 'layers': return (<svg {...p}><path d="M12 3 3 8l9 5 9-5-9-5Z" stroke={color} strokeWidth={sw} strokeLinejoin="round" /><path d="M3 13l9 5 9-5M3 16.5l9 5 9-5" stroke={color} strokeWidth={sw} strokeLinejoin="round" /></svg>)
+    case 'device': return (<svg {...p}><rect x="3.5" y="5.5" width="17" height="11" rx="2" stroke={color} strokeWidth={sw} /><path d="M9 20h6M12 16.5V20" stroke={color} strokeWidth={sw} strokeLinecap="round" /><circle cx="7" cy="11" r="1.2" fill={color} /><path d="M10.5 11h7" stroke={color} strokeWidth={sw} strokeLinecap="round" /></svg>)
+    case 'camera': return (<svg {...p}><rect x="3" y="7" width="14" height="11" rx="2.2" stroke={color} strokeWidth={sw} /><path d="M17 11 L21 8.5 V16.5 L17 14" stroke={color} strokeWidth={sw} strokeLinejoin="round" /></svg>)
+    case 'users': return (<svg {...p}><circle cx="9" cy="8" r="3.2" stroke={color} strokeWidth={sw} /><path d="M3.5 19a5.5 5.5 0 0 1 11 0" stroke={color} strokeWidth={sw} strokeLinecap="round" /><path d="M16 5.2a3.2 3.2 0 0 1 0 5.6M17.5 19a5.5 5.5 0 0 0-2.2-4.4" stroke={color} strokeWidth={sw} strokeLinecap="round" /></svg>)
+    case 'eye': return (<svg {...p}><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke={color} strokeWidth={sw} strokeLinejoin="round" /><circle cx="12" cy="12" r="2.6" stroke={color} strokeWidth={sw} /></svg>)
+    default: return null
   }
 }
 
-/* ----------------------- Activity Chart ----------------------- */
+/* ----------------------- Views time-series chart ----------------------- */
 
-function ActivityChart({ data, peakIndex }) {
-  // Viewport
-  const W = 760
-  const H = 280
-  const PADDING = { top: 30, right: 20, bottom: 40, left: 56 }
-  const innerW = W - PADDING.left - PADDING.right
-  const innerH = H - PADDING.top - PADDING.bottom
+function ViewsChart({ series }) {
+  const W = 820, H = 280
+  const PAD = { top: 24, right: 24, bottom: 38, left: 46 }
+  const innerW = W - PAD.left - PAD.right
+  const innerH = H - PAD.top - PAD.bottom
+  const n = series.length
+  const vals = series.map((s) => s.views || 0)
+  const total = vals.reduce((a, b) => a + b, 0)
+  const rawMax = Math.max(...vals, 0)
+  const step = rawMax <= 0 ? 1 : Math.max(1, Math.ceil(rawMax / 4))
+  const maxY = step * 4
 
-  // Scale
-  const maxY = Math.max(...data) * 1.1
-  const minY = 0
-  const stepX = innerW / (data.length - 1)
-  const xOf = (i) => PADDING.left + i * stepX
-  const yOf = (v) => PADDING.top + innerH - ((v - minY) / (maxY - minY)) * innerH
+  const xOf = (i) => PAD.left + (n <= 1 ? innerW / 2 : (i / (n - 1)) * innerW)
+  const yOf = (v) => PAD.top + innerH - (v / maxY) * innerH
 
-  // Build smoothed-ish path using straight segments (clean & readable like the ref)
-  const pts = data.map((v, i) => `${xOf(i).toFixed(1)},${yOf(v).toFixed(1)}`)
-  const linePath = `M ${pts.join(' L ')}`
-  const areaPath =
-    `M ${xOf(0)},${yOf(0)} ` +
-    `L ${pts.join(' L ')} ` +
-    `L ${xOf(data.length - 1)},${yOf(0)} Z`
+  const pts = series.map((s, i) => `${xOf(i).toFixed(1)},${yOf(s.views || 0).toFixed(1)}`)
+  const linePath = n ? `M ${pts.join(' L ')}` : ''
+  const areaPath = n ? `M ${xOf(0)},${yOf(0)} L ${pts.join(' L ')} L ${xOf(n - 1)},${yOf(0)} Z` : ''
 
-  // Y-axis tick labels
-  const yTicks = [1400, 1500, 1600, 1700, 1800, 1900].map((v, i, arr) => {
-    const t = (arr.length - 1 - i) / (arr.length - 1)
-    return { label: v.toFixed(2), y: PADDING.top + t * innerH }
-  })
-
-  // X-axis labels (synthesized clock times)
-  const xLabels = ['5:58 PM', '10:00 PM', '2:23 AM', '6:35 AM', '10:47 AM', '3:00 PM']
-  const xLabelXs = xLabels.map((_, i) => xOf((data.length - 1) * (i / (xLabels.length - 1))))
-
-  // Peak tooltip — peak concurrent sessions across all applications
-  const px = xOf(peakIndex)
-  const py = yOf(data[peakIndex])
-  const peakValue = String(Math.round(1400 + (data[peakIndex] / 100) * 500))
+  const yTicks = [0, 1, 2, 3, 4].map((k) => ({ v: k * step, y: yOf(k * step) }))
+  const labelEvery = n <= 8 ? 1 : Math.ceil(n / 6)
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="kiosk-chart-svg" aria-hidden="true">
+    <svg viewBox={`0 0 ${W} ${H}`} className="kiosk-chart-svg" preserveAspectRatio="xMidYMid meet">
       <defs>
-        <linearGradient id="area-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor="#F36A1E" stopOpacity="0.32" />
+        <linearGradient id="views-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#F36A1E" stopOpacity="0.30" />
           <stop offset="1" stopColor="#F36A1E" stopOpacity="0.02" />
         </linearGradient>
       </defs>
 
-      {/* Y-axis ticks */}
       {yTicks.map((t, i) => (
         <g key={i}>
-          <line x1={PADDING.left} x2={W - PADDING.right} y1={t.y} y2={t.y} stroke="#F1E6D6" strokeDasharray="3 4" />
-          <text x={PADDING.left - 10} y={t.y + 3} fontSize="10" fill="#9c9389" textAnchor="end" fontFamily="Manrope, system-ui">
-            {t.label}
-          </text>
+          <line x1={PAD.left} x2={W - PAD.right} y1={t.y} y2={t.y} stroke="#F1E6D6" strokeDasharray="3 4" />
+          <text x={PAD.left - 10} y={t.y + 3} fontSize="10" fill="#9c9389" textAnchor="end" fontFamily="Manrope, system-ui">{nf(t.v)}</text>
         </g>
       ))}
 
-      {/* Area + line */}
-      <path d={areaPath} fill="url(#area-fill)" />
-      <path d={linePath} fill="none" stroke="#F36A1E" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" />
+      {total > 0 && (
+        <>
+          <path d={areaPath} fill="url(#views-fill)" />
+          <path d={linePath} fill="none" stroke="#F36A1E" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+          {n <= 16 && series.map((s, i) => (
+            <circle key={i} cx={xOf(i)} cy={yOf(s.views || 0)} r="3.2" fill="#fff" stroke="#F36A1E" strokeWidth="2" />
+          ))}
+        </>
+      )}
 
-      {/* Peak tooltip */}
-      <line x1={px} x2={px} y1={py} y2={H - PADDING.bottom} stroke="#F36A1E" strokeDasharray="3 4" strokeWidth="1" opacity="0.7" />
-      <g transform={`translate(${px} ${py - 30})`}>
-        <rect x="-30" y="-14" width="60" height="22" rx="11" fill="#F36A1E" />
-        <text x="0" y="0.5" textAnchor="middle" dominantBaseline="middle" fontSize="11" fontWeight="700" fill="#fff" fontFamily="Manrope, system-ui">
-          {peakValue}
+      {series.map((s, i) => (i % labelEvery === 0 || i === n - 1) ? (
+        <text key={'x' + i} x={xOf(i)} y={H - PAD.bottom + 20} fontSize="10" fill="#9c9389" textAnchor="middle" fontFamily="Manrope, system-ui">{fmtDay(s.date)}</text>
+      ) : null)}
+
+      {total === 0 && (
+        <text x={W / 2} y={PAD.top + innerH / 2} fontSize="13" fill="#9c9389" textAnchor="middle" fontWeight="600" fontFamily="Manrope, system-ui">
+          No views recorded in this period.
         </text>
-      </g>
-      <circle cx={px} cy={py} r="4.5" fill="#fff" stroke="#F36A1E" strokeWidth="2" />
-
-      {/* X-axis labels */}
-      {xLabels.map((lab, i) => (
-        <text key={lab} x={xLabelXs[i]} y={H - PADDING.bottom + 22} fontSize="10" fill="#9c9389" textAnchor="middle" fontFamily="Manrope, system-ui">
-          {lab}
-        </text>
-      ))}
-
-      {/* Y-axis unit marker — sessions across applications */}
-      <text x={PADDING.left - 32} y={PADDING.top + innerH / 2} fontSize="13" fontWeight="700" fill="#F36A1E" fontFamily="Manrope, system-ui">sess.</text>
+      )}
     </svg>
   )
 }
 
+/* ----------------------- Data load + aggregation ----------------------- */
+
+function useAnalytics() {
+  const [state, setState] = useState({ loading: true, error: null, stats: null })
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      setState((s) => ({ ...s, loading: true, error: null }))
+      const [appsR, devsR, camsR, dashR, linksR, usersR] = await Promise.allSettled([
+        api.listApplications(),
+        api.listDevices(),
+        api.listCameras(),
+        api.listDashboards(),
+        api.listAppCameras(),
+        api.listUsers({ page: 1, pageSize: 1 }),
+      ])
+      if (!alive) return
+
+      const val = (r, key) => (r.status === 'fulfilled' ? (r.value?.[key] || []) : [])
+      const cnt = (r, arr) => (r.status === 'fulfilled' ? (r.value?.count ?? arr.length) : null)
+
+      const appsRaw = val(appsR, 'applications')
+      const devices = val(devsR, 'devices')
+      const cameras = val(camsR, 'cameras')
+      const dashboards = val(dashR, 'dashboards')
+      const links = val(linksR, 'links')
+
+      const devBy = {}, connBy = {}, camBy = {}, dashBy = {}, dashDateBy = {}
+      for (const d of devices) { const a = fk(d.application); devBy[a] = (devBy[a] || 0) + 1; if (d.is_connected) connBy[a] = (connBy[a] || 0) + 1 }
+      for (const l of links) { const a = fk(l.application); camBy[a] = (camBy[a] || 0) + 1 }
+      for (const dh of dashboards) {
+        const a = fk(dh.application)
+        dashBy[a] = (dashBy[a] || 0) + 1
+        const ds = dh.created_at ? String(dh.created_at).slice(0, 10) : null
+        if (ds && (!dashDateBy[a] || ds < dashDateBy[a])) dashDateBy[a] = ds   // earliest dashboard date per app
+      }
+
+      const apps = appsRaw.map((a) => ({
+        id: a.id,
+        name: a.name,
+        publish: !!a.publish,
+        is_active: !!a.is_active,
+        created_at: a.created_at,
+        views: a.public_views || 0,
+        devices: devBy[a.id] || 0,
+        connected: connBy[a.id] || 0,
+        cameras: camBy[a.id] || 0,
+        dashboards: dashBy[a.id] || 0,
+      }))
+
+      const totals = {
+        apps: cnt(appsR, appsRaw) ?? apps.length,
+        appsPublished: apps.filter((a) => a.publish).length,
+        appsActive: apps.filter((a) => a.is_active).length,
+        dashboards: cnt(dashR, dashboards),
+        dashboardsPublished: dashboards.filter((d) => d.publish).length,
+        devices: cnt(devsR, devices),
+        devicesConnected: devices.filter((d) => d.is_connected).length,
+        cameras: cnt(camsR, cameras),
+        camerasActive: cameras.filter((c) => c.is_active).length,
+        viewers: cameras.reduce((s, c) => s + (c.viewers || 0), 0),
+        users: usersR.status === 'fulfilled' ? (usersR.value?.count ?? null) : null,
+        views: apps.reduce((s, a) => s + a.views, 0),
+      }
+
+      const anyOk = [appsR, devsR, camsR, dashR].some((r) => r.status === 'fulfilled')
+      setState({
+        loading: false,
+        error: anyOk ? null : 'Could not load analytics. Check your connection or permissions.',
+        stats: { apps, totals, dashDatesByApp: dashDateBy },
+      })
+    })()
+    return () => { alive = false }
+  }, [])
+
+  return state
+}
+
 /* ----------------------- Page ----------------------- */
+
+const RANGES = [{ days: 7, label: '7D' }, { days: 15, label: '15D' }, { days: 30, label: '30D' }]
+const ACTION_STATE = { create: 'ok', update: 'idle', delete: 'err' }
+const ACTION_LABEL = { create: 'Created', update: 'Updated', delete: 'Deleted' }
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const user = auth.getUser()
+  if (!user) { navigate('/signin', { replace: true }); return null }
 
-  const [tf, setTf] = useState('1D')
-  const [scope, setScope] = useState('Applications') // Applications | Cameras
+  const { loading, error, stats } = useAnalytics()
+  const t = stats?.totals
 
-  if (!user) {
-    navigate('/signin', { replace: true })
-    return null
-  }
+  // Views graph state — range (7|15|30|'custom') + application filter.
+  const [range, setRange] = useState(7)
+  const [appFilter, setAppFilter] = useState('all')
+  const [customStart, setCustomStart] = useState('')
+  const [customEnd, setCustomEnd] = useState('')
+  const [ts, setTs] = useState({ loading: true, series: [], total: 0 })
 
-  const headlineMetric = useMemo(() => {
-    const last = ACTIVITY[ACTIVITY.length - 1]
-    const prev = ACTIVITY[0]
-    const pct = ((last - prev) / prev) * 100
-    return { value: '1,859', delta: '+61', pct: pct.toFixed(2) }
+  const todayStr = useMemo(() => todayISO(), [])
+
+  // The earliest selectable date for the current scope:
+  //   • All applications → the first application's creation date.
+  //   • A single application → that application's dashboard creation date
+  //     (falling back to the application's own creation date).
+  const minDate = useMemo(() => {
+    if (!stats) return ''
+    if (appFilter === 'all') {
+      // Lowest dashboard creation date across every application (same basis
+      // as the individual case). Fall back to the earliest application date.
+      const dd = Object.values(stats.dashDatesByApp || {}).filter(Boolean).sort()
+      if (dd.length) return dd[0]
+      const dates = stats.apps.map((a) => toDateStr(a.created_at)).filter(Boolean).sort()
+      return dates[0] || ''
+    }
+    const dash = stats.dashDatesByApp?.[appFilter]
+    if (dash) return dash
+    const app = stats.apps.find((a) => String(a.id) === String(appFilter))
+    return app ? toDateStr(app.created_at) : ''
+  }, [stats, appFilter])
+
+  // Default the custom range to [minDate → today] whenever the scope changes
+  // (or data first loads). User edits afterwards are preserved.
+  useEffect(() => {
+    if (!stats) return
+    setCustomStart(minDate || '')
+    setCustomEnd(todayStr)
+  }, [appFilter, minDate, stats, todayStr])
+
+  const customInvalid = range === 'custom' && (!customStart || !customEnd || customEnd < customStart)
+
+  useEffect(() => {
+    let alive = true
+    if (range === 'custom') {
+      if (customInvalid) { setTs({ loading: false, series: [], total: 0 }); return undefined }
+      setTs((s) => ({ ...s, loading: true }))
+      api.appViewsTimeseries({ start: customStart, end: customEnd, application: appFilter })
+        .then((r) => { if (alive) setTs({ loading: false, series: r?.series || [], total: r?.total || 0 }) })
+        .catch(() => { if (alive) setTs({ loading: false, series: [], total: 0 }) })
+    } else {
+      setTs((s) => ({ ...s, loading: true }))
+      api.appViewsTimeseries({ days: range, application: appFilter })
+        .then((r) => { if (alive) setTs({ loading: false, series: r?.series || [], total: r?.total || 0 }) })
+        .catch(() => { if (alive) setTs({ loading: false, series: [], total: 0 }) })
+    }
+    return () => { alive = false }
+  }, [range, appFilter, customStart, customEnd, customInvalid])
+
+  // Internal activity log — last 6, categorised (drives Recent activity).
+  // Initial load over REST (fast + reliable); live updates over WebSocket.
+  const [logs, setLogs] = useState({ loading: true, items: [] })
+  useEffect(() => {
+    let alive = true
+    api.listActivityLogs({ limit: 6 })
+      .then((r) => { if (alive) setLogs((s) => (s.items.length ? s : { loading: false, items: r?.logs || [] })) })
+      .catch(() => { if (alive) setLogs((s) => (s.items.length ? s : { loading: false, items: [] })) })
+    return () => { alive = false }
   }, [])
 
-  const peakIndex = ACTIVITY.indexOf(Math.max(...ACTIVITY))
+  // Live activity feed over WebSocket — snapshot on connect + push per new entry.
+  const [live, setLive] = useState(false)
+  useEffect(() => {
+    const loc = typeof window !== 'undefined' ? window.location : null
+    const host = loc?.hostname || 'localhost'
+    const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
+    const token = auth.getAccess()
+    if (!token) return undefined
+    const url = `${proto}//${host}:8001/ws/activity-logs/?token=${encodeURIComponent(token)}`
+    let cancelled = false, ws = null, attempt = 0, timer = null
+    const schedule = () => { attempt += 1; timer = setTimeout(connect, Math.min(15000, 800 * Math.pow(2, attempt))) }
+    function connect() {
+      if (cancelled) return
+      try { ws = new WebSocket(url) } catch { schedule(); return }
+      ws.onopen = () => { attempt = 0; setLive(true) }
+      ws.onmessage = (e) => {
+        let msg; try { msg = JSON.parse(e.data) } catch { return }
+        if (msg?.type === 'snapshot' && Array.isArray(msg.logs)) {
+          setLogs({ loading: false, items: msg.logs.slice(0, 6) })
+        } else if (msg?.type === 'log' && msg.log) {
+          setLogs((s) => ({ loading: false, items: [msg.log, ...s.items.filter((x) => x.id !== msg.log.id)].slice(0, 6) }))
+        }
+      }
+      ws.onerror = () => { try { ws.close() } catch { /* noop */ } }
+      ws.onclose = () => { setLive(false); if (!cancelled) schedule() }
+    }
+    connect()
+    return () => { cancelled = true; setLive(false); if (timer) clearTimeout(timer); try { ws && ws.close() } catch { /* noop */ } }
+  }, [])
+
+  // Top 3 applications by views.
+  const topApps = useMemo(() => {
+    if (!stats) return []
+    return [...stats.apps].sort((a, b) => (b.views - a.views) || (b.devices - a.devices)).slice(0, 3)
+  }, [stats])
+  const topMax = Math.max(1, ...topApps.map((a) => a.views))
+
+  const fleetPct = t ? pct(t.devicesConnected, t.devices || 0) : 0
+  const appName = appFilter === 'all' ? 'all applications' : (stats?.apps.find((a) => String(a.id) === String(appFilter))?.name || 'application')
+
+  const KPIS = t ? [
+    { icon: 'app',    num: t.apps,       label: 'Applications', sub: `${t.appsPublished} published · ${t.appsActive} active` },
+    { icon: 'layers', num: t.dashboards, label: 'Dashboards',   sub: `${t.dashboardsPublished} published` },
+    { icon: 'device', num: t.devices,    label: 'Devices',      sub: `${t.devicesConnected} connected` },
+    { icon: 'camera', num: t.cameras,    label: 'Cameras',      sub: `${t.camerasActive} active · ${nf(t.viewers)} viewers` },
+    { icon: 'users',  num: t.users,      label: 'Users',        sub: 'team members' },
+    { icon: 'eye',    num: t.views,      label: 'Total views',  sub: 'public dashboard opens' },
+  ] : []
 
   return (
     <div className="kiosk-app">
-      {/* ========== TOP BAR ========== */}
       <TopBar />
 
-      {/* ========== BODY GRID ========== */}
-      <div className="kiosk-body">
+      <div className="kiosk-body dash-ro">
+        {/* ===== Page heading (full width) ===== */}
+        <div className="dash-ro-head">
+          <div>
+            <h1>Platform Overview</h1>
+            <p className="lede">Live analytics across every application, dashboard, device and camera.</p>
+          </div>
+        </div>
 
-        {/* ============== LEFT COLUMN ============== */}
-        <main className="kiosk-main">
+        {error && <div className="admin-banner error">{error}</div>}
 
-          {/* Trending row */}
-          <div className="trending-row">
-            <div className="trending-head">
-              <span className="trending-title">Trending now</span>
-              <MiniIcon name="rocket" size={18} />
-            </div>
-            {TRENDING.map((d) => (
-              <div className="trend-card" key={d.id}>
-                <div className="trend-ic"><MiniIcon name={d.icon} size={20} /></div>
-                <div className="trend-info">
-                  <div className="trend-name">{d.name}</div>
-                  <div className="trend-meta">
-                    <span className="trend-state">{d.state}</span>
-                    <span className="trend-delta">{d.delta}</span>
-                    <span className="trend-info-ic"><MiniIcon name="info" size={12} /></span>
-                  </div>
-                </div>
-                <button type="button" className="trend-cart" aria-label="Open device" title="Open device">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 12h14m-5-5 5 5-5 5" stroke="#14161C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
+        {/* ===== KPIs + hero (left) · system overview (right) — bottoms aligned ===== */}
+        <div className="dash-top-grid">
+          <div className="dash-top-left">
+
+          {/* ===== KPI grid ===== */}
+          <section className="dash-kpis">
+            {(loading ? Array.from({ length: 6 }) : KPIS).map((k, i) => (
+              <div className={'dash-kpi' + (loading ? ' is-skeleton' : '')} key={i}>
+                {!loading && (
+                  <>
+                    <span className="kpi-ic"><Ic name={k.icon} size={18} /></span>
+                    <div className="kpi-num">{nf(k.num)}</div>
+                    <div className="kpi-label">{k.label}</div>
+                    <div className="kpi-sub">{k.sub}</div>
+                  </>
+                )}
               </div>
             ))}
-            <a href="#" className="trending-more">
-              View more <MiniIcon name="arrow" size={14} />
-            </a>
-          </div>
+          </section>
 
-          {/* ===== Hero metric + Chart ===== */}
+          {/* ===== Hero — views over time ===== */}
           <div className="hero-card">
-            <div className="hero-head">
+            <div className="hero-head dash-views-head">
               <div className="hero-id">
-                <span className="hero-token">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" fill="#FFE9D5" stroke="#F36A1E" strokeWidth="1.6" />
-                    <path d="M8 13l3 3 5-7" stroke="#F36A1E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <span className="hero-pair">APPLICATIONS <span className="muted">/ sessions</span></span>
+                <span className="hero-token"><Ic name="eye" size={20} /></span>
+                <span className="hero-pair">VIEWS <span className="muted">/ over time</span></span>
               </div>
               <div className="hero-stats">
-                <span className="hero-value">{headlineMetric.value} <span className="muted">sessions</span></span>
-                <span className="hero-delta">{headlineMetric.delta} ({headlineMetric.pct}%)</span>
+                <span className="hero-value">{nf(ts.total)} <span className="muted">views{range !== 'custom' ? ` · ${range}d` : ''}</span></span>
               </div>
-              <div className="tf-pill" role="tablist" aria-label="Timeframe">
-                {TIMEFRAMES.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    role="tab"
-                    aria-selected={tf === t}
-                    className={'tf-opt' + (tf === t ? ' is-active' : '')}
-                    onClick={() => setTf(t)}
-                  >
-                    {t}
-                  </button>
-                ))}
+              <div className="dash-views-controls">
+                <select
+                  className="dash-app-select"
+                  value={appFilter}
+                  onChange={(e) => setAppFilter(e.target.value)}
+                  aria-label="Filter views by application"
+                >
+                  <option value="all">All applications</option>
+                  {stats?.apps.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                </select>
+                <div className="tf-pill" role="tablist" aria-label="Range">
+                  {RANGES.map((r) => (
+                    <button key={r.days} type="button" role="tab" aria-selected={range === r.days}
+                      className={'tf-opt' + (range === r.days ? ' is-active' : '')}
+                      onClick={() => setRange(r.days)}>{r.label}</button>
+                  ))}
+                  <button type="button" role="tab" aria-selected={range === 'custom'}
+                    className={'tf-opt' + (range === 'custom' ? ' is-active' : '')}
+                    onClick={() => setRange('custom')}>Custom</button>
+                </div>
               </div>
             </div>
 
-            <div className="chart-wrap">
-              <ActivityChart data={ACTIVITY} peakIndex={peakIndex} />
+            {range === 'custom' && (
+              <div className="dash-views-daterow">
+                <label>From
+                  <input type="date" value={customStart} min={minDate || undefined} max={customEnd || todayStr}
+                    onChange={(e) => setCustomStart(e.target.value)} />
+                </label>
+                <label>To
+                  <input type="date" value={customEnd} min={customStart || minDate || undefined} max={todayStr}
+                    onChange={(e) => setCustomEnd(e.target.value)} />
+                </label>
+                {customInvalid && <span className="dash-date-err">End date must be on or after the start date.</span>}
+                {minDate && <span className="dash-date-hint">Data available from {fmtDay(minDate)}</span>}
+              </div>
+            )}
+
+            <div className="chart-wrap dash-views-chart">
+              {ts.loading
+                ? <div className="dash-ph">Loading views…</div>
+                : customInvalid
+                  ? <div className="dash-ph">Pick a valid start and end date.</div>
+                  : <ViewsChart series={ts.series} />}
             </div>
+            <p className="dash-views-cap">
+              Daily public dashboard opens for {appName}, {range === 'custom'
+                ? `${customStart ? fmtDay(customStart) : '—'} → ${customEnd ? fmtDay(customEnd) : '—'}`
+                : `last ${range} days`}.
+            </p>
+          </div>
           </div>
 
-          {/* ===== Activity Log ===== */}
-          <div className="log-card">
-            <div className="log-head">
-              <div className="log-title">Activity History</div>
-              <div className="log-cols">
-                <span>Entity <MiniIcon name="chevron" size={12} /></span>
-                <span>Trigger <MiniIcon name="chevron" size={12} /></span>
-                <span>Type <MiniIcon name="chevron" size={12} /></span>
-                <span>Action <MiniIcon name="chevron" size={12} /></span>
-                <span>Value <MiniIcon name="chevron" size={12} /></span>
-                <span>Time <MiniIcon name="chevron" size={12} /></span>
+          {/* ===== Right column — system overview (bottom aligns with hero) ===== */}
+          <aside className="kiosk-side dash-side">
+            {/* Fleet health ring */}
+            <div className="ov-block">
+              <div className="ov-h">Fleet health</div>
+              <div className="fleet">
+                <div className="fleet-ring" style={{ background: `conic-gradient(var(--accent, #F36A1E) ${fleetPct * 3.6}deg, #F1E6D6 0)` }}>
+                  <div className="fleet-hole"><span className="fleet-pct">{fleetPct}%</span><span className="fleet-cap">online</span></div>
+                </div>
+                <div className="fleet-legend">
+                  <div className="fl-row"><span className="fl-dot fl-ok" /> Connected <b>{nf(t?.devicesConnected)}</b></div>
+                  <div className="fl-row"><span className="fl-dot fl-off" /> Offline <b>{nf(t ? (t.devices || 0) - t.devicesConnected : null)}</b></div>
+                  <div className="fl-row fl-total"><span className="fl-dot fl-tot" /> Total devices <b>{nf(t?.devices)}</b></div>
+                </div>
               </div>
             </div>
-            <div className="log-rows">
-              {ACTIVITY_LOG.map((r, i) => (
-                <div className="log-row" key={i}>
-                  <div className="log-device">
-                    <span className="log-dot" aria-hidden="true" />
-                    <span>{r.entity}</span>
-                  </div>
-                  <div className="log-actor">{r.actor}</div>
-                  <div className="log-type"><span className={'type-chip type-' + r.type.toLowerCase()}>{r.type}</span></div>
-                  <div className="log-action">{r.action}</div>
-                  <div className={'log-power state-' + r.state}>{r.value}</div>
-                  <div className="log-time">{r.time}</div>
+
+            {/* Distribution bars */}
+            <div className="ov-block">
+              <div className="ov-h">Distribution</div>
+              {t && [
+                { label: 'Applications', filled: t.appsPublished, total: t.apps, cap: 'published' },
+                { label: 'Dashboards', filled: t.dashboardsPublished, total: t.dashboards || 0, cap: 'published' },
+                { label: 'Cameras', filled: t.camerasActive, total: t.cameras || 0, cap: 'active' },
+              ].map((b) => (
+                <div className="ovb" key={b.label}>
+                  <div className="ovb-top"><span>{b.label}</span><span className="ovb-val">{nf(b.filled)}<span className="muted">/{nf(b.total)} {b.cap}</span></span></div>
+                  <div className="ovb-track"><div className="ovb-fill" style={{ width: pct(b.filled, b.total) + '%' }} /></div>
                 </div>
               ))}
+              {loading && <div className="dash-ph">Loading…</div>}
+            </div>
+
+            {/* Top applications — always 3 ranked rows (placeholders for empty slots) */}
+            <div className="ov-block">
+              <div className="ov-h">Top applications <span className="ov-h-sub">by views</span></div>
+              {loading ? (
+                <div className="dash-ph">Loading…</div>
+              ) : (
+                <div className="lead">
+                  {[0, 1, 2].map((i) => {
+                    const a = topApps[i]
+                    return (
+                      <div className={'lead-row' + (a ? '' : ' is-empty')} key={i}>
+                        <span className="lead-rank">{i + 1}</span>
+                        <div className="lead-main">
+                          <div className="lead-name" title={a ? a.name : ''}>{a ? a.name : '—'}</div>
+                          <div className="lead-track"><div className="lead-fill" style={{ width: a ? Math.max(3, (a.views / topMax) * 100) + '%' : '0%' }} /></div>
+                        </div>
+                        <div className="lead-val">{a ? nf(a.views) : '—'}<span className="muted"> views</span></div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+
+        {/* ===== Recent activity (full width) ===== */}
+        <div className="log-card dash-log">
+          <div className="dash-log-head">
+            <div className="log-title">
+              Recent activity
+              {live && <span className="dash-live"><span className="dash-live-dot" /> Live</span>}
             </div>
           </div>
-        </main>
-
-        {/* ============== RIGHT COLUMN (Control panel) ============== */}
-        <aside className="kiosk-side">
-          <div className="side-head">
-            <div className="side-title">Quick Control</div>
-            <div className="side-toggle" role="tablist" aria-label="Quick control scope">
-              {['Applications', 'Cameras'].map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  role="tab"
-                  aria-selected={scope === s}
-                  className={'side-toggle-opt' + (scope === s ? ' is-active' : '')}
-                  onClick={() => setScope(s)}
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
+          <div className="dash-log-cols">
+            <span>Entity</span><span>Category</span><span>Action</span><span className="ta-right">When</span>
           </div>
-          <p className="side-lede">Deploy, restart or stream any kiosk asset instantly.</p>
-
-          <div className="side-search">
-            <MiniIcon name="search" size={16} />
-            <input type="text" placeholder={'Search ' + scope.toLowerCase()} aria-label={'Search ' + scope.toLowerCase()} />
+          <div className="dash-log-rows">
+            {logs.loading ? (
+              <div className="dash-ph">Loading…</div>
+            ) : !logs.items.length ? (
+              <div className="dash-ph">No activity recorded yet. Create or edit something and it shows here.</div>
+            ) : (
+              logs.items.map((r) => {
+                const st = ACTION_STATE[r.action] || 'idle'
+                return (
+                  <div className="dash-log-row" key={r.id} title={r.message}>
+                    <div className="dl-entity">
+                      <span className={'dl-dot dl-' + st} />
+                      <div className="dl-entity-text">
+                        <span className="dl-name">{r.entity_name || '—'}</span>
+                        {r.message && <span className="dl-detail">{r.message}</span>}
+                      </div>
+                    </div>
+                    <div><span className={'dl-type dl-type-' + r.category}>{r.category}</span></div>
+                    <div><span className={'dl-state dl-state-' + st}>{ACTION_LABEL[r.action] || r.action}</span></div>
+                    <div className="dl-time ta-right">{timeAgo(r.created_at)}</div>
+                  </div>
+                )
+              })
+            )}
           </div>
-
-          <div className="side-rate">
-            <span className="rate-pill">1 APP ≈ 240 sessions / day</span>
-            <button type="button" className="rate-refresh" aria-label="Refresh">
-              <MiniIcon name="refresh" size={14} />
-            </button>
-          </div>
-
-          {/* Featured Application */}
-          <div className="side-row">
-            <div className="side-row-left">
-              <span className="side-row-ic"><MiniIcon name="app" size={18} /></span>
-              <div>
-                <div className="side-row-name">ATM Lobby</div>
-                <div className="side-row-sub">v2.4.1 · Active</div>
-              </div>
-            </div>
-            <div className="side-row-right">
-              <div className="side-row-val">243<span className="muted"> sess</span></div>
-              <div className="side-row-sub">uptime 12d 04h</div>
-            </div>
-          </div>
-
-          <button type="button" className="side-swap-btn" aria-label="Switch focus">
-            <MiniIcon name="swap" size={16} />
-          </button>
-
-          {/* Featured Camera */}
-          <div className="side-row">
-            <div className="side-row-left">
-              <span className="side-row-ic"><MiniIcon name="camera" size={18} /></span>
-              <div>
-                <div className="side-row-name">Front Cam #14</div>
-                <div className="side-row-sub">4K · 30fps · Recording</div>
-              </div>
-            </div>
-            <div className="side-row-right">
-              <div className="side-row-val">12<span className="muted"> viewers</span></div>
-              <div className="side-row-sub">stream 1.8 Mbps</div>
-            </div>
-          </div>
-
-          {/* Filter chips */}
-          <div className="side-chips">
-            <button type="button" className="chip is-muted">All regions <MiniIcon name="chevron" size={12} /></button>
-            <button type="button" className="chip is-muted">Status <MiniIcon name="chevron" size={12} /></button>
-          </div>
-
-          <div className="side-mini-meta">
-            <span>Health score <MiniIcon name="info" size={12} /></span>
-            <button type="button" className="mini-bar">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <rect x="4" y="8" width="3" height="12" rx="1" fill="#F36A1E" />
-                <rect x="10" y="4" width="3" height="16" rx="1" fill="#F36A1E" />
-                <rect x="16" y="11" width="3" height="9" rx="1" fill="#F36A1E" />
-              </svg>
-              Top events
-            </button>
-          </div>
-
-          <div className="side-mode-pill">
-            <span className="mode-ic" aria-hidden="true">✓</span>
-            Auto-deploy enabled
-          </div>
-
-          <div className="side-info-card">
-            <div className="info-title">More information</div>
-            <div className="info-row"><span>Average session</span><MiniIcon name="info" size={12} /></div>
-            <div className="info-row"><span>Failed deploys</span><MiniIcon name="info" size={12} /></div>
-            <div className="info-row"><span>Camera drop-offs</span><MiniIcon name="info" size={12} /></div>
-          </div>
-
-          <button type="button" className="side-cta">Register Application</button>
-        </aside>
+        </div>
       </div>
 
       <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>

@@ -414,6 +414,9 @@ const DASHBOARD_THEMES = [
     defaultIconColor: 'gold',
   },
 ]
+// Default theme when a dashboard has no theme set — always the first theme
+// (index 0) in the palette.
+const DEFAULT_THEME_ID = DASHBOARD_THEMES[0].id
 function getTheme(id) {
   const custom = parseCustomTheme(id)
   if (custom) return buildCustomTheme(custom.hex, custom.mode)
@@ -617,10 +620,16 @@ function buildCustomTheme(hex, mode) {
   const bottomBg = mode === 'solid'
     ? veryLight
     : `radial-gradient(ellipse 110% 80% at 0% 0%, ${tint}, transparent 65%), linear-gradient(190deg, ${veryLight} 0%, ${light} 60%, ${lightMid} 100%)`
+  // In gradient mode the page backdrop also gets a top→bottom gradient of the
+  // chosen color (more saturated at the top, fading near-white) so the gradient
+  // reads across the whole page, not just the panels. Solid mode stays a flat tint.
+  const pageBg = mode === 'solid'
+    ? rgbCss(mixWhite(rgb, 0.55))
+    : `linear-gradient(180deg, ${rgbCss(mixWhite(rgb, 0.60))} 0%, ${veryLight} 100%)`
   return {
     id: customThemeId(hex, mode),
     label: 'Custom',
-    pageBg:      rgbCss(mixWhite(rgb, 0.55)),
+    pageBg,
     panelBg,
     bottomBg,
     border:      rgbaCss(mixWhite(rgb, 0.55), 0.85),
@@ -679,23 +688,13 @@ const GRADIENT_DIRS = [
   { deg: 45,  label: '↗', title: 'Diagonal ↗' },
 ]
 
-// Recently-used colors, shared across every color picker in the dashboard
-// editor ("recent across the theme"). Persisted in localStorage as base hexes.
-const RECENT_COLORS_KEY = 'kiosk-recent-colors'
-function loadRecentColors() {
-  try {
-    const a = JSON.parse(localStorage.getItem(RECENT_COLORS_KEY) || '[]')
-    return Array.isArray(a) ? a.filter((x) => typeof x === 'string' && x.charAt(0) === '#').slice(0, 12) : []
-  } catch { return [] }
-}
-function pushRecentColor(hex) {
-  if (typeof hex !== 'string' || hex.charAt(0) !== '#') return loadRecentColors()
-  try {
-    const cur = loadRecentColors().filter((c) => c.toLowerCase() !== hex.toLowerCase())
-    const next = [hex, ...cur].slice(0, 12)
-    localStorage.setItem(RECENT_COLORS_KEY, JSON.stringify(next))
-    return next
-  } catch { return loadRecentColors() }
+// Resolve any stored color value (gradient string, hex, or built-in id) to a
+// CSS background for a preview swatch. `palette` is the relevant list to look
+// ids up in (CARD_COLORS for backgrounds, ICON_COLORS for icon/bar colors).
+function swatchBgForValue(v, palette = CARD_COLORS) {
+  if (typeof v === 'string' && (v.charAt(0) === '#' || v.slice(0, 15) === 'linear-gradient')) return v
+  const c = palette.find((x) => x.id === v)
+  return c ? (c.bg || c.hex) : v
 }
 function cardStyleFor(colorId) {
   // A full CSS gradient can be stored verbatim (e.g. a top→bottom
@@ -735,7 +734,7 @@ function cardStyleFor(colorId) {
    reveals the full palette, plus a rainbow custom-color chip that opens the
    native color picker. Shared by every card config form's Appearance section.
    The value is either a built-in color id or a raw hex string (custom). */
-function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, fallbackCustom = '#F4A261', gradientToggle = false, showRecents = false }) {
+function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, fallbackCustom = '#F4A261', gradientToggle = false, usedColors = null }) {
   const [expanded, setExpanded] = useState(false)
   const isGradientVal = typeof value === 'string' && value.slice(0, 15) === 'linear-gradient'
   const isHexVal = typeof value === 'string' && value.charAt(0) === '#'
@@ -746,14 +745,10 @@ function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, f
   // already a flat hex. Only meaningful when gradientToggle is on (card bg).
   const [gradientOn, setGradientOn] = useState(gradientToggle ? (isGradientVal || !isCustom) : false)
   const [dir, setDir] = useState(() => gradientDirOf(value, 180))
-  const [recentList, setRecentList] = useState(() => (showRecents ? loadRecentColors() : []))
 
   // Apply a base hex, wrapping it in a gradient (with the chosen direction)
-  // when the toggle is on. Always remembers the color as recent.
-  const applyCustom = (hex) => {
-    onChange(gradientToggle && gradientOn ? gradientFromHex(hex, dir) : hex)
-    if (showRecents) setRecentList(pushRecentColor(hex))
-  }
+  // when the toggle is on.
+  const applyCustom = (hex) => onChange(gradientToggle && gradientOn ? gradientFromHex(hex, dir) : hex)
   const toggleGradient = () => {
     const next = !gradientOn
     setGradientOn(next)
@@ -766,6 +761,26 @@ function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, f
 
   return (
     <div className="color-field">
+      {/* Colors already used by other widgets in this dashboard — a quick way
+          to reuse an existing background so the dashboard stays consistent. */}
+      {usedColors && usedColors.length > 0 && (
+        <div className="color-used" aria-label="Colors used in this dashboard">
+          <span className="color-recents-label">Used</span>
+          {usedColors.map((cc) => (
+            <button
+              key={cc}
+              type="button"
+              className={'color-swatch' + (solid ? ' color-swatch-solid' : '') + ' color-swatch-recent' + (value === cc ? ' is-active' : '')}
+              style={{ background: swatchBgForValue(cc, colors) }}
+              title={cc}
+              aria-label="Reuse color"
+              aria-pressed={value === cc}
+              onClick={() => onChange(cc)}
+              disabled={disabled}
+            />
+          ))}
+        </div>
+      )}
       <div className={'card-color-picker' + (expanded ? ' is-expanded' : '')}>
         <div className="color-swatches card-color-swatches">
           {colors.map((c) => (
@@ -853,35 +868,18 @@ function ColorSwatchPicker({ value, onChange, disabled, colors, solid = false, f
         </div>
       )}
 
-      {showRecents && (
-        <div className="color-recents" aria-label="Recently used colors">
-          <span className="color-recents-label">Recent</span>
-          {recentList.length === 0 && <span className="color-recents-empty">Pick a custom color to start a history</span>}
-          {recentList.map((hex) => (
-            <button
-              key={hex}
-              type="button"
-              className={'color-swatch color-swatch-recent' + (isCustom && baseHex.toLowerCase() === hex.toLowerCase() ? ' is-active' : '')}
-              style={{ background: hex }}
-              title={hex}
-              aria-label={hex}
-              onClick={() => applyCustom(hex)}
-              disabled={disabled}
-            />
-          ))}
-        </div>
-      )}
     </div>
   )
 }
 // Card colors use gradient backgrounds (c.bg); icon/bar/gauge colors are solid
 // hex chips (c.hex). Both get the same collapse + custom-palette behavior. Card
-// backgrounds additionally get the gradient on/off + direction controls.
+// backgrounds additionally get the gradient on/off + direction controls plus a
+// "Used" row of colors already applied to other widgets in the dashboard.
 function CardColorPicker(props) {
-  return <ColorSwatchPicker {...props} colors={CARD_COLORS} fallbackCustom="#FED4B9" gradientToggle showRecents />
+  return <ColorSwatchPicker {...props} colors={CARD_COLORS} fallbackCustom="#FED4B9" gradientToggle />
 }
 function IconColorPicker(props) {
-  return <ColorSwatchPicker {...props} colors={ICON_COLORS} solid fallbackCustom="#F36A1E" showRecents />
+  return <ColorSwatchPicker {...props} colors={ICON_COLORS} solid fallbackCustom="#F36A1E" />
 }
 
 /* =====================================================================
@@ -905,6 +903,95 @@ function IconColorPicker(props) {
    Cards scale fluidly with the viewport via `1fr` grid tracks; the
    layout never reflows so alignment stays exactly as designed.
    ===================================================================== */
+
+/* ----- Access queue UI (public dashboards) ----- */
+function fmtDuration(s) {
+  s = Math.max(0, Math.round(s || 0))
+  const m = Math.floor(s / 60), sec = s % 60
+  return m > 0 ? `${m}m ${String(sec).padStart(2, '0')}s` : `${sec}s`
+}
+function QueueBadge({ queue, onJoin }) {
+  const you = queue?.you || {}
+  const active = queue?.active
+  const waiting = queue?.waiting_count || 0
+  if (you.is_controller) {
+    return (
+      <div className="db-queue-badge is-control" title="You have control">
+        <span className="db-queue-dot" aria-hidden="true" />
+        Your turn · <strong>{fmtDuration(queue?.control_remaining)}</strong> left
+      </div>
+    )
+  }
+  if (you.in_queue) {
+    return (
+      <div className="db-queue-badge is-wait">
+        <span className="db-queue-pos">#{you.position}</span>
+        ~<strong>{fmtDuration(you.wait_seconds)}</strong>
+        <span className="db-queue-sep">·</span>
+        {active ? `Now: ${active.name}` : 'Waiting…'}
+      </div>
+    )
+  }
+  return (
+    <div className="db-queue-badge">
+      <span className="db-queue-count">{waiting}</span> waiting
+      <button type="button" className="db-queue-join" onClick={onJoin}>Join queue</button>
+    </div>
+  )
+}
+function QueueLobby({ queue, ready = true, onJoin }) {
+  const active = queue?.active
+  const waiting = queue?.waiting_count || 0
+  const controlSeconds = queue?.control_seconds || 60
+  const estimate = (queue?.control_remaining || 0) + waiting * controlSeconds
+  // Local "joining" spinner shown from the click until the server confirms
+  // (which unmounts this lobby). A timeout re-enables the button if no
+  // confirmation arrives, so it can never get stuck.
+  const [joining, setJoining] = useState(false)
+  useEffect(() => {
+    if (!joining) return undefined
+    const t = setTimeout(() => setJoining(false), 8000)
+    return () => clearTimeout(t)
+  }, [joining])
+  const handleJoin = () => { if (ready && !joining) { setJoining(true); onJoin?.() } }
+  return (
+    <div className="db-queue-lobby" role="dialog" aria-label="Access queue">
+      <div className="db-queue-lobby-card">
+        <span className="db-queue-lobby-ic" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+            <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M3.5 19a5.5 5.5 0 0 1 11 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            <path d="M16 6.5a3 3 0 0 1 0 5M17.5 19a5.5 5.5 0 0 0-3-4.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+          </svg>
+        </span>
+        <h2>Access queue</h2>
+        <p className="db-queue-lobby-sub">
+          One visitor controls this dashboard at a time. Join the queue to take your turn —
+          you can watch it live while you wait.
+        </p>
+        <div className="db-queue-lobby-stats">
+          <div><div className="n">{waiting}</div><div className="l">In queue</div></div>
+          <div><div className="n">{fmtDuration(queue?.control_remaining)}</div><div className="l">Turn left</div></div>
+          <div><div className="n">~{fmtDuration(estimate)}</div><div className="l">Your wait</div></div>
+        </div>
+        <div className="db-queue-lobby-now">
+          {active ? <>Now controlling: <strong>{active.name}</strong></> : 'No one is controlling right now.'}
+        </div>
+        <button
+          type="button"
+          className="btn-primary db-queue-lobby-join"
+          onClick={handleJoin}
+          disabled={!ready || joining}
+          aria-busy={!ready || joining}
+        >
+          {!ready ? 'Connecting…' : joining ? (
+            <><span className="db-queue-spinner" aria-hidden="true" /> Joining…</>
+          ) : 'Join queue'}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function DashboardDetail({ publicMode = false } = {}) {
   const { appId, dashboardId } = useParams()
@@ -958,7 +1045,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // default peach while the dashboard fetch is in flight.
   const themeKey = `kiosk-db-theme-${dashboardId}`
   const [themeId, setThemeId] = useState(() => {
-    try { return localStorage.getItem(themeKey) || 'peach' } catch { return 'peach' }
+    try { return localStorage.getItem(themeKey) || DEFAULT_THEME_ID } catch { return DEFAULT_THEME_ID }
   })
   // Tracks the last theme we know the server already has, so the
   // auto-PATCH effect doesn't fire for changes that came FROM the
@@ -1029,6 +1116,46 @@ export default function DashboardDetail({ publicMode = false } = {}) {
 
   const activeTheme = getTheme(themeId)
   const themeVars   = themeCssVars(activeTheme)
+
+  // Tint the page (window) scrollbar to the active theme while a dashboard is
+  // shown — thin + subtle. A route-scoped class on <html> lets us style the
+  // browser scrollbar (which CSS can't otherwise target per-page); the accent
+  // is passed through a CSS var and both are cleaned up on unmount.
+  useEffect(() => {
+    const root = document.documentElement
+    root.classList.add('db-scrollbars')
+    root.style.setProperty('--db-scroll-accent', activeTheme.accent || '#F36A1E')
+    return () => {
+      root.classList.remove('db-scrollbars')
+      root.style.removeProperty('--db-scroll-accent')
+    }
+  }, [activeTheme.accent])
+
+
+  // Distinct card-background colors already used by widgets in this dashboard,
+  // surfaced in the widget editor's color picker so new/edited widgets can
+  // reuse an existing background and keep the dashboard consistent.
+  const usedCardColors = useMemo(() => {
+    const seen = new Set()
+    const out = []
+    for (const c of components) {
+      const cc = c?.config?.static?.card_color
+      if (typeof cc === 'string' && cc && !seen.has(cc)) { seen.add(cc); out.push(cc) }
+    }
+    return out
+  }, [components])
+  // Same idea for icon/bar colors — distinct icon colors already in use.
+  const usedIconColors = useMemo(() => {
+    const seen = new Set()
+    const out = []
+    for (const c of components) {
+      const st = c?.config?.static || {}
+      for (const ic of [st.icon_color, st.bar_color]) {
+        if (typeof ic === 'string' && ic && ic !== 'none' && !seen.has(ic)) { seen.add(ic); out.push(ic) }
+      }
+    }
+    return out
+  }, [components])
 
   // Container 2 grid geometry — column count is fixed (see C2_COLS).
   // The visible cell grid renders C2_COLS columns with `1fr` widths so
@@ -1501,16 +1628,99 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // (toggle / button / slider / text input) can write back to the
   // device payload through the same socket the dashboard reads from.
   const dashboardWsRef = useRef(null)
+
+  // Stable per-session identity for the access queue (kept across reconnects).
+  const queueMemberRef = useRef(null)
+  if (!queueMemberRef.current) {
+    let mid = null, nm = null
+    try {
+      mid = sessionStorage.getItem('kiosk-queue-member')
+      nm = sessionStorage.getItem('kiosk-queue-name')
+    } catch {}
+    if (!mid) { mid = 'm-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36) }
+    if (!nm) { nm = 'Guest ' + Math.floor(1000 + Math.random() * 9000) }
+    try { sessionStorage.setItem('kiosk-queue-member', mid); sessionStorage.setItem('kiosk-queue-name', nm) } catch {}
+    queueMemberRef.current = { id: mid, name: nm }
+  }
+  // Live queue state (null until the queue socket reports). Refs mirror the
+  // derived gate so the stable sendDashboardCommand callback isn't stale.
+  const [queue, setQueue] = useState(null)
+  const queueWsRef = useRef(null)
+  const controlRef = useRef(true)
+  const queueOnRef = useRef(false)
+
   const sendDashboardCommand = useCallback((deviceId, action, path, payload) => {
     const ws = dashboardWsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       setToast({ type: 'error', text: 'Not connected — try again in a moment.' })
       return false
     }
+    // Access-queue read-only gate: only the current controller may write.
+    if (queueOnRef.current && !controlRef.current) {
+      setToast({ type: 'error', text: 'Read-only — wait for your turn to control.' })
+      return false
+    }
     const msg = { device_id: Number(deviceId), action, path: String(path || '') }
     if (action !== 'delete') msg.payload = payload
+    if (queueMemberRef.current) msg.member_id = queueMemberRef.current.id
     try { ws.send(JSON.stringify(msg)); return true } catch { return false }
   }, [])
+
+  // Derived gate: queue active (public + enabled) and whether we hold control.
+  const queueOn = publicMode && !!queue?.enabled
+  const hasControl = !queueOn || !!queue?.you?.is_controller
+  useEffect(() => { controlRef.current = hasControl; queueOnRef.current = queueOn }, [hasControl, queueOn])
+  // The dashboard is gated behind the queue: when the dashboard's queue is on
+  // (known from the REST load, so no flash) and the viewer hasn't joined yet,
+  // we show ONLY the lobby — the dashboard isn't rendered until they join.
+  const queueEnabled = publicMode && !!dashboard?.queue_enabled
+  const joinedQueue = !!queue?.you?.in_queue
+
+  // Join / leave the access queue.
+  const joinQueue = useCallback(() => {
+    const ws = queueWsRef.current
+    const me = queueMemberRef.current
+    if (ws && ws.readyState === WebSocket.OPEN && me) {
+      ws.send(JSON.stringify({ action: 'join', member_id: me.id, name: me.name }))
+    }
+  }, [])
+
+  // Queue WebSocket — public viewers, and ONLY for queue-enabled dashboards
+  // (known from the REST load). Skipping it for non-queue dashboards avoids a
+  // pointless socket and keeps control ungated there.
+  useEffect(() => {
+    if (!publicMode || !dashboardId) return undefined
+    if (!dashboard?.queue_enabled) return undefined
+    const loc = typeof window !== 'undefined' ? window.location : null
+    const host = loc?.hostname || 'localhost'
+    const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
+    const url = `${proto}//${host}:8001/ws/dashboard-queue/${dashboardId}/`
+    let cancelled = false, reconnectTimer = null, ws = null, attempt = 0
+    function schedule() { attempt += 1; reconnectTimer = setTimeout(connect, Math.min(15000, 800 * Math.pow(2, attempt))) }
+    function connect() {
+      if (cancelled) return
+      try { ws = new WebSocket(url) } catch { schedule(); return }
+      queueWsRef.current = ws
+      ws.onopen = () => { attempt = 0 }
+      ws.onmessage = (e) => {
+        let msg; try { msg = JSON.parse(e.data) } catch { return }
+        if (msg?.type === 'queue_state') setQueue(msg)
+      }
+      ws.onclose = () => {
+        if (queueWsRef.current === ws) queueWsRef.current = null
+        ws = null
+        if (!cancelled) schedule()
+      }
+      ws.onerror = () => { try { ws?.close() } catch {} }
+    }
+    connect()
+    return () => {
+      cancelled = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      try { ws?.close() } catch {}
+      queueWsRef.current = null
+    }
+  }, [publicMode, dashboardId, dashboard?.queue_enabled])
 
   // ---- Live device-payload updates over WebSocket ----
   // The backend's DashboardRealtimeConsumer joins every device this
@@ -1524,7 +1734,13 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     const loc   = typeof window !== 'undefined' ? window.location : null
     const host  = loc?.hostname || 'localhost'
     const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
+    // The internal editor authenticates the socket with its JWT so it can
+    // write/test controls even when the dashboard's public access-queue is on
+    // (the queue gates anonymous public viewers, not the admin building it).
+    // The public view connects without a token and stays subject to the queue.
+    const token = !publicMode ? auth.getAccess() : null
     const url   = `${proto}//${host}:8001/ws/dashboards/${dashboardId}/`
+      + (token ? `?token=${encodeURIComponent(token)}` : '')
 
     let cancelled       = false
     let reconnectTimer  = null
@@ -1613,6 +1829,13 @@ export default function DashboardDetail({ publicMode = false } = {}) {
         } else if (msg?.status === 'ok' && msg?.action === 'connected') {
           // eslint-disable-next-line no-console
           console.debug('[dashboard-ws] subscribed to', msg.components?.length ?? 0, 'bindings')
+        } else if (msg?.status === 'error') {
+          // The server rejected a write (validation, device not found, access
+          // queue, …). Previously these were dropped silently, so a control
+          // looked dead with no clue — surface the reason instead.
+          // eslint-disable-next-line no-console
+          console.warn('[dashboard-ws] command rejected', msg)
+          setToast({ type: 'error', text: msg.message || 'The server rejected that command.' })
         }
       }
     }
@@ -1668,19 +1891,39 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     return list
   }, [appCameras, camerasById])
 
+  // A Spline 3D scene (configured on the dashboard) is showcased in the camera
+  // stage AFTER all cameras — as an extra item the switcher can cycle to. If no
+  // cameras are linked it's the only stage item; if neither exists the stage
+  // shows an empty-state placeholder.
+  const splineEnabled = !!dashboard?.spline_url_enable && !!dashboard?.spline_url
+  const stageItems = useMemo(() => {
+    const items = [...stageCameras]
+    if (splineEnabled) {
+      items.push({
+        id: '__spline__',
+        isSpline: true,
+        camera_name: '3D View',
+        spline_url: dashboard.spline_url,
+        is_active: true,
+        status: true,
+      })
+    }
+    return items
+  }, [stageCameras, splineEnabled, dashboard?.spline_url])
+
   useEffect(() => {
     if (selectedCamId != null) {
-      if (!stageCameras.some((c) => c.id === selectedCamId)) {
-        setSelectedCamId(stageCameras[0]?.id ?? null)
+      if (!stageItems.some((c) => c.id === selectedCamId)) {
+        setSelectedCamId(stageItems[0]?.id ?? null)
       }
       return
     }
-    if (stageCameras.length > 0) setSelectedCamId(stageCameras[0].id)
-  }, [stageCameras, selectedCamId])
+    if (stageItems.length > 0) setSelectedCamId(stageItems[0].id)
+  }, [stageItems, selectedCamId])
 
   const activeCamera = useMemo(
-    () => stageCameras.find((c) => c.id === selectedCamId) || null,
-    [stageCameras, selectedCamId],
+    () => stageItems.find((c) => c.id === selectedCamId) || null,
+    [stageItems, selectedCamId],
   )
 
   const devicesById = useMemo(() => {
@@ -1971,26 +2214,89 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // Public viewers get the mobile stack automatically on phone-sized
   // screens (only when a mobile layout has actually been built); the admin
   // gets whichever viewport they picked from the toolbar toggle.
+  // Public visibility is per-viewport: a phone may only open the dashboard when
+  // the MOBILE layout is published, a desktop only when the DESKTOP layout is.
+  // If the relevant layout isn't published we show a "not published" notice
+  // instead of opening anything.
+  const publicMobileOk  = !!dashboard?.publish_mobile
+  const publicDesktopOk = !!dashboard?.publish_desktop
+  const publicBlocked = publicMode && !!dashboard && (isNarrow ? !publicMobileOk : !publicDesktopOk)
+  // Queue gate: show only the lobby (not the dashboard) until the viewer joins.
+  const queueGate = queueEnabled && !publicBlocked && !joinedQueue
+
   const showMobileLayout = publicMode
-    ? (isNarrow && mobileComponents.length > 0)
+    ? (isNarrow && publicMobileOk)
     : (editViewport === 'mobile')
+
+  // The dashboard editor / config is desktop-only — building, arranging and
+  // resizing widgets needs a large screen. On a real phone (narrow viewport)
+  // show a "not supported" notice instead of the cramped desktop editor. The
+  // public dashboard view (publicMode) still renders normally on mobile.
+  if (!publicMode && isNarrow) {
+    return (
+      <div className="kiosk-app">
+        <TopBar />
+        <div className="db-unsupported">
+          <div className="db-unsupported-card">
+            <div className="db-unsupported-ic" aria-hidden="true">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none">
+                <rect x="2.5" y="4" width="19" height="12.5" rx="2" stroke="#F36A1E" strokeWidth="1.7" />
+                <path d="M8 20.5h8M12 16.5v4" stroke="#F36A1E" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h2>Dashboard editor isn’t available on mobile</h2>
+            <p>Configuring a dashboard — adding, arranging and resizing widgets — needs a larger screen. Please open this page on a desktop or laptop.</p>
+            <button type="button" className="btn-primary" onClick={() => navigate(appId ? `/applications/${appId}` : '/applications')}>
+              Back to application
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={'kiosk-app is-db' + (previewMode ? ' is-db-preview' : '') + (publicMode ? ' is-public' : '')} style={themeVars}>
       {!publicMode && <TopBar />}
+
+      {/* Public dashboard header — back arrow + the application's name, plus
+          the live access-queue status when a queue is running. */}
+      {publicMode && (
+        <header className="db-public-topbar">
+          <Link to="/public" className="db-public-topbar-back" aria-label="Back to applications" title="Back to applications">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Link>
+          <span className="db-public-topbar-title">
+            {dashboard?.application_name || dashboard?.name || 'Live dashboard'}
+          </span>
+          {queueEnabled && !publicBlocked && joinedQueue && <QueueBadge queue={queue} onJoin={joinQueue} />}
+        </header>
+      )}
+
+      {/* Lobby — shown FIRST (before the dashboard) whenever a queue is on and
+          the viewer hasn't joined. The dashboard isn't rendered behind it; it
+          only appears once they join. */}
+      {queueGate && (
+        <QueueLobby queue={queue} ready={!!queue} onJoin={joinQueue} />
+      )}
 
       <div className={'admin-page db-page'
         + (previewMode ? ' is-preview' : '')
         + (!previewMode && !publicMode && showMobileLayout ? ' is-mobile-edit' : '')
         + (previewMode && showMobileLayout && !isNarrow ? ' is-mobile-preview' : '')
         + (previewMode && showMobileLayout && isNarrow ? ' is-mobile-fullscreen' : '')}>
-        {!previewMode && (
+        {!previewMode && !publicMode && (
           <div className="db-page-actions-row">
-            <Link to={publicMode ? '/public' : `/applications/${appId}`} className="back-link">
+            <Link
+              to={`/applications/${appId}`}
+              className="back-link"
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                 <path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              {publicMode ? 'Back to Applications' : 'Back to Application'}
+              Back to Application
             </Link>
             {!publicMode && (
             <div className="db-theme-picker" role="group" aria-label="Dashboard theme">
@@ -2113,9 +2419,6 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                 Preview
               </button>
             )}
-            {publicMode && dashboard?.dashboard_name && (
-              <span className="db-public-title">{dashboard.dashboard_name}</span>
-            )}
           </div>
         )}
 
@@ -2126,9 +2429,25 @@ export default function DashboardDetail({ publicMode = false } = {}) {
           </div>
         ) : error ? (
           <div className="admin-banner error">{error}</div>
-        ) : !dashboard ? null : (
+        ) : !dashboard ? null : publicBlocked ? (
+          <div className="db-public-unpub">
+            <span className="db-public-unpub-ic" aria-hidden="true">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                <path d="M4 5l16 15" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+            </span>
+            <h2>No dashboard published</h2>
+            <p>
+              This application doesn’t have a {isNarrow ? 'mobile' : 'desktop'} dashboard published yet.
+              {isNarrow ? ' Try opening it on a desktop, or check back later.' : ' Check back later.'}
+            </p>
+            <Link to="/public" className="btn-secondary db-public-unpub-back">Back to applications</Link>
+          </div>
+        ) : queueGate ? null : (
           <>
-            {!previewMode && (
+            {!previewMode && !publicMode && (
               <header className="db-head">
                 <h1>{dashboard.name}</h1>
                 {dashboard.description && <p className="db-head-desc">{dashboard.description}</p>}
@@ -2146,7 +2465,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                   layout={mLayout}
                   devicesById={devicesById}
                   sendCommand={sendDashboardCommand}
-                  cameras={stageCameras}
+                  cameras={stageItems}
                   activeCamera={activeCamera}
                   onSelectCam={setSelectedCamId}
                   /* Preview on a real phone renders the exact simulator
@@ -2166,7 +2485,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                   editable={canUpdate && !previewMode}
                   mobileBusy={mobileBusy}
                   themeVars={themeVars}
-                  cameras={stageCameras}
+                  cameras={stageItems}
                   activeCamera={activeCamera}
                   onSelectCam={setSelectedCamId}
                   onToggleInclude={toggleMobileInclude}
@@ -2185,7 +2504,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
               <div className="db-top">
                 {/* Container 1 — Camera (its own panel). */}
                 <CameraCard
-                  cameras={stageCameras}
+                  cameras={stageItems}
                   active={activeCamera}
                   onSelect={setSelectedCamId}
                 />
@@ -2392,6 +2711,8 @@ export default function DashboardDetail({ publicMode = false } = {}) {
           themeDefaults={{
             cardColor: activeTheme.defaultCardColor,
             iconColor: activeTheme.defaultIconColor,
+            usedColors: usedCardColors,
+            usedIconColors: usedIconColors,
           }}
           onSubmit={(payload, setSaving, setErrors, setBanner) => {
             if (editingWidget) {
@@ -2547,6 +2868,7 @@ function MobileGrid({ components, layout, editable, devicesById, sendCommand, ca
                         sendCommand={sendCommand}
                         onEdit={() => onEdit?.(c)}
                         onDelete={() => onDelete?.(c)}
+                        hideActions
                       />
                     </div>
                   )
@@ -2766,6 +3088,7 @@ function MobileEditorShell({
    exactly like the in-editor simulator. The plain public end-user view
    keeps the natural page scroll. */
 function MobilePublicShell({ components, layout, devicesById, sendCommand, cameras, activeCamera, onSelectCam, bounded = false }) {
+  const hasCam = Array.isArray(cameras) && cameras.length > 0
   const grid = (
     <MobileGrid
       components={components}
@@ -2776,13 +3099,26 @@ function MobilePublicShell({ components, layout, devicesById, sendCommand, camer
       cameras={cameras}
       activeCamera={activeCamera}
       onSelectCam={onSelectCam}
-      fillContainer={bounded}
+      // Fill-to-fit (shrink widgets to the screen, fixed camera, internal
+      // scroll) whenever the layout is bounded — i.e. the preview, or the real
+      // phone when a camera/3D scene pins the top. Matches the preview exactly.
+      fillContainer={bounded || hasCam}
     />
   )
   if (bounded) {
     return (
       <div className="db-shell db-mobile-public is-bounded">
         <div className="db-mobile-screen db-mobile-live">{grid}</div>
+      </div>
+    )
+  }
+  // Real phone WITH a camera/3D scene: render the same fixed-screen layout as
+  // the preview, sized to the viewport. With neither, keep the natural
+  // page-scroll stack (whole page moves).
+  if (hasCam) {
+    return (
+      <div className="db-shell db-mobile-public is-live-screen">
+        <div className="db-mobile-screen db-mobile-live is-live">{grid}</div>
       </div>
     )
   }
@@ -2806,7 +3142,11 @@ const WIDGET_TYPE_OPTIONS = [
 ]
 const WRITE_TYPES = ['string', 'int', 'float', 'boolean']
 
-function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, onDelete, sendCommand }) {
+function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, onDelete, sendCommand, hideActions = false }) {
+  // `canUpdate` still drives the drag handle (so widgets stay draggable), but
+  // `hideActions` suppresses the floating edit/delete icons — used in the mobile
+  // simulator where editing/deleting a widget is done from the desktop view.
+  const showActions = !hideActions
   const cfg = component?.config || {}
   const stat = cfg.static || {}
   const variant = cfg.variant
@@ -2835,7 +3175,7 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <ControlPreview variant={variant} options={options} onCommand={sendCommand} />
-        {(canUpdate || canDelete) && (
+        {showActions && (canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && (
               <button type="button" className="db-card-action" onClick={onEdit} title="Edit">
@@ -2870,7 +3210,7 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <ChartPreview variant={variant} options={options} />
-        {(canUpdate || canDelete) && (
+        {showActions && (canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && <button type="button" className="db-card-action" onClick={onEdit} title="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 20h4l10-10-4-4L4 16v4z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" /></svg></button>}
             {canDelete && <button type="button" className="db-card-action danger" onClick={onDelete} title="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg></button>}
@@ -2890,7 +3230,7 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <FillPreview variant={variant} options={options} />
-        {(canUpdate || canDelete) && (
+        {showActions && (canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && (
               <button type="button" className="db-card-action" onClick={onEdit} title="Edit">
@@ -2920,7 +3260,7 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <LogPreview variant={variant} options={options} />
-        {(canUpdate || canDelete) && (
+        {showActions && (canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && (
               <button type="button" className="db-card-action" onClick={onEdit} title="Edit">
@@ -2953,7 +3293,7 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <DialPreview variant={variant} options={options} />
-        {(canUpdate || canDelete) && (
+        {showActions && (canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && (
               <button type="button" className="db-card-action" onClick={onEdit} title="Edit">
@@ -2994,7 +3334,7 @@ function DashWidgetView({ component, devicesById, canUpdate, canDelete, onEdit, 
     return (
       <div className={'db-card-wrap' + (canUpdate ? ' db-c2-widget-drag' : '')}>
         <CardPreview variant={variant} options={options} />
-        {(canUpdate || canDelete) && (
+        {showActions && (canUpdate || canDelete) && (
           <div className="db-card-actions">
             {canUpdate && (
               <button type="button" className="db-card-action" onClick={onEdit} title="Edit">
@@ -3307,6 +3647,7 @@ function CameraCard({ cameras, active, onSelect, compact = false }) {
     onSelect(cameras[next].id)
   }
 
+  const isSpline = !!active?.isSpline
   const isOnline = !!active?.status
   const hasStream = active?.is_active && active?.webrtc_url
 
@@ -3389,7 +3730,15 @@ function CameraCard({ cameras, active, onSelect, compact = false }) {
       </div>
       )}
       <div className="db-cam-player">
-        {hasStream ? (
+        {isSpline ? (
+          <iframe
+            className="db-cam-frame db-spline-frame"
+            src={active.spline_url}
+            title="3D scene"
+            allow="autoplay; fullscreen; xr-spatial-tracking"
+            allowFullScreen
+          />
+        ) : hasStream ? (
           <iframe
             className="db-cam-frame"
             src={active.webrtc_url}
@@ -3405,7 +3754,7 @@ function CameraCard({ cameras, active, onSelect, compact = false }) {
             </svg>
             <div className="muted">
               {active == null
-                ? 'No camera linked to this application.'
+                ? 'No live camera or 3D scene has been added to this dashboard yet.'
                 : !active.is_active
                   ? 'This camera is disabled.'
                   : 'No stream URL configured.'}
@@ -3413,11 +3762,13 @@ function CameraCard({ cameras, active, onSelect, compact = false }) {
           </div>
         )}
 
-        {/* LIVE pill (top-left of the player) */}
-        <div className="db-cam-live">
-          <span className={'db-cam-live-dot ' + (isOnline ? 'is-on' : 'is-off')} aria-hidden="true" />
-          {isOnline ? 'Live' : 'Offline'}
-        </div>
+        {/* LIVE pill — only for actual camera streams, not the 3D scene. */}
+        {!isSpline && (
+          <div className="db-cam-live">
+            <span className={'db-cam-live-dot ' + (isOnline ? 'is-on' : 'is-off')} aria-hidden="true" />
+            {isOnline ? 'Live' : 'Offline'}
+          </div>
+        )}
       </div>
     </article>
   )
@@ -4664,18 +5015,18 @@ function CardConfigure({ variant, devices, onBack, onSubmit, initial, themeDefau
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field">
             <span className="form-label">Card color</span>
-            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} usedColors={themeDefaults?.usedColors} />
           </div>
           {hasAnyIcon && (
             <div className="form-field">
               <span className="form-label">Icon color</span>
-              <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
+              <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} usedColors={themeDefaults?.usedIconColors} />
             </div>
           )}
           {def.hasBarColor && (
             <div className="form-field">
               <span className="form-label">Progress bar color</span>
-              <IconColorPicker value={barColor} onChange={setBarColor} disabled={saving} />
+              <IconColorPicker value={barColor} onChange={setBarColor} disabled={saving} usedColors={themeDefaults?.usedIconColors} />
             </div>
           )}
           <div className="form-field">
@@ -5549,7 +5900,7 @@ function ControlVariantGallery({ onPick }) {
    ===================================================================== */
 function DialVariantGallery({ onPick }) {
   return (
-    <div className="card-gallery">
+    <div className="card-gallery card-gallery-dials">
       {DIAL_VARIANTS.map((v) => (
         <button key={v.id} type="button" className="card-variant"
           onClick={() => onPick?.(v.id)} aria-label={`Use ${v.title}`}>
@@ -5998,7 +6349,7 @@ function PreviewThresholdDial({ options = {} }) {
       <div className="cv-title">{d.title}</div>
       {options.description && <div className="cv-desc">{options.description}</div>}
       <div className="dial-wrap">
-        <svg className="dial-svg" viewBox="-6 -2 112 71">
+        <svg className="dial-svg" viewBox="-6 -2 112 76">
           <path d={arcPath} fill="none" stroke="rgba(0,0,0,0.08)"
             strokeWidth={sw} strokeLinecap="round" />
           {zoneArcs}
@@ -6008,9 +6359,11 @@ function PreviewThresholdDial({ options = {} }) {
               transform: `rotate(${rotateDeg}deg)`,
               transition: 'fill 0.3s ease',
             }} />
-          <text x={cx - r} y={cy + 12} textAnchor="middle"
+          {/* 0 / max labels sit clear below the arc baseline (the 12px round
+              caps extend ~sw/2 below cy, so the labels start under that). */}
+          <text x={cx - r} y={cy + 18} textAnchor="middle"
             className="dial-svg-label dial-gauge-label">{abbreviateNum(d.min)}</text>
-          <text x={cx + r} y={cy + 12} textAnchor="middle"
+          <text x={cx + r} y={cy + 18} textAnchor="middle"
             className="dial-svg-label dial-gauge-label">{abbreviateNum(d.max)}</text>
         </svg>
         <div className="dial-readout">
@@ -6171,11 +6524,11 @@ function DialConfigure({ variant, devices, initial, onBack, onSubmit, themeDefau
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field">
             <span className="form-label">Card color</span>
-            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} usedColors={themeDefaults?.usedColors} />
           </div>
           <div className="form-field">
             <span className="form-label">Gauge color</span>
-            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} usedColors={themeDefaults?.usedIconColors} />
           </div>
         </div>
         <div className="card-config-section">
@@ -6472,7 +6825,7 @@ function ChartConfigure({ variant, devices, initial, onBack, onSubmit, themeDefa
         <div className="card-config-section">
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field"><span className="form-label">Card color</span>
-            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} usedColors={themeDefaults?.usedColors} />
           </div>
         </div>
         <div className="card-config-section">
@@ -6728,10 +7081,10 @@ function FillConfigure({ variant, devices, initial, onBack, onSubmit, themeDefau
         <div className="card-config-section">
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field"><span className="form-label">Card color</span>
-            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} usedColors={themeDefaults?.usedColors} />
           </div>
           <div className="form-field"><span className="form-label">Fill color</span>
-            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} usedColors={themeDefaults?.usedIconColors} />
           </div>
         </div>
         <div className="card-config-section">
@@ -6933,10 +7286,10 @@ function LogConfigure({ variant, devices, initial, onBack, onSubmit, themeDefaul
         <div className="card-config-section">
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field"><span className="form-label">Card color</span>
-            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} usedColors={themeDefaults?.usedColors} />
           </div>
           <div className="form-field"><span className="form-label">Accent color</span>
-            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} usedColors={themeDefaults?.usedIconColors} />
           </div>
         </div>
         <div className="card-config-section">
@@ -8198,11 +8551,11 @@ function ControlConfigure({ variant, devices, initial, onBack, onSubmit, themeDe
           <div className="card-config-section-head">Appearance</div>
           <div className="form-field">
             <span className="form-label">Card color</span>
-            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} />
+            <CardColorPicker value={cardColor} onChange={setCardColor} disabled={saving} usedColors={themeDefaults?.usedColors} />
           </div>
           <div className="form-field">
             <span className="form-label">Icon color</span>
-            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} />
+            <IconColorPicker value={iconColor} onChange={setIconColor} disabled={saving} usedColors={themeDefaults?.usedIconColors} />
           </div>
         </div>
 

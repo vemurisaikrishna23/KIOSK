@@ -778,6 +778,11 @@ class PublicDashboardLoadAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # NOTE: a "view" is no longer counted here. Engagement is counted only
+        # when a visitor actually JOINS the access queue (see
+        # DashboardQueueConsumer._count_view), so the metric reflects real
+        # interaction rather than every page open.
+
         # Dashboard components (USE EXISTING SERIALIZER)
         components = DashboardComponent.objects.filter(
             dashboard=dashboard
@@ -874,17 +879,23 @@ class PublicAnalyticsAPIView(APIView):
             application__publish=True,
         )
 
+        from django.db.models import Count, Q, Sum
+        total_tries = apps_qs.aggregate(s=Sum("public_views"))["s"] or 0
+
         totals = {
             "applications":     apps_qs.count(),
             "dashboards":       dashboards_qs.count(),
             "cameras":          cameras_qs.count(),
             "devices":          devices_qs.count(),
             "devices_connected": devices_qs.filter(is_connected=True).count(),
+            # Engagement metric — total number of public dashboard opens
+            # ("tries") across every published application.
+            "tries":            total_tries,
         }
 
         # Per-app breakdown — small payload, no N+1 because we project
-        # the counts via a single query per relation.
-        from django.db.models import Count, Q
+        # the counts via a single query per relation. Ordered by popularity
+        # (most-tried first) so the breakdown reads as a leaderboard.
         per_app_rows = apps_qs.annotate(
             dashboards_count=Count(
                 "dashboards",
@@ -898,9 +909,10 @@ class PublicAnalyticsAPIView(APIView):
                 distinct=True,
             ),
             cameras_count=Count("camera_links", distinct=True),
-        ).values(
+        ).order_by("-public_views", "-created_at").values(
             "id",
             "name",
+            "public_views",
             "dashboards_count",
             "devices_count",
             "devices_connected_count",
@@ -913,6 +925,7 @@ class PublicAnalyticsAPIView(APIView):
         per_app_list = list(per_app_rows)
         for row in per_app_list:
             row["application_name"] = row.pop("name")
+            row["tries"] = row.pop("public_views")
 
         return Response(
             {
@@ -921,6 +934,338 @@ class PublicAnalyticsAPIView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ApplicationViewsTimeseriesAPIView(APIView):
+    """
+    Authenticated daily-views time series for the admin dashboard's views
+    graph. Returns one point per calendar day for the last `days` days
+    (default 7, capped at 90). Pass `?application=<id>` to scope to a single
+    application; omit it to aggregate views across every application.
+
+    Response: { days, application, total, series: [{ date, views }, …] }
+    Days with no recorded views are returned as zero so the chart is
+    continuous.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta, date as date_cls
+        from django.db.models import Sum
+        from django.utils import timezone
+
+        today = timezone.localdate()
+        app_id = request.query_params.get("application") or None
+
+        def _parse(s):
+            try:
+                parts = [int(x) for x in str(s).split("-")[:3]]
+                return date_cls(parts[0], parts[1], parts[2])
+            except Exception:
+                return None
+
+        # Custom range takes priority when both bounds are supplied; otherwise
+        # fall back to a rolling "last N days" window.
+        start = _parse(request.query_params.get("start"))
+        end = _parse(request.query_params.get("end"))
+
+        if start and end:
+            if end < start:
+                return Response(
+                    {"detail": "end date must be on or after start date."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Cap the span so a wild range can't return thousands of points.
+            if (end - start).days > 366:
+                start = end - timedelta(days=366)
+        else:
+            try:
+                days = int(request.query_params.get("days", 7))
+            except (TypeError, ValueError):
+                days = 7
+            days = max(1, min(days, 366))
+            end = today
+            start = today - timedelta(days=days - 1)
+
+        span = (end - start).days + 1
+
+        qs = ApplicationDailyView.objects.filter(date__gte=start, date__lte=end)
+        if app_id:
+            qs = qs.filter(application_id=app_id)
+
+        by_date = {
+            row["date"]: row["c"]
+            for row in qs.values("date").annotate(c=Sum("count"))
+        }
+
+        series = []
+        for i in range(span):
+            d = start + timedelta(days=i)
+            series.append({"date": d.isoformat(), "views": by_date.get(d, 0) or 0})
+
+        return Response(
+            {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "days": span,
+                "application": int(app_id) if app_id else None,
+                "total": sum(s["views"] for s in series),
+                "series": series,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+def _activity_log_range(qp):
+    """
+    Resolve (start_date, end_date, error) from the request query params:
+      • ?start=YYYY-MM-DD&end=YYYY-MM-DD  → that range (span capped at 30 days)
+      • ?days=N                           → the last N days (1..30, default 1)
+    """
+    from datetime import timedelta, date as date_cls
+    from django.utils import timezone
+    today = timezone.localdate()
+
+    def _pdate(s):
+        try:
+            y, m, d = [int(x) for x in str(s).split("-")[:3]]
+            return date_cls(y, m, d)
+        except Exception:
+            return None
+
+    sd = _pdate(qp.get("start"))
+    ed = _pdate(qp.get("end"))
+    if sd and ed:
+        if ed < sd:
+            return None, None, "end date must be on or after start date."
+        if (ed - sd).days > 30:
+            sd = ed - timedelta(days=30)
+        return sd, ed, None
+
+    try:
+        days = int(qp.get("days", 1))
+    except (TypeError, ValueError):
+        days = 1
+    days = max(1, min(days, 30))
+    return today - timedelta(days=days - 1), today, None
+
+
+class ActivityLogListAPIView(APIView):
+    """
+    Authenticated read of the internal activity log.
+
+    Two modes:
+      • ?limit=N            → latest N entries (dashboard "Recent activity").
+      • ?days / ?start+?end → date-range window (default last 1 day, max 30)
+                              with ?page / ?page_size pagination (Activity Log page).
+    Always opportunistically purges entries past the 30-day retention window.
+    Optional ?category= filter in both modes.
+    """
+    permission_classes = [IsAuthenticated]
+    LOG_FIELDS = ("id", "category", "action", "entity_name", "message", "actor_name", "created_at")
+
+    def get(self, request):
+        try:
+            ActivityLog.purge_old()
+        except Exception:
+            pass
+
+        qp = request.query_params
+        qs = ActivityLog.objects.all()
+        category = qp.get("category") or None
+        if category:
+            qs = qs.filter(category=category)
+
+        # Dashboard widget mode — latest N, no date filter / pagination.
+        limit = qp.get("limit")
+        if limit is not None:
+            try:
+                limit = max(1, min(int(limit), 200))
+            except (TypeError, ValueError):
+                limit = 6
+            return Response(
+                {"count": qs.count(), "logs": list(qs[:limit].values(*self.LOG_FIELDS))},
+                status=status.HTTP_200_OK,
+            )
+
+        # Page mode — date range + pagination.
+        sd, ed, err = _activity_log_range(qp)
+        if err:
+            return Response({"detail": err}, status=status.HTTP_400_BAD_REQUEST)
+        qs = qs.filter(created_at__date__gte=sd, created_at__date__lte=ed)
+        total = qs.count()
+
+        try:
+            page = max(1, int(qp.get("page", 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = max(1, min(int(qp.get("page_size", 25)), 100))
+        except (TypeError, ValueError):
+            page_size = 25
+        offset = (page - 1) * page_size
+
+        return Response({
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, (total + page_size - 1) // page_size),
+            "start": sd.isoformat(),
+            "end": ed.isoformat(),
+            "logs": list(qs[offset:offset + page_size].values(*self.LOG_FIELDS)),
+        }, status=status.HTTP_200_OK)
+
+
+class ActivityLogExportAPIView(APIView):
+    """CSV export of the activity log for a date range — gated by the download permission."""
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {"list": "activity_log_download"}
+
+    def get(self, request):
+        import csv
+        from io import StringIO
+        from django.http import HttpResponse
+
+        qp = request.query_params
+        sd, ed, err = _activity_log_range(qp)
+        if err:
+            return Response({"detail": err}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = ActivityLog.objects.all()
+        category = qp.get("category") or None
+        if category:
+            qs = qs.filter(category=category)
+        qs = qs.filter(created_at__date__gte=sd, created_at__date__lte=ed)[:10000]
+
+        buf = StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["When", "Category", "Action", "Entity", "Detail", "Actor"])
+        for log in qs:
+            writer.writerow([
+                log.created_at.isoformat() if log.created_at else "",
+                log.get_category_display(),
+                log.get_action_display(),
+                log.entity_name,
+                log.message,
+                log.actor_name,
+            ])
+
+        resp = HttpResponse(buf.getvalue(), content_type="text/csv")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="activity-logs_{sd.isoformat()}_to_{ed.isoformat()}.csv"'
+        )
+        return resp
+
+
+def _safe_filename_part(s):
+    """Slugify a name for use inside a Content-Disposition filename."""
+    cleaned = "".join(c if (c.isalnum() or c in "-_") else "-" for c in (s or ""))
+    return (cleaned.strip("-") or "user")[:40]
+
+
+class UserActivityLogListAPIView(APIView):
+    """
+    The activity performed BY a single user — their personal audit trail.
+
+    Same date-range + pagination + category contract as the global activity
+    log, but scoped to `actor = <user_id>`. Gated by the user_activity_view
+    permission (separate from the global activity_log_view).
+    """
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {"list": "user_activity_view"}
+    LOG_FIELDS = ("id", "category", "action", "entity_name", "message", "actor_name", "created_at")
+
+    def get(self, request, user_id):
+        from UserAccounts.models import User
+        user = User.objects.filter(pk=user_id).first()
+        if not user:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            ActivityLog.purge_old()
+        except Exception:
+            pass
+
+        qp = request.query_params
+        qs = ActivityLog.objects.filter(actor_id=user.id)
+        category = qp.get("category") or None
+        if category:
+            qs = qs.filter(category=category)
+
+        sd, ed, err = _activity_log_range(qp)
+        if err:
+            return Response({"detail": err}, status=status.HTTP_400_BAD_REQUEST)
+        qs = qs.filter(created_at__date__gte=sd, created_at__date__lte=ed)
+        total = qs.count()
+
+        try:
+            page = max(1, int(qp.get("page", 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = max(1, min(int(qp.get("page_size", 25)), 100))
+        except (TypeError, ValueError):
+            page_size = 25
+        offset = (page - 1) * page_size
+
+        return Response({
+            "user": {"id": user.id, "name": user.name, "email": user.email},
+            "count": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": max(1, (total + page_size - 1) // page_size),
+            "start": sd.isoformat(),
+            "end": ed.isoformat(),
+            "logs": list(qs[offset:offset + page_size].values(*self.LOG_FIELDS)),
+        }, status=status.HTTP_200_OK)
+
+
+class UserActivityLogExportAPIView(APIView):
+    """CSV export of a single user's activity — gated by user_activity_download."""
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {"list": "user_activity_download"}
+
+    def get(self, request, user_id):
+        import csv
+        from io import StringIO
+        from django.http import HttpResponse
+        from UserAccounts.models import User
+
+        user = User.objects.filter(pk=user_id).first()
+        if not user:
+            return Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        qp = request.query_params
+        sd, ed, err = _activity_log_range(qp)
+        if err:
+            return Response({"detail": err}, status=status.HTTP_400_BAD_REQUEST)
+
+        qs = ActivityLog.objects.filter(actor_id=user.id)
+        category = qp.get("category") or None
+        if category:
+            qs = qs.filter(category=category)
+        qs = qs.filter(created_at__date__gte=sd, created_at__date__lte=ed)[:10000]
+
+        buf = StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["When", "Category", "Action", "Entity", "Detail", "Actor"])
+        for log in qs:
+            writer.writerow([
+                log.created_at.isoformat() if log.created_at else "",
+                log.get_category_display(),
+                log.get_action_display(),
+                log.entity_name,
+                log.message,
+                log.actor_name,
+            ])
+
+        resp = HttpResponse(buf.getvalue(), content_type="text/csv")
+        who = _safe_filename_part(user.name or user.email or f"user-{user.id}")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="user-activity_{who}_{sd.isoformat()}_to_{ed.isoformat()}.csv"'
+        )
+        return resp
+
 
 # =====================================================================
 # SSL Certificate management
@@ -972,3 +1317,127 @@ class PublicSSLCertificateDownloadView(View):
         resp = FileResponse(cert.file.open("rb"), content_type="application/x-x509-ca-cert")
         resp["Content-Disposition"] = 'attachment; filename="server.crt"'
         return resp
+
+
+# =====================================================================
+# Contact Us submissions  +  Company Information
+# =====================================================================
+class ContactSubmissionViewSet(viewsets.ModelViewSet):
+    """
+    Admin triage for messages sent from the public Contact Us form.
+    Listing / status updates / deletion are permission-gated; the public
+    intake is a separate AllowAny endpoint (PublicContactSubmissionView).
+    """
+    queryset = ContactSubmission.objects.all().order_by("-created_at")
+    serializer_class = ContactSubmissionSerializer
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {
+        "list":           "contact_submission_view",
+        "retrieve":       "contact_submission_view",
+        "update":         "contact_submission_update",
+        "partial_update": "contact_submission_update",
+        "destroy":        "contact_submission_delete",
+    }
+
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())
+        status_param = request.query_params.get("status")
+        if status_param:
+            qs = qs.filter(status=status_param)
+        # Counts per status for the page's stat tiles.
+        from django.db.models import Count
+        counts = {row["status"]: row["c"] for row in
+                  self.get_queryset().values("status").annotate(c=Count("id"))}
+        serializer = self.get_serializer(qs, many=True)
+        return Response({
+            "count": qs.count(),
+            "status_counts": counts,
+            "submissions": serializer.data,
+        }, status=status.HTTP_200_OK)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({
+            "message": "Submission updated.",
+            "submission": serializer.data,
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response({"message": "Submission deleted."}, status=status.HTTP_200_OK)
+
+
+class PublicContactSubmissionView(APIView):
+    """No-auth intake for the public landing page's Contact Us form."""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = PublicContactSubmissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {"message": "Thanks for reaching out — our team will get back to you shortly."},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class CompanyInformationViewSet(viewsets.ModelViewSet):
+    """
+    Admin CRUD for company contact details shown on the public landing
+    page. Multiple records may exist but only ONE is active at a time
+    (singleton enforced in the model's save()).
+    """
+    queryset = CompanyInformation.objects.all()
+    serializer_class = CompanyInformationSerializer
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {
+        "list":           "company_info_view",
+        "retrieve":       "company_info_view",
+        "create":         "company_info_create",
+        "update":         "company_info_update",
+        "partial_update": "company_info_update",
+        "destroy":        "company_info_delete",
+    }
+
+    def list(self, request, *args, **kwargs):
+        qs = self.get_queryset()
+        active = qs.filter(is_active=True).first()
+        return Response({
+            "count": qs.count(),
+            "active": CompanyInformationSerializer(active).data if active else None,
+            "records": CompanyInformationSerializer(qs, many=True).data,
+        }, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # Never delete the live address — one record must always stay active.
+        if instance.is_active and CompanyInformation.objects.exclude(pk=instance.pk).exists():
+            return Response(
+                {"detail": "Cannot delete the active record. Activate another one first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        instance.delete()
+        # Safety net: if nothing is active but records remain, promote the latest.
+        if not CompanyInformation.objects.filter(is_active=True).exists():
+            latest = CompanyInformation.objects.order_by("-updated_at").first()
+            if latest:
+                latest.is_active = True
+                latest.save()
+        return Response({"message": "Record deleted."}, status=status.HTTP_200_OK)
+
+
+class PublicCompanyInformationView(APIView):
+    """No-auth read of the active company info for the public landing page."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        info = CompanyInformation.objects.filter(is_active=True).order_by("-updated_at").first()
+        return Response(
+            {"company": CompanyInformationSerializer(info).data if info else None},
+            status=status.HTTP_200_OK,
+        )

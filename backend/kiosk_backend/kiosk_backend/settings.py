@@ -94,6 +94,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Stashes the current request so activity-log signals can attribute the actor.
+    'Applications.current_request.CurrentRequestMiddleware',
 ]
 
 ROOT_URLCONF = 'kiosk_backend.urls'
@@ -236,7 +238,9 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": ["redis://:Myaccess2021@178.16.137.196:6379"],
+            # Local Redis (low-latency). Override with the REDIS_URL env var to
+            # point at a remote/managed instance in other environments.
+            "hosts": [os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")],
         },
     },
 }

@@ -981,6 +981,21 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
         self.bindings = []
         self.device_index = {}
 
+        # The internal editor connects with ?token=<JWT>. A valid token marks
+        # this as an authenticated admin session, which bypasses the public
+        # access-queue write gate (the queue is meant to ration control among
+        # anonymous public viewers, not the admin building/testing the board).
+        self.is_admin = False
+        try:
+            params = parse_qs(self.scope.get("query_string", b"").decode())
+            token = (params.get("token") or [None])[0]
+            if token:
+                from rest_framework_simplejwt.tokens import AccessToken
+                AccessToken(token)   # validates signature + expiry (raises if bad)
+                self.is_admin = True
+        except Exception:
+            self.is_admin = False
+
         print("\n=== DASHBOARD WS CONNECT ===", flush=True)
         print("PATH:", self.scope.get("path"), flush=True)
         print("KWARGS:", self.scope.get("url_route", {}).get("kwargs"), flush=True)
@@ -1074,6 +1089,18 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
 
         if not action:
             return await self._send_error("Missing action")
+
+        # Access-queue gate: when the dashboard runs a turn-based queue, only the
+        # member currently holding control may write. Reads ("get") are always
+        # allowed; everyone else is read-only until their turn. Authenticated
+        # admins (the internal editor, identified by a valid ?token=) bypass the
+        # queue so they can test controls while building the dashboard.
+        if (action in ("put", "patch", "post", "delete")
+                and getattr(self.dashboard, "queue_enabled", False)
+                and not getattr(self, "is_admin", False)):
+            from . import queue_manager
+            if not queue_manager.is_controller(self.dashboard_id, data.get("member_id")):
+                return await self._send_error("It's not your turn to control this dashboard.", code=403)
 
         # device_id required for all except maybe future features
         if action != "get" and device_id is None:
@@ -1447,6 +1474,292 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
             log.warning("Dashboard WebSocket send failed: %s", e)
 
 
+# =====================================================================
+# 🔹 Dashboard ACCESS QUEUE consumer
+# =====================================================================
+import asyncio
+from . import queue_manager
+
+_queue_tickers = {}  # dashboard_id -> asyncio.Task (one live ticker per dashboard)
+
+
+async def _queue_ticker(dashboard_id, control_seconds, channel_layer, group):
+    """Drives rotation + live countdowns: every second it advances the queue and
+    re-broadcasts state. Stops once the dashboard has been idle for a few ticks."""
+    try:
+        idle = 0
+        while True:
+            await asyncio.sleep(1)
+            if not queue_manager.has_activity(dashboard_id):
+                idle += 1
+                if idle >= 3:
+                    break
+                continue
+            idle = 0
+            queue_manager.tick(dashboard_id, control_seconds)
+            try:
+                await channel_layer.group_send(group, {"type": "queue.update"})
+            except Exception:
+                pass
+    finally:
+        _queue_tickers.pop(int(dashboard_id), None)
+
+
+class DashboardQueueConsumer(AsyncWebsocketConsumer):
+    """
+    Turn-based access queue for a published dashboard.
+
+    Client → server:  {"action":"join","member_id":"...","name":"..."}
+                      {"action":"leave"}
+    Server → client:  {"type":"queue_state", enabled, active, control_remaining,
+                       control_seconds, waiting_count, you:{in_queue,is_controller,
+                       position,wait_seconds}}
+    """
+
+    async def connect(self):
+        try:
+            self.dashboard_id = int(self.scope["url_route"]["kwargs"]["dashboard_id"])
+        except Exception:
+            await self.close(code=4000); return
+        self.member_id = None
+        self.dashboard = None
+        self.enabled = False
+        self.control_seconds = 60
+        self.group = f"dashqueue_{self.dashboard_id}"
+        self._closed = False
+        self._viewer_added = False
+        # Accept FIRST so the WS handshake completes instantly — the (possibly
+        # slow, remote-DB) dashboard load + channel-layer join then run on a
+        # background task. Doing them before accept() was blocking the
+        # handshake on the remote Postgres query (slow "connecting" state).
+        await self.accept()
+        asyncio.create_task(self._setup())
+
+    async def _setup(self):
+        try:
+            # The client only opens this socket for queue-enabled dashboards, so
+            # send a provisional state IMMEDIATELY from the in-memory queue (no
+            # remote calls) — this enables the lobby's "Join queue" button right
+            # away instead of after the remote DB + Redis round-trips below.
+            self.enabled = True
+            await self._send_state()
+
+            # Now the (remote) work: load the real control time + join the
+            # Redis group for live ticker updates. Refine the state afterwards.
+            self.dashboard = await self._get_dashboard(self.dashboard_id)
+            if self._closed:
+                return
+            if not (self.dashboard and self.dashboard.queue_enabled):
+                # Shouldn't normally happen (client gates on this), but stay safe.
+                self.enabled = False
+                await self._raw({"type": "queue_state", "enabled": False})
+                return
+            self.control_seconds = int(getattr(self.dashboard, "queue_control_seconds", 60) or 60)
+            queue_manager.add_viewer(self.dashboard_id)
+            self._viewer_added = True
+            await self.channel_layer.group_add(self.group, self.channel_name)
+            if self._closed:
+                return
+            self._ensure_ticker()
+            await self._send_state()
+        except Exception:
+            log.exception("DashboardQueueConsumer setup failed")
+
+    async def disconnect(self, code):
+        self._closed = True
+        try:
+            if self.member_id:
+                queue_manager.leave(self.dashboard_id, self.member_id)
+            if getattr(self, "_viewer_added", False):
+                queue_manager.remove_viewer(self.dashboard_id)
+            await self.channel_layer.group_discard(self.group, self.channel_name)
+            if getattr(self, "enabled", False):
+                await self._broadcast()
+        except Exception:
+            pass
+
+    async def receive(self, text_data):
+        if not self.enabled:
+            return
+        try:
+            data = json.loads(text_data)
+        except Exception:
+            return
+        action = data.get("action")
+        if action == "join":
+            self.member_id = data.get("member_id") or str(uuid.uuid4())
+            added = queue_manager.join(self.dashboard_id, self.member_id, data.get("name"))
+            # Immediate feedback to the joining client (don't wait on the Redis
+            # round-trip from the broadcast below).
+            await self._send_state()
+            # A "view" is counted only when someone actually joins the queue
+            # (not on a plain dashboard open, and not on a duplicate join).
+            if added:
+                await self._count_view()
+            self._ensure_ticker()
+            await self._broadcast()
+        elif action == "leave":
+            if self.member_id:
+                queue_manager.leave(self.dashboard_id, self.member_id)
+            await self._broadcast()
+
+    async def queue_update(self, event):
+        await self._send_state()
+
+    async def _broadcast(self):
+        try:
+            await self.channel_layer.group_send(self.group, {"type": "queue.update"})
+        except Exception:
+            pass
+
+    async def _send_state(self):
+        snap = queue_manager.snapshot(self.dashboard_id, self.control_seconds)
+        active = snap["active"]
+        you = {"in_queue": False, "is_controller": False, "position": 0, "wait_seconds": 0}
+        if self.member_id:
+            if active and active["id"] == self.member_id:
+                you = {"in_queue": True, "is_controller": True, "position": 0, "wait_seconds": 0}
+            else:
+                for m in snap["members"]:
+                    if m["id"] == self.member_id:
+                        you = {"in_queue": True, "is_controller": False,
+                               "position": m["position"], "wait_seconds": m["wait_seconds"]}
+                        break
+        await self._raw({
+            "type": "queue_state",
+            "enabled": True,
+            "active": ({"name": active["name"]} if active else None),
+            "control_remaining": snap["control_remaining"],
+            "control_seconds": snap["control_seconds"],
+            "waiting_count": snap["waiting_count"],
+            "you": you,
+        })
+
+    async def _raw(self, data):
+        try:
+            await self.send(text_data=json.dumps(data))
+        except Exception:
+            pass
+
+    def _ensure_ticker(self):
+        t = _queue_tickers.get(self.dashboard_id)
+        if t and not t.done():
+            return
+        _queue_tickers[self.dashboard_id] = asyncio.create_task(
+            _queue_ticker(self.dashboard_id, self.control_seconds, self.channel_layer, self.group)
+        )
+
+    @database_sync_to_async
+    def _get_dashboard(self, dashboard_id):
+        try:
+            return Dashboard.objects.get(id=dashboard_id)
+        except Exception:
+            return None
+
+    @database_sync_to_async
+    def _count_view(self):
+        """Atomically count one engagement ("view") for this dashboard's
+        application — fired only when a visitor joins the queue. Bumps both
+        the cumulative Application.public_views counter and the per-day
+        ApplicationDailyView bucket (used by the dashboard's views graph)."""
+        try:
+            from django.db.models import F
+            from django.utils import timezone
+            from .models import Application, ApplicationDailyView
+            app_id = getattr(self.dashboard, "application_id", None)
+            if app_id:
+                Application.objects.filter(pk=app_id).update(public_views=F("public_views") + 1)
+                today = timezone.localdate()
+                bumped = ApplicationDailyView.objects.filter(
+                    application_id=app_id, date=today
+                ).update(count=F("count") + 1)
+                if not bumped:
+                    try:
+                        ApplicationDailyView.objects.create(
+                            application_id=app_id, date=today, count=1
+                        )
+                    except Exception:
+                        # Lost a race to create the row — just increment it.
+                        ApplicationDailyView.objects.filter(
+                            application_id=app_id, date=today
+                        ).update(count=F("count") + 1)
+        except Exception:
+            pass
+
+
+# Group every live "Recent activity" listener joins.
+ACTIVITY_LOG_GROUP = "activity_logs"
+
+
+class ActivityLogConsumer(AsyncWebsocketConsumer):
+    """
+    Live feed of the internal activity log for the dashboard's "Recent
+    activity" panel. Auth-gated by a JWT access token in the query string
+    (?token=...). On connect it sends a snapshot of the latest entries; new
+    entries are pushed as they happen (broadcast from the logging signal).
+
+      Server → client:  {"type":"snapshot","logs":[…]}   (on connect)
+                        {"type":"log","log":{…}}          (live, per new entry)
+    """
+
+    SNAPSHOT_LIMIT = 6
+
+    async def connect(self):
+        params = parse_qs(self.scope.get("query_string", b"").decode())
+        token = (params.get("token") or [None])[0]
+        if not self._token_ok(token):
+            await self.close(code=4001)
+            return
+        await self.channel_layer.group_add(ACTIVITY_LOG_GROUP, self.channel_name)
+        await self.accept()
+        try:
+            logs = await self._recent(self.SNAPSHOT_LIMIT)
+            await self.send(text_data=json.dumps({"type": "snapshot", "logs": logs}))
+        except Exception:
+            pass
+
+    async def disconnect(self, code):
+        try:
+            await self.channel_layer.group_discard(ACTIVITY_LOG_GROUP, self.channel_name)
+        except Exception:
+            pass
+
+    async def receive(self, text_data=None, bytes_data=None):
+        # Server → client only; ignore anything the client sends.
+        return
+
+    async def activity_log(self, event):
+        """Handler for {"type": "activity.log", "log": {...}} group messages."""
+        try:
+            await self.send(text_data=json.dumps({"type": "log", "log": event.get("log")}))
+        except Exception:
+            pass
+
+    @staticmethod
+    def _token_ok(token):
+        if not token:
+            return False
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            AccessToken(token)   # validates signature + expiry (raises if bad)
+            return True
+        except Exception:
+            return False
+
+    @database_sync_to_async
+    def _recent(self, limit):
+        from .models import ActivityLog
+        try:
+            ActivityLog.purge_old()
+        except Exception:
+            pass
+        rows = []
+        for r in ActivityLog.objects.values(
+            "id", "category", "action", "entity_name", "message", "actor_name", "created_at"
+        )[:limit]:
+            r["created_at"] = r["created_at"].isoformat() if r.get("created_at") else None
+            rows.append(r)
+        return rows
 
 
 # import json

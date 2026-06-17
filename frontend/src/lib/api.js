@@ -492,6 +492,68 @@ export const api = {
   publicAnalytics: () =>
     request(`${APPS_BASE}/public/analytics/`),
 
+  // Authenticated daily-views time series for the dashboard's views graph.
+  // Either pass `days` (rolling window: 7 | 15 | 30 …) OR both `start` & `end`
+  // (YYYY-MM-DD custom range). application: app id to scope to one app
+  // (omit/'all' = every app).
+  appViewsTimeseries: ({ days = 7, start, end, application } = {}) => {
+    const params = new URLSearchParams()
+    if (start && end) { params.set('start', start); params.set('end', end) }
+    else params.set('days', String(days))
+    if (application != null && application !== 'all') params.set('application', String(application))
+    return request(`${APPS_BASE}/views-timeseries/?${params.toString()}`, { withAuth: true })
+  },
+
+  // Internal activity log (categorised, 30-day retention).
+  //   • Dashboard widget: { limit: 6 } → latest N.
+  //   • Activity Log page: { days } or { start, end } + { page, page_size }.
+  listActivityLogs: ({ limit, days, start, end, page, page_size, category } = {}) => {
+    const params = new URLSearchParams()
+    if (limit != null) params.set('limit', String(limit))
+    if (days != null) params.set('days', String(days))
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
+    if (page != null) params.set('page', String(page))
+    if (page_size != null) params.set('page_size', String(page_size))
+    if (category) params.set('category', category)
+    return request(`${APPS_BASE}/activity-logs/?${params.toString()}`, { withAuth: true })
+  },
+  // CSV export for the selected date range (returns raw CSV text). Gated by the
+  // activity_log_download permission server-side.
+  downloadActivityLogs: ({ days, start, end, category } = {}) => {
+    const params = new URLSearchParams()
+    if (days != null) params.set('days', String(days))
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
+    if (category) params.set('category', category)
+    return request(`${APPS_BASE}/activity-logs/export/?${params.toString()}`, { withAuth: true })
+  },
+
+  // Per-user activity trail (the actions a single account performed).
+  //   • { userId, days } or { userId, start, end } + { page, page_size, category }
+  // Gated by user_activity_view server-side. Returns { user, count, page,
+  // total_pages, start, end, logs }.
+  listUserActivity: ({ userId, days, start, end, page, page_size, category } = {}) => {
+    const params = new URLSearchParams()
+    if (days != null) params.set('days', String(days))
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
+    if (page != null) params.set('page', String(page))
+    if (page_size != null) params.set('page_size', String(page_size))
+    if (category) params.set('category', category)
+    return request(`${APPS_BASE}/user-activity/${userId}/?${params.toString()}`, { withAuth: true })
+  },
+  // CSV export of one user's activity (raw CSV text). Gated by
+  // user_activity_download server-side.
+  downloadUserActivity: ({ userId, days, start, end, category } = {}) => {
+    const params = new URLSearchParams()
+    if (days != null) params.set('days', String(days))
+    if (start) params.set('start', start)
+    if (end) params.set('end', end)
+    if (category) params.set('category', category)
+    return request(`${APPS_BASE}/user-activity/${userId}/export/?${params.toString()}`, { withAuth: true })
+  },
+
   /* -------- SSL Certificate management (admin) -------- */
   listSSLCertificates: () =>
     request(`${APPS_BASE}/ssl-certificates/`, { withAuth: true }),
@@ -515,4 +577,42 @@ export const api = {
       json: { is_active: true },
       withAuth: true,
     }),
+
+  /* -------- Contact Us submissions (admin) --------
+     Returns { count, status_counts, submissions: [...] }. The public
+     landing form posts via the no-auth publicSubmitContact() below. */
+  listContactSubmissions: ({ status } = {}) => {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    const qs = params.toString()
+    return request(`${APPS_BASE}/contact-submissions/${qs ? '?' + qs : ''}`, { withAuth: true })
+  },
+  updateContactSubmission: (id, data) =>
+    request(`${APPS_BASE}/contact-submissions/${id}/`, { method: 'PATCH', json: data, withAuth: true }),
+  deleteContactSubmission: (id) =>
+    request(`${APPS_BASE}/contact-submissions/${id}/`, { method: 'DELETE', withAuth: true }),
+
+  /* -------- Company Information (admin) --------
+     Returns { count, active, records: [...] }. Singleton-active pattern,
+     like SSL certificates — only one record is active at a time. */
+  listCompanyInformation: () =>
+    request(`${APPS_BASE}/company-information/`, { withAuth: true }),
+  createCompanyInformation: (data) =>
+    request(`${APPS_BASE}/company-information/`, { method: 'POST', json: data, withAuth: true }),
+  updateCompanyInformation: (id, data) =>
+    request(`${APPS_BASE}/company-information/${id}/`, { method: 'PATCH', json: data, withAuth: true }),
+  deleteCompanyInformation: (id) =>
+    request(`${APPS_BASE}/company-information/${id}/`, { method: 'DELETE', withAuth: true }),
+  setActiveCompanyInformation: (id) =>
+    request(`${APPS_BASE}/company-information/${id}/`, {
+      method: 'PATCH',
+      json: { is_active: true },
+      withAuth: true,
+    }),
+
+  /* -------- Public (no auth) — contact intake + active company info -------- */
+  publicSubmitContact: (data) =>
+    request(`${APPS_BASE}/public/contact/`, { method: 'POST', json: data }),
+  publicGetCompanyInformation: () =>
+    request(`${APPS_BASE}/public/company-information/`),
 }

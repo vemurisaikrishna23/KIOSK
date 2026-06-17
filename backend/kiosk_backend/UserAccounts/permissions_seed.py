@@ -33,6 +33,25 @@ def create_default_permissions():
         {"name": "View SSL Certificate",   "short_name": "ssl_certificate_view",   "policy": "SSLCertificate"},
         {"name": "Upload SSL Certificate", "short_name": "ssl_certificate_upload", "policy": "SSLCertificate"},
         {"name": "Delete SSL Certificate", "short_name": "ssl_certificate_delete", "policy": "SSLCertificate"},
+
+                # ------------------ CONTACT SUBMISSIONS ------------------
+        {"name": "View Contact Submissions",   "short_name": "contact_submission_view",   "policy": "ContactSubmission"},
+        {"name": "Update Contact Submissions", "short_name": "contact_submission_update", "policy": "ContactSubmission"},
+        {"name": "Delete Contact Submissions", "short_name": "contact_submission_delete", "policy": "ContactSubmission"},
+
+                # ------------------ COMPANY INFORMATION ------------------
+        {"name": "View Company Information",   "short_name": "company_info_view",   "policy": "CompanyInformation"},
+        {"name": "Create Company Information", "short_name": "company_info_create", "policy": "CompanyInformation"},
+        {"name": "Update Company Information", "short_name": "company_info_update", "policy": "CompanyInformation"},
+        {"name": "Delete Company Information", "short_name": "company_info_delete", "policy": "CompanyInformation"},
+
+                # ------------------ ACTIVITY LOG ------------------
+        {"name": "View Activity Logs",     "short_name": "activity_log_view",     "policy": "ActivityLog"},
+        {"name": "Download Activity Logs", "short_name": "activity_log_download", "policy": "ActivityLog"},
+
+                # ------------------ USER ACTIVITY ------------------
+        {"name": "View User Activity",     "short_name": "user_activity_view",     "policy": "UserActivity"},
+        {"name": "Download User Activity", "short_name": "user_activity_download", "policy": "UserActivity"},
     ]
 
     for perm in permissions:

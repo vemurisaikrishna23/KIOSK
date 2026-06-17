@@ -15,6 +15,10 @@ import PublicLanding from './pages/PublicLanding.jsx'
 import PublicApplications from './pages/PublicApplications.jsx'
 import PublicDashboard from './pages/PublicDashboard.jsx'
 import SslCertificate from './pages/SslCertificate.jsx'
+import ContactSubmissions from './pages/ContactSubmissions.jsx'
+import CompanyInformation from './pages/CompanyInformation.jsx'
+import ActivityLog from './pages/ActivityLog.jsx'
+import UserActivity from './pages/UserActivity.jsx'
 import RouteLoader from './components/RouteLoader.jsx'
 import { auth } from './lib/api.js'
 
@@ -122,6 +126,22 @@ export default function App() {
       <Route
         path="/ssl-certificate"
         element={<RequireAuth><SslCertificate /></RequireAuth>}
+      />
+      <Route
+        path="/contact-submissions"
+        element={<RequireAuth><ContactSubmissions /></RequireAuth>}
+      />
+      <Route
+        path="/company-information"
+        element={<RequireAuth><CompanyInformation /></RequireAuth>}
+      />
+      <Route
+        path="/activity-logs"
+        element={<RequireAuth><ActivityLog /></RequireAuth>}
+      />
+      <Route
+        path="/users/:userId/activity"
+        element={<RequireAuth><UserActivity /></RequireAuth>}
       />
       {/* Public (no auth) — marketing landing + live demo list + view-only dashboard. */}
       <Route path="/" element={<PublicLanding />} />

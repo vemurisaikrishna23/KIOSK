@@ -85,6 +85,55 @@ html {
 }
 ::-webkit-scrollbar-corner { background: var(--bg); }
 
+/* ---- Dashboard scrollbars: thin + subtle, tinted to the active theme ----
+   Inside the dashboard (.kiosk-app.is-db) the scrollbars follow the theme
+   accent (--db-accent) at low opacity and a transparent track, so they're far
+   less noticeable than the global chrome scrollbar. */
+.kiosk-app.is-db *,
+.kiosk-app.is-db {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--db-accent, #F36A1E) 32%, transparent) transparent;
+}
+.kiosk-app.is-db ::-webkit-scrollbar,
+.kiosk-app.is-db::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.kiosk-app.is-db ::-webkit-scrollbar-track,
+.kiosk-app.is-db::-webkit-scrollbar-track,
+.kiosk-app.is-db ::-webkit-scrollbar-corner,
+.kiosk-app.is-db::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.kiosk-app.is-db ::-webkit-scrollbar-thumb,
+.kiosk-app.is-db::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--db-accent, #F36A1E) 28%, transparent);
+  border-radius: 999px;
+  border: 0;
+}
+.kiosk-app.is-db ::-webkit-scrollbar-thumb:hover,
+.kiosk-app.is-db::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--db-accent, #F36A1E) 55%, transparent);
+}
+/* Page (window) scrollbar while a dashboard route is mounted — theme-tinted,
+   thin, subtle. `.db-scrollbars` + `--db-scroll-accent` are set on <html> by
+   DashboardDetail and removed when leaving the page. */
+html.db-scrollbars {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--db-scroll-accent, #F36A1E) 32%, transparent) transparent;
+}
+html.db-scrollbars::-webkit-scrollbar { width: 9px; height: 9px; }
+html.db-scrollbars::-webkit-scrollbar-track,
+html.db-scrollbars::-webkit-scrollbar-corner { background: transparent; }
+html.db-scrollbars::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--db-scroll-accent, #F36A1E) 30%, transparent);
+  border-radius: 999px;
+  border: 0;
+}
+html.db-scrollbars::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--db-scroll-accent, #F36A1E) 55%, transparent);
+}
+
 /* ---- Disable text selection / callouts (inputs stay editable) ---- */
 body {
   -webkit-user-select: none;
@@ -103,6 +152,10 @@ input, textarea, select, [contenteditable="true"] {
 /* ---- Custom cursor — LANDING PAGE ONLY (scoped to .pf-page) ---- */
 .pf-page {
   cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='26'%20height='26'%3E%3Ccircle%20cx='13'%20cy='13'%20r='11'%20fill='%23F36A1E'%20fill-opacity='0.16'/%3E%3Ccircle%20cx='13'%20cy='13'%20r='4.5'%20fill='%23F36A1E'%20stroke='white'%20stroke-width='2'/%3E%3C/svg%3E") 13 13, auto;
+  /* Decorative orbs / wide hero art can extend past the viewport on small
+     screens — clip horizontally (clip, not hidden, so it doesn't create a
+     scroll container that would break any sticky descendants). */
+  overflow-x: clip;
 }
 .pf-page a[href], .pf-page button:not(:disabled), .pf-page [role="button"]:not([aria-disabled="true"]),
 .pf-page label, .pf-page summary, .pf-page select:not(:disabled),
@@ -3129,6 +3182,227 @@ input, textarea, select, [contenteditable="true"] {
 }
 .trending-more:hover { color: #F36A1E; }
 
+/* =====================================================================
+   Main dashboard — READ-ONLY analytics overview
+   ===================================================================== */
+.dash-ro-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  grid-column: 1 / -1;   /* span both columns so main + sidebar start on the same row below */
+}
+.dash-ro-head h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink, #14161C); }
+.dash-ro-head .lede { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-3, #948B7E); }
+.dash-ro-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #B5500F; background: rgba(243,106,30,0.10);
+  border: 1px solid rgba(243,106,30,0.22); border-radius: 999px;
+  padding: 6px 12px; white-space: nowrap; flex-shrink: 0;
+}
+
+/* Layout: heading + (KPIs+hero | sidebar) + full-width recent activity.
+   The sidebar stretches to the left stack's height so its bottom lines up
+   with the hero card's bottom. */
+.kiosk-body.dash-ro { display: flex; flex-direction: column; gap: 22px; }
+.dash-top-grid { display: grid; grid-template-columns: 1fr 380px; gap: 22px; align-items: stretch; }
+.dash-top-left { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.dash-ro .kiosk-side { position: static; top: auto; height: auto; justify-content: space-between; }
+@media (max-width: 1180px) {
+  .dash-top-grid { grid-template-columns: 1fr; }
+  .dash-ro .kiosk-side { justify-content: flex-start; }
+}
+
+/* KPI grid */
+.dash-kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; }
+.dash-kpi {
+  background: #fff; border: 1px solid rgba(20,22,28,0.06); border-radius: 18px;
+  padding: 16px 16px 14px; box-shadow: 0 14px 30px -22px rgba(20,22,28,0.12);
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.dash-kpi.is-skeleton { min-height: 116px; background: linear-gradient(180deg,#fff,#FBF7F2); }
+.kpi-ic {
+  width: 34px; height: 34px; border-radius: 10px; margin-bottom: 6px;
+  background: #FFF3E7; border: 1px solid rgba(243,106,30,0.18);
+  display: grid; place-items: center;
+}
+.kpi-num { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink, #14161C); line-height: 1.1; }
+.kpi-label { font-size: 13px; font-weight: 700; color: var(--ink-2, #463F36); }
+.kpi-sub { font-size: 11.5px; color: var(--ink-3, #948B7E); }
+
+/* Hero bars — engagement leaderboard (reuses .hero-card / .hero-head) */
+.dash-bars { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+.dbar-row { display: grid; grid-template-columns: 150px 1fr 64px; align-items: center; gap: 12px; }
+.dbar-name { font-size: 13px; font-weight: 600; color: var(--ink-2,#463F36); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dbar-track { height: 12px; border-radius: 999px; background: #F4ECE1; overflow: hidden; }
+.dbar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFA45C, #F36A1E); }
+.dbar-val { font-size: 13px; font-weight: 800; color: var(--ink,#14161C); text-align: right; }
+.dash-ph { padding: 28px 4px; text-align: center; color: var(--ink-3,#948B7E); font-size: 13px; font-weight: 600; }
+
+/* Views graph — controls (app dropdown + range pills) + caption */
+.dash-views-head { row-gap: 12px; }
+.dash-views-controls { display: flex; align-items: center; gap: 10px; margin-left: auto; flex-wrap: wrap; }
+.dash-app-select {
+  appearance: none; -webkit-appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='m6 9 6 6 6-6' stroke='%236b6258' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid rgba(20,22,28,0.14); border-radius: 10px;
+  padding: 8px 30px 8px 12px; font-size: 13px; font-weight: 600; color: var(--ink,#14161C);
+  max-width: 200px; cursor: pointer; outline: none;
+}
+.dash-app-select:focus { border-color: rgba(243,106,30,0.5); box-shadow: 0 0 0 3px rgba(243,106,30,0.12); }
+.dash-views-chart { min-height: 240px; display: grid; place-items: center; }
+.dash-views-chart .kiosk-chart-svg { width: 100%; height: auto; }
+.dash-views-cap { margin: 8px 2px 0; font-size: 12px; color: var(--ink-3,#948B7E); }
+
+/* Custom date-range row */
+.dash-views-daterow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; }
+.dash-views-daterow label { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--ink-2,#463F36); }
+.dash-views-daterow input[type="date"] {
+  border: 1px solid rgba(20,22,28,0.14); border-radius: 10px; padding: 7px 10px;
+  font-size: 13px; font-weight: 600; color: var(--ink,#14161C); background: #fff; cursor: pointer; outline: none;
+}
+.dash-views-daterow input[type="date"]:focus { border-color: rgba(243,106,30,0.5); box-shadow: 0 0 0 3px rgba(243,106,30,0.12); }
+.dash-date-err { font-size: 12px; font-weight: 700; color: #C0392B; }
+.dash-date-hint { font-size: 12px; font-weight: 600; color: var(--ink-3,#948B7E); }
+
+/* Read-only activity table */
+.dash-log .dash-log-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.dash-log-sub { font-size: 12px; color: var(--ink-3,#948B7E); }
+.dash-live { display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #168A52; vertical-align: middle; }
+.dash-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #1FAE6B; box-shadow: 0 0 0 0 rgba(31,174,107,0.5); animation: dash-live-pulse 1.6s ease-out infinite; }
+@keyframes dash-live-pulse { 0% { box-shadow: 0 0 0 0 rgba(31,174,107,0.5); } 70% { box-shadow: 0 0 0 6px rgba(31,174,107,0); } 100% { box-shadow: 0 0 0 0 rgba(31,174,107,0); } }
+.dash-log-cols, .dash-log-row {
+  display: grid; grid-template-columns: 2fr 1fr 1.2fr 0.9fr; gap: 12px; align-items: center;
+}
+.dash-log-cols {
+  padding: 12px 6px 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-3,#948B7E); border-bottom: 1px solid #F1E6D6;
+}
+.dash-log-rows { display: flex; flex-direction: column; }
+.dash-log-row { padding: 12px 6px; border-bottom: 1px solid #F6EEE3; font-size: 13.5px; }
+.dash-log-row:last-child { border-bottom: 0; }
+.dl-entity { display: inline-flex; align-items: flex-start; gap: 9px; min-width: 0; }
+.dl-entity-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dl-name { font-weight: 700; color: var(--ink,#14161C); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-detail { font-size: 11.5px; color: var(--ink-3,#948B7E); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dl-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.dl-ok { background: #1FAE6B; } .dl-err { background: #E0463D; } .dl-idle { background: #C9BCA8; }
+.dl-type { font-size: 11.5px; font-weight: 700; color: var(--ink-2,#463F36); background: #F4ECE1; border-radius: 6px; padding: 3px 8px; white-space: nowrap; text-transform: capitalize; }
+.dl-state { font-size: 11.5px; font-weight: 800; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.dl-state-ok { color: #168A52; background: rgba(31,174,107,0.14); }
+.dl-state-err { color: #C0392B; background: rgba(224,70,61,0.14); }
+.dl-state-idle { color: #6b6258; background: rgba(20,22,28,0.07); }
+.dl-time { color: var(--ink-3,#948B7E); font-size: 12.5px; }
+
+/* Right column — system overview */
+.dash-side { gap: 18px; }
+.ov-block { display: flex; flex-direction: column; gap: 12px; }
+.ov-block + .ov-block { padding-top: 16px; border-top: 1px solid #F1E6D6; }
+.ov-h { font-size: 14px; font-weight: 800; color: var(--ink,#14161C); }
+.ov-h-sub { font-size: 12px; font-weight: 600; color: var(--ink-3,#948B7E); }
+
+/* Fleet ring */
+.fleet { display: flex; align-items: center; gap: 16px; }
+.fleet-ring { width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
+.fleet-hole { width: 70px; height: 70px; border-radius: 50%; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1px rgba(20,22,28,0.05); }
+.fleet-pct { font-size: 22px; font-weight: 800; color: var(--ink,#14161C); line-height: 1; }
+.fleet-cap { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-3,#948B7E); }
+.fleet-legend { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: var(--ink-2,#463F36); flex: 1; min-width: 0; }
+.fl-row { display: flex; align-items: center; gap: 8px; }
+.fl-row b { margin-left: auto; font-weight: 800; color: var(--ink,#14161C); }
+.fl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.fl-ok { background: #1FAE6B; } .fl-off { background: #E0463D; } .fl-tot { background: #C9BCA8; }
+
+/* Distribution bars */
+.ovb { display: flex; flex-direction: column; gap: 6px; }
+.ovb-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; color: var(--ink-2,#463F36); }
+.ovb-val { font-weight: 800; color: var(--ink,#14161C); white-space: nowrap; }
+.ovb-val .muted { font-weight: 500; color: var(--ink-3,#948B7E); }
+.ovb-track { height: 8px; border-radius: 999px; background: #F4ECE1; overflow: hidden; }
+.ovb-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFA45C, #F36A1E); }
+
+/* Leaderboard */
+.lead { display: flex; flex-direction: column; gap: 12px; }
+.lead-row.is-empty .lead-rank { opacity: 0.45; }
+.lead-row.is-empty .lead-name,
+.lead-row.is-empty .lead-val { color: var(--ink-3, #948B7E); }
+.lead-row.is-empty .lead-track { opacity: 0.5; }
+
+/* ===== Activity Log page ===== */
+/* "← Back to Users" link above the per-user activity heading. */
+.alog-back { display: inline-block; margin-bottom: 6px; font-size: 12.5px; font-weight: 700; }
+.alog-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.alog-dates { display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.alog-dates label { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--ink-2,#463F36); }
+.alog-dates input[type="date"], .alog-cat, .alog-rows {
+  border: 1px solid rgba(20,22,28,0.14); border-radius: 10px; padding: 8px 12px;
+  font-size: 13px; font-weight: 600; color: var(--ink,#14161C); background: #fff; cursor: pointer; outline: none;
+}
+.alog-dates input[type="date"]:focus, .alog-cat:focus, .alog-rows:focus { border-color: rgba(243,106,30,0.5); box-shadow: 0 0 0 3px rgba(243,106,30,0.12); }
+.alog-cat { margin-left: auto; }
+.alog-dl { white-space: nowrap; }
+.alog-date-hint { font-size: 12px; font-weight: 600; color: var(--ink-3,#948B7E); }
+
+.alog-table .alog-head, .alog-table .alog-row {
+  display: grid;
+  grid-template-columns: 1.5fr 0.9fr 0.85fr 1.3fr 2.2fr 1fr;
+  gap: 12px; align-items: start;
+}
+.alog-table .alog-head {
+  padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-3,#948B7E); border-bottom: 1px solid #F1E6D6;
+}
+.alog-row { padding: 13px 16px; border-bottom: 1px solid #F6EEE3; font-size: 13.5px; border-left: 3px solid transparent; }
+.alog-row:last-child { border-bottom: 0; }
+.alog-row.alog-ok   { border-left-color: rgba(31,174,107,0.5); }
+.alog-row.alog-err  { border-left-color: rgba(224,70,61,0.55); }
+.alog-row.alog-idle { border-left-color: rgba(201,188,168,0.7); }
+.alog-when { color: var(--ink-2,#463F36); white-space: nowrap; }
+.alog-entity { font-weight: 700; color: var(--ink,#14161C); min-width: 0; word-break: break-word; }
+.alog-detail { color: var(--ink-2,#463F36); line-height: 1.5; word-break: break-word; }
+.alog-actor { color: var(--ink-2,#463F36); }
+.alog-table .dl-type { text-transform: capitalize; }
+
+@media (max-width: 860px) {
+  .alog-cat { margin-left: 0; }
+  .alog-table .alog-head { display: none; }
+  .alog-table .alog-row {
+    grid-template-columns: 1fr auto; gap: 6px 12px;
+    grid-template-areas: "ent when" "cat act" "detail detail" "actor actor";
+    padding: 14px 16px;
+  }
+  .alog-row .alog-entity { grid-area: ent; }
+  .alog-row .alog-when { grid-area: when; justify-self: end; font-size: 12px; }
+  .alog-row > [data-col="Category"] { grid-area: cat; }
+  .alog-row > [data-col="Action"] { grid-area: act; justify-self: end; }
+  .alog-row .alog-detail { grid-area: detail; }
+  .alog-row .alog-actor { grid-area: actor; font-size: 12px; }
+}
+.lead-row { display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: center; }
+.lead-rank { font-size: 13px; font-weight: 800; color: var(--accent,#F36A1E); }
+.lead-main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.lead-name { font-size: 13px; font-weight: 700; color: var(--ink,#14161C); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lead-track { height: 6px; border-radius: 999px; background: #F4ECE1; overflow: hidden; }
+.lead-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg,#FFA45C,#F36A1E); }
+.lead-val { font-size: 12.5px; font-weight: 800; color: var(--ink,#14161C); text-align: right; line-height: 1.35; }
+.lead-val .muted { font-weight: 500; color: var(--ink-3,#948B7E); }
+.lead-sub { font-size: 11px; font-weight: 600; color: var(--ink-3,#948B7E); }
+
+/* Responsive */
+@media (max-width: 1180px) {
+  .dash-kpis { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 720px) {
+  .dash-kpis { grid-template-columns: repeat(2, 1fr); }
+  .dash-ro-head { flex-direction: column; }
+  .kpi-num { font-size: 23px; }
+  .dbar-row { grid-template-columns: 104px 1fr 50px; gap: 8px; }
+  .dash-log-cols { display: none; }
+  .dash-log-row { grid-template-columns: 1fr auto; grid-template-areas: "ent time" "type state"; row-gap: 6px; }
+  .dash-log-row .dl-entity { grid-area: ent; }
+  .dash-log-row .dl-time { grid-area: time; }
+  .dash-log-row > div:nth-child(2) { grid-area: type; justify-self: start; }
+  .dash-log-row > div:nth-child(3) { grid-area: state; justify-self: end; }
+}
+
 /* ===== Hero card with chart ===== */
 .hero-card {
   background: #fff;
@@ -3710,8 +3984,9 @@ input, textarea, select, [contenteditable="true"] {
 .camera-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  /* Auto rows expand to match the tallest content in that subgrid row track,
-     so every card in the same visual row aligns section-by-section. */
+  /* Auto rows expand to match the tallest content in each subgrid row track,
+     so every card in a row aligns section-by-section (chips, stats, URL,
+     footer all share one baseline). */
   grid-auto-rows: auto;
   gap: 14px;
 }
@@ -3720,11 +3995,12 @@ input, textarea, select, [contenteditable="true"] {
   border: 1px solid rgba(20, 22, 28, 0.08);
   border-radius: 16px;
   padding: 16px 16px 14px;
-  /* CSS Subgrid: each card spans 5 row tracks of the parent grid (one per
-     internal section: head, chips, stats, url, actions). Sibling cards in
-     the same grid row share those tracks, so the chip row's natural height
-     determines a single row height across all of them, and every section
-     below it stays perfectly in line. */
+  /* CSS Subgrid: each card spans 5 row tracks (head, chips, stats, url,
+     actions). Sibling cards in the same grid row share those tracks, so each
+     section lands at exactly the same y across every card — regardless of
+     whether a card has a description. The header is locked to a constant
+     height (1-line title + fixed 2-line description, see below) so no card
+     shows reserved-whitespace gaps. */
   display: grid;
   grid-template-rows: subgrid;
   grid-row: span 5;
@@ -3760,6 +4036,11 @@ input, textarea, select, [contenteditable="true"] {
   justify-content: space-between;
   gap: 12px;
   align-self: start;
+  /* As a subgrid item this defaults to min-width:auto, which would refuse to
+     shrink below the (nowrap) title's full width — pushing the OFFLINE badge
+     out of place. min-width:0 lets the header shrink to the card so the title
+     truncates with "…" and the badge stays anchored on the right. */
+  min-width: 0;
 }
 .camera-card-id {
   display: flex;
@@ -3787,11 +4068,16 @@ input, textarea, select, [contenteditable="true"] {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  /* Always reserve 2 lines of vertical space so every card's "chips" row
-     starts at the same y-coordinate, regardless of whether the description
-     is empty, 1 line, or longer than 2 lines. */
+  /* Always exactly 2 lines tall: the clamp caps long text at 2 lines (extra
+     spills to "…"), and the min-height reserves 2 lines for short / missing
+     descriptions — so every card's chips/stats/URL/footer line up. */
   min-height: calc(12px * 1.4 * 2);
 }
+/* When the description is clamped, the whole blurb becomes a click target that
+   opens the full text (no separate "Read more" line that would break the
+   locked header height). */
+.camera-card-desc.is-clickable { cursor: pointer; }
+.camera-card-desc.is-clickable:hover { color: var(--ink); }
 .camera-card-desc .muted { font-style: normal; font-weight: 500; color: rgba(107, 98, 88, 0.55); }
 .camera-readmore {
   margin: 4px 0 0;
@@ -3806,12 +4092,9 @@ input, textarea, select, [contenteditable="true"] {
   align-self: flex-start;
 }
 .camera-readmore:hover { text-decoration: underline; }
-/* Reserved slot — keeps every card's title block the same height so the
-   chip row, viewer stats, URL strip, etc. all line up across the grid
-   whether or not a card actually has a "Read more" link. */
+/* No "Read more" needed → collapse the slot entirely so it adds no height. */
 .camera-readmore.is-empty {
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
 }
 .camera-desc-full {
   margin: 0;
@@ -4068,6 +4351,233 @@ input, textarea, select, [contenteditable="true"] {
   transition: color 0.15s, transform 0.15s;
 }
 .back-link:hover { color: #F36A1E; transform: translateX(-2px); }
+/* Public dashboard: a compact circular back-arrow button (no text). */
+/* Public dashboard header — a sticky bar with the back arrow + application
+   name. The page scrolls normally beneath it. */
+.db-public-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 22px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(20, 22, 28, 0.08);
+}
+.db-public-topbar-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  color: #14161C;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.db-public-topbar-back:hover {
+  background: #fff;
+  color: #F36A1E;
+  border-color: rgba(243, 106, 30, 0.4);
+}
+.db-public-topbar-title {
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14161C;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "No dashboard published" notice (public, when the relevant viewport layout
+   isn't published). */
+.db-public-unpub {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  max-width: 440px;
+  margin: 12vh auto 0;
+  padding: 0 20px;
+}
+.db-public-unpub-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  background: rgba(20, 22, 28, 0.06);
+  color: #8c8377;
+  margin-bottom: 6px;
+}
+.db-public-unpub h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14161C;
+}
+.db-public-unpub p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #5C6378;
+}
+.db-public-unpub-back { margin-top: 14px; }
+
+/* ---- Access-queue header badge ---- */
+.db-queue-badge {
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.06);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3C4458;
+  white-space: nowrap;
+}
+.db-queue-badge strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+.db-queue-badge.is-control {
+  background: rgba(31, 174, 107, 0.14);
+  color: #14794B;
+}
+.db-queue-badge.is-wait { background: rgba(243, 106, 30, 0.10); color: #9A4A12; }
+.db-queue-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #1FAE6B;
+  box-shadow: 0 0 0 0 rgba(31, 174, 107, 0.5);
+  animation: dbQueuePulse 1.6s ease-out infinite;
+}
+@keyframes dbQueuePulse {
+  0% { box-shadow: 0 0 0 0 rgba(31, 174, 107, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(31, 174, 107, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 174, 107, 0); }
+}
+.db-queue-pos, .db-queue-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.12);
+  font-weight: 800; font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+.db-queue-sep { opacity: 0.5; }
+.db-queue-join {
+  margin-left: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: #F36A1E;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.db-queue-join:hover { background: #D85510; }
+
+/* ---- Access-queue lobby overlay ---- */
+.db-queue-lobby {
+  position: fixed;
+  inset: 0;
+  /* Below the sticky public header (z-index 40) so the back arrow stays
+     reachable. It's a full screen on the theme page background — the dashboard
+     isn't shown until the visitor joins. */
+  z-index: 35;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--db-page-bg, #FBF7F1);
+  transition: background 0.3s ease;
+}
+.db-queue-lobby-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 26px 26px 24px;
+  text-align: center;
+  box-shadow: 0 30px 70px -30px rgba(20, 22, 28, 0.5);
+}
+.db-queue-lobby-ic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px; height: 52px;
+  border-radius: 16px;
+  background: rgba(243, 106, 30, 0.12);
+  color: #F36A1E;
+  margin-bottom: 12px;
+}
+.db-queue-lobby-card h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14161C;
+}
+.db-queue-lobby-sub {
+  margin: 0 0 18px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #5C6378;
+}
+.db-queue-lobby-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.db-queue-lobby-stats > div {
+  background: #FBF7F1;
+  border: 1px solid rgba(244, 217, 194, 0.7);
+  border-radius: 12px;
+  padding: 10px 6px;
+}
+.db-queue-lobby-stats .n {
+  font-size: 18px;
+  font-weight: 800;
+  color: #14161C;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.db-queue-lobby-stats .l {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #8c8377;
+}
+.db-queue-lobby-now {
+  font-size: 13px;
+  color: #5C6378;
+  margin-bottom: 16px;
+}
+.db-queue-lobby-now strong { color: #14161C; font-weight: 700; }
+.db-queue-lobby-join { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.db-queue-spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  animation: dbQueueSpin 0.7s linear infinite;
+}
+@keyframes dbQueueSpin { to { transform: rotate(360deg); } }
 .back-link svg { transition: transform 0.15s; }
 .back-link:hover svg { transform: translateX(-2px); }
 
@@ -4176,6 +4686,29 @@ input, textarea, select, [contenteditable="true"] {
   align-items: center;
   gap: 10px;
 }
+/* 3D Scene (Spline) section body. */
+.spline-section {
+  padding: 16px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.spline-section-lead {
+  margin: 0;
+  font-size: 13px;
+  color: #5C6378;
+  line-height: 1.5;
+}
+.spline-section-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+.spline-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: #8c8377;
+}
+.spline-status.is-on { color: #1FAE6B; }
 .btn-primary.btn-sm {
   padding: 7px 14px;
   font-size: 12.5px;
@@ -6069,12 +6602,8 @@ input, textarea, select, [contenteditable="true"] {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  /* Sit at the top of the subgrid row track at the chip strip's natural
-     height — never stretch to fill the track (otherwise neighbouring
-     cards in the row get visually bloated chips). The track itself
-     still grows to fit the tallest card's chip wrap. */
-  align-self: start;
   align-items: flex-start;
+  align-self: start;
 }
 .camera-chip {
   display: inline-flex;
@@ -6120,8 +6649,6 @@ input, textarea, select, [contenteditable="true"] {
   background: #FAF3EA;
   border: 1px solid rgba(20, 22, 28, 0.06);
   border-radius: 12px;
-  /* Don't inflate vertically when the subgrid row track is taller than
-     the stats pill's natural height. */
   align-self: start;
 }
 .camera-stats > div { display: flex; flex-direction: column; gap: 2px; }
@@ -6152,11 +6679,19 @@ input, textarea, select, [contenteditable="true"] {
   gap: 8px;
   font-size: 11px;
   color: var(--ink-3);
-  padding: 6px 8px;
+  /* Match the stats strip's padding + radius exactly so the "WEBRTC" label
+     lines up directly under "VIEWERS" and both boxes read as one stacked pair. */
+  padding: 10px 12px;
   background: rgba(20, 22, 28, 0.03);
-  border-radius: 8px;
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  border-radius: 12px;
   align-self: start;
-  overflow: hidden;
+  /* The row itself must NOT clip — otherwise the hover tooltip below would be
+     cut off. The long URL is still clamped by .camera-url-value's own
+     overflow, so the strip stays a single tidy line at rest. */
+  overflow: visible;
+  position: relative;
+  min-width: 0;
 }
 .camera-url-label {
   font-weight: 800;
@@ -6173,6 +6708,39 @@ input, textarea, select, [contenteditable="true"] {
   text-overflow: ellipsis;
   min-width: 0;
   flex: 1;
+}
+/* Hover the URL strip → reveal the full (otherwise "…"-clamped) value in a
+   styled tooltip floating just above the row. Sits inside the card's vertical
+   bounds, so the list scroll container never clips it. */
+.camera-url[data-url]:hover::after {
+  content: attr(data-url);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 7px);
+  z-index: 30;
+  padding: 8px 10px;
+  background: #14161c;
+  color: #fff;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 8px;
+  box-shadow: 0 14px 30px -12px rgba(20, 22, 28, 0.55);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  pointer-events: none;
+}
+.camera-url[data-url]:hover::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  bottom: calc(100% + 1px);
+  z-index: 31;
+  border: 6px solid transparent;
+  border-top-color: #14161c;
+  pointer-events: none;
 }
 
 .camera-actions {
@@ -6567,6 +7135,12 @@ input, textarea, select, [contenteditable="true"] {
 }
 
 .row-btn {
+  /* inline-flex + centering so the <a> (e.g. Reply) and <button> (e.g. Delete)
+     variants render identically and stay aligned in any row/grid. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background: #fff;
   border: 1px solid rgba(20, 22, 28, 0.10);
   color: var(--ink);
@@ -6575,6 +7149,7 @@ input, textarea, select, [contenteditable="true"] {
   font-weight: 700;
   padding: 6px 12px;
   border-radius: 8px;
+  text-decoration: none;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -7330,17 +7905,17 @@ body { overflow-x: hidden; }
 .kiosk-nav-backdrop {
   display: none;
   position: fixed;
-  /* Start BELOW the sticky top bar so the bar itself isn't dimmed/blurred
-     when the drawer is open. Per-breakpoint top values are tuned to the
-     top-bar heights set further down. */
+  /* Invisible click-catcher that closes the drawer when tapping outside it.
+     Starts below the top bar so the bar (and burger) stay interactive.
+     Kept transparent on purpose — the dropdown is a small popup, so
+     dimming/blurring the whole screen behind it felt heavy ("dull"). */
   top: 60px;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(20, 22, 28, 0.35);
-  backdrop-filter: blur(2px);
+  background: transparent;
   border: 0;
-  cursor: pointer;
+  cursor: default;
   z-index: 25;
 }
 
@@ -8978,6 +9553,14 @@ body { overflow-x: hidden; }
   background: var(--db-page-bg, #FBF7F1);
   transition: background 0.3s ease;
 }
+/* In normal edit/view mode the full-bleed shell above already paints the page
+   background, so the centered content column stays transparent — otherwise a
+   gradient page bg would paint twice (shell + column) and, because the top bar
+   offsets the column, show a faint seam on wide screens. Preview and mobile
+   fullscreen keep their own page background (no top bar, so no seam there). */
+.kiosk-app.is-db:not(.is-db-preview) .db-page:not(.is-mobile-fullscreen) {
+  background: transparent;
+}
 .db-page-actions-row {
   display: flex;
   align-items: center;
@@ -9211,7 +9794,10 @@ body { overflow-x: hidden; }
 /* Hide the cell-grid surface in preview mode — the empty cells are an
    authoring guide and add noise to the polished view. Widgets keep
    rendering on top because RGL sits in a sibling wrapper. */
-.db-page.is-preview .db-cell-grid {
+/* Hide the editor cell-grid in read-only views — preview AND public — so end
+   users see a clean dashboard without the layout grid. */
+.db-page.is-preview .db-cell-grid,
+.kiosk-app.is-public .db-cell-grid {
   display: none;
 }
 /* Exit-preview chip — pinned to the very top-right of the viewport so
@@ -9813,6 +10399,39 @@ body { overflow-x: hidden; }
   background: transparent;
 }
 .db-mobile-public .db-mobile-content { padding: 2px 2px 28px; gap: 12px; }
+/* Public mobile + a camera / 3D scene is present: render the SAME fixed-screen
+   layout as the editor preview (the `.db-mobile-screen` panel: fixed camera +
+   shrink-to-fit, internally-scrolling widgets) but sized to the real viewport.
+   With no camera/spline this `.is-live-screen` wrapper isn't used, so the page
+   scrolls normally. `overflow-x: clip` keeps horizontal overflow contained
+   without turning the shell into a scroll container. */
+.kiosk-app.is-public { overflow-x: clip; }
+.kiosk-app.is-public:has(.db-mobile-public.is-live-screen) {
+  height: 100dvh;
+  overflow: hidden;
+}
+.kiosk-app.is-public:has(.db-mobile-public.is-live-screen) .admin-page.db-page {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.db-mobile-public.is-live-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* The preview screen, adapted for a real device: fill the viewport instead of
+   the fixed 720px simulator height, and square off the rounded phone corners. */
+.db-mobile-public.is-live-screen .db-mobile-screen.is-live {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-width: none;
+  border-radius: 0;
+}
 /* On a real phone, trim the public dashboard page chrome so the widget
    stack uses the full screen width and fits any device. */
 @media (max-width: 768px) {
@@ -11115,6 +11734,21 @@ body { overflow-x: hidden; }
   min-height: 0;              /* allows the inner scroll to actually engage */
   scrollbar-gutter: stable;
 }
+/* Pin the config form's action bar (Back / Save Changes) to the bottom of the
+   scrolling editor so it's always reachable while editing a tall widget form.
+   The footer keeps the form's content width (aligned with the fields above and
+   clear of the scrollbar gutter); zeroing the pane's bottom padding lets it sit
+   flush against the bottom. The cream background hides content scrolling under it. */
+.widget-picker-main:has(.modal-foot) { padding-bottom: 0; }
+.widget-picker-main .modal-foot {
+  position: sticky;
+  bottom: 0;
+  margin: 0;
+  padding: 14px 0 18px;
+  background: #FCFAF7;
+  border-top: 1px solid #F1E6D6;
+  z-index: 3;
+}
 /* Slim peach-themed scrollbars for the picker's main / side panels. */
 .widget-picker-main::-webkit-scrollbar,
 .widget-picker-side::-webkit-scrollbar { width: 10px; }
@@ -11382,6 +12016,43 @@ body { overflow-x: hidden; }
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+/* ---------- Dials gallery — uniform, full-sized cards. A generous fixed
+   card height keeps every dial card the same size; NO container-type change,
+   so the dials keep their natural (full) size, and .dial-wrap centres each
+   dial vertically. Scoped to the picker gallery only — dashboard widgets +
+   the config preview are untouched. ---- */
+.card-gallery-dials .card-variant-preview .cv-card { height: 340px; }
+
+/* ---------- Dashboard editor: not-supported-on-mobile notice ---------- */
+.db-unsupported {
+  min-height: calc(100vh - 70px);
+  display: grid;
+  place-items: center;
+  padding: 28px 20px;
+}
+.db-unsupported-card {
+  max-width: 420px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  border-radius: 18px;
+  padding: 32px 26px;
+  box-shadow: 0 24px 50px -28px rgba(20, 22, 28, 0.22);
+}
+.db-unsupported-ic {
+  width: 76px; height: 76px; margin: 0 auto 16px;
+  border-radius: 18px;
+  background: #FFF3E7; border: 1px solid rgba(243, 106, 30, 0.18);
+  display: grid; place-items: center;
+}
+.db-unsupported-card h2 {
+  margin: 0 0 8px; font-size: 18px; font-weight: 800;
+  letter-spacing: -0.01em; color: var(--ink, #14161C); line-height: 1.3;
+}
+.db-unsupported-card p {
+  margin: 0 0 20px; font-size: 13.5px; line-height: 1.55; color: var(--ink-3, #948B7E);
 }
 
 /* ---------- preview "card" chrome — shared by every variant ----------
@@ -13855,29 +14526,103 @@ body { overflow-x: hidden; }
 
 .public-page {
   flex: 1;
+  padding-bottom: 28px;
+  gap: 16px;
 }
 .public-intro {
-  padding: 12px 0 24px;
-  max-width: 720px;
+  flex: 0 0 auto;
+  padding: 10px 0 0;
+  max-width: none;
 }
 .public-intro h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
+  margin: 0 0 6px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #14161C;
 }
-.public-intro p {
+.public-intro-lede {
   margin: 0;
   color: #5C6378;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;
+  /* Always one line in the UI; ellipsize rather than wrap if the viewport is
+     too narrow to fit the full sentence. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Engagement overview keeps its natural height — it never scrolls. */
+.public-page .public-analytics { flex: 0 0 auto; margin: 0; }
+
+/* Apps container — a panel (like the authenticated Applications page) holding
+   the responsive card grid + pager. Grows with content; the page scrolls. */
+.public-apps-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(244, 217, 194, 0.75);
+  border-radius: 20px;
+  padding: 16px 18px 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.public-apps-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.public-apps-panel-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #14161C;
+}
+.public-apps-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: rgba(243, 106, 30, 0.12);
+  color: #B25313;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.public-apps-panel .pager {
+  margin-top: 16px;
 }
 .public-app-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 18px;
 }
+/* Public app cards reuse the authenticated Applications card (.app-card-v2).
+   The grid mirrors that page; these tweaks adapt the card's footer for the
+   public "View dashboard" CTA and the tries metric. */
+.public-app-grid-v2 { margin-top: 4px; }
+.public-app-grid-v2 .app-card-v2 { background: #fff; }
+.public-app-view-btn,
+.public-app-noview-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.public-tries-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8c8377;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.public-tries-meta svg { color: #F36A1E; }
 .public-app-card {
   position: relative;
   background: linear-gradient(180deg, #FFFBF5 0%, #FCEFD9 100%);
@@ -13940,14 +14685,18 @@ body { overflow-x: hidden; }
   margin-top: auto;
 }
 .public-app-card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
-  font-weight: 600;
-  color: #8c8377;
-  padding: 3px 9px;
+  font-weight: 700;
+  color: #B25313;
+  padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(244, 217, 194, 0.6);
+  background: rgba(243, 106, 30, 0.08);
+  border: 1px solid rgba(243, 106, 30, 0.18);
 }
+.public-app-card-chip svg { color: #F36A1E; }
 .public-app-card-actions {
   display: flex;
   gap: 8px;
@@ -13985,65 +14734,71 @@ body { overflow-x: hidden; }
 .public-analytics {
   background: linear-gradient(180deg, #FFFBF5 0%, #FCEFD9 100%);
   border: 1px solid rgba(244, 217, 194, 0.85);
-  border-radius: 22px;
-  padding: 22px 24px 24px;
-  margin: 4px 0 28px;
+  border-radius: 18px;
+  padding: 14px 18px 16px;
+  margin: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    0 14px 32px -24px rgba(20, 22, 28, 0.20);
+    0 10px 24px -22px rgba(20, 22, 28, 0.20);
 }
 .public-analytics-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 .public-analytics-head h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   letter-spacing: -0.01em;
   color: #14161C;
 }
 .public-analytics-sub {
-  font-size: 12.5px;
+  font-size: 12px;
   color: #8c8377;
 }
 .public-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 12px;
-  margin-bottom: 22px;
+  /* Always four blocks in a single row; if the panel is too narrow the row
+     scrolls horizontally rather than wrapping. */
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(150px, 1fr);
+  gap: 10px;
+  margin-bottom: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
+.public-kpi-tile { min-width: 0; }
 .public-kpi-tile {
   background: rgba(255, 255, 255, 0.65);
   border: 1px solid rgba(244, 217, 194, 0.6);
-  border-radius: 16px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 9px 13px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 92px;
+  gap: 2px;
+  min-height: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .public-kpi-label {
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #8c8377;
 }
 .public-kpi-value {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
   color: #14161C;
-  line-height: 1.05;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
 }
 .public-kpi-hint {
-  font-size: 11.5px;
+  font-size: 11px;
   color: #5C6378;
 }
 .public-breakdown {
@@ -14134,14 +14889,167 @@ body { overflow-x: hidden; }
   flex-wrap: wrap;
 }
 
+/* Feature KPI tile — the "most tried" headline. Warm accent fill so it
+   anchors the row as the single most important figure. */
+.public-kpi-tile.is-feature {
+  background: linear-gradient(155deg, #F36A1E 0%, #FF8A47 100%);
+  border-color: rgba(243, 106, 30, 0.5);
+  box-shadow: 0 10px 24px -16px rgba(243, 106, 30, 0.8);
+}
+.public-kpi-tile.is-feature .public-kpi-label { color: rgba(255, 255, 255, 0.85); }
+.public-kpi-tile.is-feature .public-kpi-hint  { color: rgba(255, 255, 255, 0.9); font-weight: 600; }
+.public-kpi-feature-name {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  line-height: 1.12;
+  margin: 1px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* "Most tried" leaderboard — ranked rows with a single popularity bar. */
+.public-rank-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  counter-reset: rank;
+}
+.public-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(244, 217, 194, 0.5);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.public-rank-num {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #B25313;
+  background: rgba(243, 106, 30, 0.12);
+  font-variant-numeric: tabular-nums;
+}
+.public-rank-row:first-child .public-rank-num {
+  color: #fff;
+  background: linear-gradient(135deg, #F36A1E, #FF8A47);
+}
+.public-rank-main { flex: 1 1 auto; min-width: 0; }
+.public-rank-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+.public-rank-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #14161C;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.public-rank-count {
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: #8c8377;
+  font-variant-numeric: tabular-nums;
+}
+.public-rank-bar {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(244, 217, 194, 0.5);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.public-rank-fill {
+  height: 100%;
+  min-width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #F36A1E 0%, #FF8A47 100%);
+  transition: width 320ms ease;
+}
+
 @media (max-width: 720px) {
   .public-analytics { padding: 16px 16px 18px; border-radius: 18px; }
   .public-analytics-head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .public-analytics-head h2 { font-size: 17px; }
   .public-kpi-grid { gap: 8px; }
   .public-kpi-value { font-size: 26px; }
+  .public-kpi-feature-name { font-size: 17px; }
   .public-breakdown-head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .public-breakdown-stats { gap: 8px; font-size: 11px; }
+}
+
+/* =====================================================================
+   Public Kiosk Access Hub — mobile responsive
+   ===================================================================== */
+/* The app grid never overflows: the min track is capped at 100% of the
+   container, so it collapses to a single column on narrow screens. */
+.public-apps-panel .public-app-grid-v2 {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+}
+@media (max-width: 720px) {
+  .public-page { padding-left: 16px; padding-right: 16px; }
+  /* The single-line lede may wrap on small screens instead of truncating. */
+  .public-intro-lede { white-space: normal; overflow: visible; text-overflow: clip; }
+  .public-apps-panel { padding: 12px 14px 16px; border-radius: 16px; }
+  .public-apps-panel-head h2 { font-size: 15px; }
+  /* Engagement overview: drop the horizontal-scroll row and lay the tiles out
+     as a real grid — the "Most viewed" feature spans the full width on top,
+     the three numeric tiles sit in a row below. */
+  .public-kpi-grid {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-columns: auto;
+    overflow-x: visible;
+    gap: 8px;
+  }
+  .public-kpi-tile.is-feature { grid-column: 1 / -1; }
+  .public-kpi-tile.is-feature .public-kpi-feature-name {
+    -webkit-line-clamp: 1;
+    font-size: 17px;
+  }
+}
+@media (max-width: 480px) {
+  .public-topbar { padding: 10px 14px; }
+  .public-topbar-brand .logo-wordmark { height: 24px; }
+  .public-intro { padding: 6px 0 12px; }
+  .public-intro h1 { font-size: 19px; }
+  .public-intro-lede { font-size: 13px; }
+  .public-kpi-tile { padding: 8px 11px; }
+  .public-kpi-value { font-size: 21px; }
+  .public-kpi-label { font-size: 10px; }
+  .public-kpi-hint { font-size: 10.5px; }
+  /* Stack the pager so its info + controls don't crowd on a phone. */
+  .public-apps-panel .pager {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    text-align: center;
+  }
+  .public-apps-panel .pager .pager-controls { justify-content: center; }
+}
+/* Very narrow phones: two numeric tiles per row (feature stays full width). */
+@media (max-width: 400px) {
+  .public-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* =====================================================================
@@ -16098,7 +17006,6 @@ body { overflow-x: hidden; }
 }
 @media (max-width: 720px) {
   .pf-nav { padding: var(--pf-s-3); gap: var(--pf-s-3); }
-  .pf-nav-links { display: none; }
   .pf-hero-wrap { padding: var(--pf-s-3) var(--pf-s-3) var(--pf-s-5); }
   .pf-hero {
     padding: var(--pf-s-5) var(--pf-s-4);
@@ -18447,35 +19354,77 @@ html.kc-cursor-click .kc-cursor-ring::after {
 /* contact methods row */
 .pf-contact-methods {
   max-width: 680px;
-  margin: var(--pf-s-5) auto 0;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--pf-s-3) var(--pf-s-5);
+  margin: var(--pf-s-4) auto 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: var(--pf-s-3);
 }
 .pf-contact-method {
-  display: inline-flex;
-  align-items: center;
-  gap: 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(20, 22, 28, 0.08);
+  box-shadow: 0 8px 22px -18px rgba(20, 22, 28, 0.45);
+  min-width: 0;
+  transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+a.pf-contact-method:hover {
+  border-color: rgba(243, 106, 30, 0.45);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px -20px rgba(243, 106, 30, 0.45);
 }
 .pf-contact-ic {
-  width: 38px; height: 38px; flex-shrink: 0;
-  border-radius: 11px;
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 12px;
   display: grid; place-items: center;
   color: #C95812;
   background: rgba(243, 106, 30, 0.12);
 }
-.pf-contact-method > span:last-child { display: flex; flex-direction: column; line-height: 1.3; }
-.pf-contact-method b { font-size: 10px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--pf-mute); }
-a.pf-contact-method { color: var(--pf-ink); font-size: 13.5px; font-weight: 700; transition: color 0.15s ease; }
-a.pf-contact-method:hover { color: var(--accent); }
-span.pf-contact-method { color: var(--pf-ink); font-size: 13.5px; font-weight: 700; }
+.pf-contact-method-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+  min-width: 0;
+}
+.pf-contact-method b {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--pf-mute);
+}
+.pf-contact-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pf-ink);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.pf-contact-address {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--pf-mute);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+a.pf-contact-method { color: inherit; text-decoration: none; }
+a.pf-contact-method:hover .pf-contact-value { color: var(--accent); }
+/* Email + phone share the top row; the office card (with the long
+   address) spans the full width beneath them. */
+.pf-contact-method-office { grid-column: 1 / -1; }
 
 /* responsive */
 @media (max-width: 560px) {
   .pf-demo-row { grid-template-columns: 1fr; }
   .pf-contact-card { padding: var(--pf-s-4); }
-  .pf-contact-methods { flex-direction: column; align-items: flex-start; gap: var(--pf-s-3); }
+  .pf-contact-methods { grid-template-columns: 1fr; }
+  .pf-contact-method-office { grid-column: 1 / -1; }
 }
 
 /* =====================================================================
@@ -18557,6 +19506,114 @@ span.pf-contact-method { color: var(--pf-ink); font-size: 13.5px; font-weight: 7
   box-shadow: 0 10px 22px -10px rgba(243, 106, 30, 0.6);
 }
 
+/* ---------- Mobile nav: hamburger + slide-down drawer ----------
+   Desktop keeps the inline links; below 860px the section links collapse
+   into a drawer behind a hamburger, and the standalone "Explore" pill is
+   hidden (its twin lives inside the drawer). */
+.pf-nav-burger { display: none; }
+.pf-nav-links-explore { display: none; }
+.pf-nav-backdrop { display: none; }
+
+@media (max-width: 860px) {
+  .pf-nav {
+    position: relative;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+  .pf-nav-explore { display: none; }
+  .pf-nav-burger {
+    justify-self: end;
+    display: inline-flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    width: 42px;
+    height: 42px;
+    padding: 0 9px;
+    border: 1px solid var(--pf-line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+  }
+  .pf-nav-burger span {
+    display: block;
+    height: 2px;
+    width: 100%;
+    border-radius: 2px;
+    background: var(--pf-ink);
+    transition: transform 0.22s ease, opacity 0.22s ease;
+  }
+  .pf-nav.is-open .pf-nav-burger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .pf-nav.is-open .pf-nav-burger span:nth-child(2) { opacity: 0; }
+  .pf-nav.is-open .pf-nav-burger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+  /* The links panel — absolutely positioned drawer dropping from the bar. */
+  .pf-nav-links {
+    display: flex;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    flex-direction: column;
+    align-items: stretch;
+    justify-self: stretch;
+    gap: 0;
+    padding: 8px max(var(--pf-s-4), calc((100% - var(--pf-container)) / 2));
+    background: rgba(244, 236, 227, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--pf-line);
+    box-shadow: 0 22px 40px -26px rgba(20, 22, 28, 0.5);
+    /* collapsed by default; the .is-open state on the bar reveals it */
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 0.28s ease, opacity 0.2s ease;
+  }
+  .pf-nav.is-open .pf-nav-links {
+    max-height: 70vh;
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .pf-nav-links a {
+    padding: 13px 4px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--pf-ink);
+    border-bottom: 1px solid rgba(20, 22, 28, 0.07);
+  }
+  .pf-nav-links a::after { display: none; }
+  .pf-nav-links-explore {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 12px;
+    padding: 13px 18px !important;
+    border: 0 !important;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff !important;
+    font-weight: 800;
+  }
+  .pf-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    /* Must sit BELOW .pf-nav (z-index 30) so it doesn't cover the drawer
+       links — otherwise taps hit this full-screen catcher and the menu
+       items stop working. It still covers the page (the whole .pf-nav-wrap
+       is a z-index:50 stacking context, above page content). */
+    z-index: 5;
+    border: 0;
+    /* Transparent click-catcher — closes the drawer when tapping outside it
+       without dimming the page behind the dropdown. */
+    background: transparent;
+    cursor: default;
+  }
+}
+
 @media (max-width: 720px) {
   .pf-brand-logo { height: 24px; }
   .pf-nav { grid-template-columns: 1fr auto; }
@@ -18583,5 +19640,547 @@ span.pf-contact-method { color: var(--pf-ink); font-size: 13.5px; font-weight: 7
 @media (max-width: 720px) {
   .pf-hero { padding-top: 104px; padding-inline: var(--pf-s-4); }
   .pf-s2 { padding-top: var(--pf-s-7); padding-bottom: var(--pf-s-7); padding-inline: var(--pf-s-4); }
+}
+
+/* =====================================================================
+   Contact Submissions (admin) + Company Information (admin) + public map
+   ===================================================================== */
+.admin-page-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3, #6B6258);
+}
+
+/* ---- Status filter chips ---- */
+.cs-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.cs-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid rgba(20, 22, 28, 0.12);
+  background: #fff;
+  color: var(--ink, #14161C);
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.cs-chip:hover { border-color: rgba(243, 106, 30, 0.5); }
+.cs-chip.is-on {
+  border-color: var(--accent, #F36A1E);
+  background: rgba(243, 106, 30, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(243, 106, 30, 0.35);
+}
+.cs-chip-count {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--ink-3, #6B6258);
+  background: rgba(20, 22, 28, 0.06);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.cs-chip.is-on .cs-chip-count { background: rgba(243, 106, 30, 0.16); color: #b8530f; }
+
+/* ---- Status pills (base shape; per-status colours further below) ---- */
+.cs-status-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 999px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ---- Submissions table — mirrors the Users data table; columns are
+   Name · Email · Status · Received · Actions. */
+.cs-table .user-table-head,
+.cs-table .user-row {
+  grid-template-columns: 1.3fr 1.85fr 0.8fr 0.85fr 1.25fr;
+}
+.cs-cell-name { min-width: 0; }
+.cs-cell-name .user-name { font-weight: 700; color: var(--ink, #14161C); }
+.cs-cell-email { min-width: 0; }
+.cs-row-email {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--accent, #F36A1E);
+  font-weight: 600;
+  text-decoration: none;
+}
+.cs-row-email:hover { text-decoration: underline; }
+
+/* ---- Read-message popup — standard modal (matches the device-details
+   modal: meta-grid for read-only fields, a labelled message panel, and a
+   right-aligned modal-foot). No custom overlay / bottom-sheet. ---- */
+.cs-msg-meta .cs-meta-wide { grid-column: 1 / -1; }
+.cs-msg-meta dd .cs-status-pill { vertical-align: middle; }
+/* Show the full email (the table cell ellipsizes it). */
+.cs-msg-meta .cs-row-email {
+  display: inline;
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  font-weight: 700;
+}
+.cs-muted { color: var(--ink-3, #948B7E); font-style: italic; font-weight: 500; }
+
+/* Read-only message panel — a calm, readable box that scrolls if long. */
+.cs-msg-readonly {
+  padding: 13px 14px;
+  background: #FAF8F4;
+  border: 1px solid rgba(20, 22, 28, 0.1);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2, #463F36);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow-y: auto;
+  /* Subtle scrollbar — overrides the loud global orange chrome scrollbar. */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(20, 22, 28, 0.28) transparent;
+}
+.cs-msg-readonly::-webkit-scrollbar { width: 8px; }
+.cs-msg-readonly::-webkit-scrollbar-track { background: transparent; border: 0; }
+.cs-msg-readonly::-webkit-scrollbar-thumb { background: rgba(20, 22, 28, 0.25); border-radius: 999px; border: 0; }
+.cs-msg-readonly::-webkit-scrollbar-thumb:hover { background: rgba(20, 22, 28, 0.4); }
+
+/* Destructive action sits on the left of the standard foot; Reply + Close right. */
+.cs-msg-modal .modal-foot .btn-danger { margin-right: auto; }
+
+/* Status pills reuse .ssl-status-pill base; add per-status colours. */
+.cs-pill-new            { background: rgba(243, 106, 30, 0.14); color: #b8530f; }
+.cs-pill-contacted      { background: rgba(58, 122, 224, 0.14); color: #2c5fb0; }
+.cs-pill-in_discussion  { background: rgba(180, 130, 20, 0.16); color: #8a6a10; }
+.cs-pill-converted      { background: rgba(31, 174, 107, 0.14); color: #168A52; }
+.cs-pill-not_interested { background: rgba(20, 22, 28, 0.10); color: #6b6258; }
+
+/* ---- Company Information records ---- */
+/* Translucent loading overlay shown over the records while activating a
+   record — the data stays visible (dimmed + blurred) behind the spinner so
+   the user sees their click was registered. */
+.ci-records-card { position: relative; }
+.ci-busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.62);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  font-weight: 600;
+  color: var(--ink-2, #463F36);
+}
+.ci-busy-overlay .admin-spinner { width: 28px; height: 28px; }
+
+.ci-list { gap: 14px; display: flex; flex-direction: column; }
+.ci-record {
+  border: 1px solid rgba(20, 22, 28, 0.1);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: #fff;
+}
+.ci-record.is-active {
+  border-color: rgba(31, 174, 107, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(31, 174, 107, 0.2);
+}
+.ci-record-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ci-record-title { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.ci-record-body {
+  display: flex;
+  gap: 18px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.ci-fields {
+  flex: 1 1 280px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+}
+.ci-fields > div { min-width: 0; }
+.ci-field-wide { grid-column: 1 / -1; }
+.ci-fields dt {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3, #948B7E);
+}
+.ci-fields dd {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink, #14161C);
+  word-break: break-word;
+}
+.ci-map-thumb {
+  flex: 0 0 260px;
+  height: 150px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(20, 22, 28, 0.12);
+  background: #f2efea;
+}
+.ci-map-thumb.is-large { flex: 1 1 100%; height: 280px; max-width: 100%; overflow: hidden; }
+.ci-map-thumb iframe { width: 100%; max-width: 100%; height: 100%; border: 0; display: block; }
+/* Company modal textareas: real height + visible resize affordance; the
+   Google-Maps embed (exact characters matter) renders monospace. */
+.ci-modal .form-field textarea { min-height: 80px; line-height: 1.45; resize: vertical; }
+.ci-modal .form-field textarea.mono {
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  min-height: 104px;
+  white-space: pre;
+  overflow-x: auto;
+}
+.ci-map-preview { margin-top: 4px; }
+.ci-map-preview-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3, #948B7E);
+  margin-bottom: 6px;
+}
+.ci-active-toggle .ci-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2, #463F36);
+  cursor: pointer;
+}
+.ci-active-toggle .ci-switch input { width: 16px; height: 16px; accent-color: var(--accent, #F36A1E); }
+
+/* ---- Public landing: contact form error + office map ---- */
+.pf-contact-error {
+  margin: -4px 0 4px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(224, 70, 61, 0.1);
+  border: 1px solid rgba(224, 70, 61, 0.3);
+  color: #c0392b;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pf-contact-map {
+  position: relative;
+  margin: var(--pf-s-3) auto 0;
+  max-width: 680px;
+  width: 100%;
+  height: 280px;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(20, 22, 28, 0.1);
+  box-shadow: 0 20px 44px -30px rgba(20, 22, 28, 0.5);
+  background: #eef1f4;
+}
+.pf-contact-map iframe { width: 100%; height: 100%; border: 0; display: block; }
+.pf-contact-map-link {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: var(--pf-ink, #14161C);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 8px 22px -10px rgba(20, 22, 28, 0.5);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+.pf-contact-map-link:hover { transform: translateY(-2px); color: var(--accent, #F36A1E); }
+
+@media (max-width: 720px) {
+  .pf-contact-map { height: 230px; }
+
+  /* =====================================================================
+     Contact Submissions page — mobile friendliness. Scoped to .cs-* /
+     .cs-page so no other admin page is affected.
+     ===================================================================== */
+  .admin-page.cs-page { padding: 14px 16px 0; gap: 14px; }
+  .cs-page .admin-card.list-card { padding: 12px 10px; }
+  .cs-page .admin-empty { padding: 20px 8px; font-size: 13px; }
+  .cs-page .admin-loading { padding: 32px 0; }
+
+  /* Filter chips: one swipeable row that bleeds to the screen edges,
+     instead of wrapping into a tall multi-row block. */
+  .cs-filter-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -16px 12px;
+    padding: 0 16px 2px;
+    gap: 8px;
+  }
+  .cs-filter-row::-webkit-scrollbar { display: none; }
+  .cs-chip { flex: 0 0 auto; min-height: 38px; }
+
+  /* Table → cards across the whole mobile range. The Users transform only
+     kicks in at <=640px, so we extend it to <=720px here and tailor the
+     stacked layout (name · email · status · received · actions) for
+     contact rows. */
+  .cs-table .user-table-head { display: none !important; }
+  .cs-table .user-row {
+    display: flex !important;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 14px;
+    margin-bottom: 10px;
+    border: 1px solid rgba(20, 22, 28, 0.08) !important;
+    border-left: 3px solid rgba(20, 22, 28, 0.12) !important;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 6px 16px -10px rgba(20, 22, 28, 0.10);
+  }
+  /* Status-coloured left edge for at-a-glance triage. */
+  .cs-table .cs-status-new            { border-left-color: rgba(243, 106, 30, 0.6) !important; }
+  .cs-table .cs-status-contacted      { border-left-color: rgba(58, 122, 224, 0.6) !important; }
+  .cs-table .cs-status-in_discussion  { border-left-color: rgba(180, 130, 20, 0.65) !important; }
+  .cs-table .cs-status-converted      { border-left-color: rgba(31, 174, 107, 0.6) !important; }
+  .cs-table .cs-status-not_interested { border-left-color: rgba(20, 22, 28, 0.3) !important; }
+
+  .cs-table .user-row > div { width: 100%; }
+  .cs-table .user-row > div[data-col]::before { display: none !important; }
+
+  /* Name = bold headline; email below it; status pill on its own line. */
+  .cs-table .cs-cell-name .user-name { font-size: 15px; }
+  .cs-table .cs-cell-email { margin-top: -2px; }
+  .cs-table .cs-row-email { font-size: 13px; white-space: normal; }
+  .cs-table .cs-status-pill { align-self: flex-start; }
+
+  /* Received: subtle, labelled, divided from the body above. */
+  .cs-table div[data-col="Received"] {
+    border-top: 1px dashed rgba(20, 22, 28, 0.08);
+    padding-top: 10px;
+    font-size: 11.5px;
+    color: var(--ink-3, #948B7E);
+  }
+  .cs-table div[data-col="Received"]::before {
+    content: 'Received ';
+    color: var(--ink-3, #948B7E);
+    font-weight: 600;
+  }
+
+  /* Actions full-width, side by side with big tap targets. */
+  .cs-table .user-actions { display: flex !important; gap: 8px; }
+  .cs-table .user-actions .row-btn { flex: 1; min-height: 44px; font-size: 13px; border-radius: 10px; }
+
+  /* ---- Read-message popup (standard modal) — mobile ----
+     A clean content-height modal (NOT the full-screen variant, which leaves
+     the buttons flush against the bottom edge). It hugs its content, scrolls
+     when long, and keeps a comfortable gutter below the actions. */
+  .modal-overlay.cs-msg-overlay { padding: 14px; align-items: center; }
+  .cs-msg-modal.modal-card {
+    height: auto;
+    max-height: calc(100dvh - 28px);
+    width: 100%;
+    max-width: 100%;
+    border-radius: 18px;
+  }
+  .cs-msg-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    /* breathing room below the action buttons + the phone's home/gesture bar */
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  }
+  .cs-msg-meta { grid-template-columns: 1fr; }
+  .cs-msg-readonly { max-height: 38vh; }
+  /* Keep the natural stack order on mobile (drop the desktop left-push). */
+  .cs-msg-modal .modal-foot .btn-danger { margin-right: 0; }
+
+  /* =====================================================================
+     Company Information page — mobile friendliness (audited change set).
+     All rules scoped to .ci-* / .ci-page / .ci-modal so no other admin
+     page is affected.
+     ===================================================================== */
+  /* Page chrome: consistent tight padding across the whole sub-720 band
+     (641–720 otherwise kept desktop padding under the sticky TopBar). */
+  .admin-page.ci-page { padding: 14px 16px 0; gap: 16px; }
+  .admin-page-sub { font-size: 12px; line-height: 1.5; margin: 6px 0 0; }
+  .ci-list { gap: 12px; }
+
+  /* Record card: looser padding + softer corners, stacked head. */
+  .ci-record { padding: 16px 14px; border-radius: 16px; }
+  .ci-record-head { flex-direction: column; align-items: stretch; gap: 12px; }
+
+  /* Title row: the name WRAPS (never truncated), the status pill is pinned
+     right and protected from squeeze, the active-dot sits centered. */
+  .ci-record-title { font-size: 14.5px; gap: 8px; align-items: center; flex: 1 1 auto; min-width: 0; }
+  .ci-record-title strong { min-width: 0; white-space: normal; word-break: break-word; line-height: 1.25; }
+  .ci-record-title .ssl-status-pill { margin-left: auto; flex-shrink: 0; white-space: nowrap; }
+  .ci-record-title .connection-dot { margin-top: 0; align-self: center; }
+
+  /* Actions: equal-width grid, comfortable 44px tap targets, no wrap. */
+  .ci-record-head .detail-row-actions {
+    display: grid;
+    /* Reset the device-row defaults that leak in at <=560px (grid-auto-flow:
+       column + grid-area:acts) so these buttons flow normally into the grid. */
+    grid-auto-flow: row;
+    grid-area: auto;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 8px;
+    width: 100%;
+  }
+  .ci-record-head .detail-row-actions .row-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 10px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  /* Field list: single column, separated pairs, larger labels + values. */
+  .ci-fields { grid-template-columns: 1fr; gap: 13px 0; }
+  .ci-fields dt { font-size: 11px; letter-spacing: 0.05em; }
+  .ci-fields dd { font-size: 14px; margin-top: 4px; line-height: 1.35; }
+
+  /* In-card map: right-sized so it informs without dominating. */
+  .ci-map-thumb { flex-basis: 100%; height: 170px; border-radius: 12px; }
+
+  /* Page header: full-width "Add record" button under the title. */
+  .ci-head { align-items: stretch; }
+  .ci-add-btn { width: 100%; min-height: 44px; }
+
+  /* Outer list card hugs tighter so it doesn't double-box the records;
+     empty / loading states reclaim vertical space on short viewports. */
+  .ci-page .admin-card.list-card { padding: 12px 10px; }
+  .ci-page .admin-empty { padding: 20px 8px; font-size: 13px; }
+  .ci-page .admin-empty-title { font-size: 14px; }
+  .ci-page .admin-empty-sub { font-size: 12.5px; line-height: 1.45; }
+  .ci-page .admin-loading { padding: 32px 0; }
+
+  /* ---- Company modal: a comfortable form on phones ---- */
+  /* 16px inputs/textareas kill iOS zoom-on-focus (overrides the global
+     14px base + the harmful ≤380px 13.5px rule, scoped to this modal). */
+  .ci-modal .form-grid-2 { grid-template-columns: 1fr; gap: 16px; }
+  .ci-modal .form-field { gap: 8px; }
+  .ci-modal .form-field > span { font-size: 13px; font-weight: 700; letter-spacing: 0.3px; color: var(--ink-2, #463F36); line-height: 1.3; }
+  .ci-modal .form-field input,
+  .ci-modal .form-field textarea,
+  .ci-modal .form-field select { font-size: 16px; padding: 11px 12px; }
+  .ci-modal .modal-body { padding: 16px 16px 20px; gap: 16px; }
+  .ci-modal .modal-head { padding: 16px; }
+  .ci-modal .modal-x { font-size: 28px; min-width: 40px; min-height: 40px; padding: 4px 8px; }
+  .ci-modal .form-hint { font-size: 12px; line-height: 1.4; }
+
+  /* "Active" toggle promoted from a cramped grid cell to a separated card
+     so the checkbox + caption reads as a distinct control, not an
+     afterthought wedged under Phone. */
+  .ci-active-toggle {
+    grid-column: 1 / -1;
+    gap: 10px;
+    margin-top: 2px;
+    padding: 12px 14px;
+    background: #FAF8F4;
+    border: 1px solid rgba(20, 22, 28, 0.08);
+    border-radius: 12px;
+  }
+  .ci-active-toggle > span {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--ink-3, #948B7E);
+  }
+  .ci-active-toggle .ci-switch { align-items: flex-start; gap: 10px; }
+  .ci-active-toggle .ci-switch input { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 1px; }
+  .ci-active-toggle .form-hint { margin-top: 4px; }
+
+  /* Footer: full-width stacked buttons, Save at the bottom (thumb zone). */
+  .ci-modal .modal-foot { flex-direction: column-reverse; gap: 8px; }
+  .ci-modal .modal-foot .btn-primary,
+  .ci-modal .modal-foot .btn-secondary { width: 100%; padding: 13px 16px; min-height: 46px; }
+}
+
+@media (max-width: 560px) {
+  /* In-card map calmer still; clearer fields→map separation. */
+  .ci-map-thumb { height: 150px; }
+  .ci-record-body { gap: 16px; margin-top: 10px; }
+  /* In-modal map preview steps down (it's .is-large, so name it explicitly
+     to beat the generic .ci-map-thumb override on specificity). */
+  .ci-map-thumb.is-large { height: 200px; }
+  .ci-map-preview { margin-top: 6px; }
+  .ci-map-preview-label { margin-bottom: 4px; }
+}
+
+@media (max-width: 380px) {
+  /* Smallest phones: trim the in-modal map preview once more. */
+  .ci-map-thumb.is-large { height: 170px; }
+}
+
+/* =====================================================================
+   Public landing FOOTER — mobile alignment.
+   Desktop: brand (1.6fr) + 3 link columns in one row. On tablets/large
+   phones the brand stacks above three evenly-aligned link columns; on
+   small phones the links become a clean single left-aligned stack (no
+   orphaned half-row), and the base row stacks left. Appended last so it
+   wins over the earlier 2-column rule that left "Get Started" stranded.
+   ===================================================================== */
+@media (max-width: 720px) {
+  .pf-footer-inner {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    text-align: left;
+    gap: var(--pf-s-5);
+  }
+  .pf-footer-brand-col { max-width: none; width: 100%; }
+  .pf-footer-brand { justify-content: flex-start; }
+  .pf-footer-cols {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--pf-s-5) var(--pf-s-4);
+  }
+  .pf-footer-col { align-items: flex-start; text-align: left; }
+  .pf-footer-base {
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: var(--pf-s-2);
+  }
+}
+@media (max-width: 560px) {
+  .pf-footer-cols { grid-template-columns: 1fr; gap: var(--pf-s-4); }
+  .pf-footer-col { width: 100%; }
 }
 

@@ -20,12 +20,15 @@ class ApplicationSerializer(serializers.ModelSerializer):
             'publish',
             'is_active',
             'application_image',
+            'spline_url',
+            'spline_url_enable',
+            'public_views',
             'created_by',
             'created_by_name',
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['created_by', 'created_by_name', 'created_at', 'updated_at']
+        read_only_fields = ['created_by', 'created_by_name', 'created_at', 'updated_at', 'public_views']
 
     def get_created_by_name(self, obj):
         return obj.created_by.name if obj.created_by else None
@@ -168,6 +171,15 @@ class DashboardSerializer(serializers.ModelSerializer):
         source="application.name", read_only=True
     )
     created_by_name = serializers.SerializerMethodField(read_only=True)
+    # Spline config now lives on the Application; surface it (read-only) on the
+    # dashboard payload so the dashboard renderer can show the 3D scene in the
+    # camera area without a separate request.
+    spline_url = serializers.CharField(
+        source="application.spline_url", read_only=True, allow_null=True
+    )
+    spline_url_enable = serializers.BooleanField(
+        source="application.spline_url_enable", read_only=True
+    )
 
     class Meta:
         model = Dashboard
@@ -185,6 +197,8 @@ class DashboardSerializer(serializers.ModelSerializer):
             "dashboard_image_enable",
             "spline_url",
             "spline_url_enable",
+            "queue_enabled",
+            "queue_control_seconds",
             "theme",
             "created_by",
             "created_by_name",
@@ -402,3 +416,48 @@ class SSLCertificateSerializer(serializers.ModelSerializer):
             return obj.file.size
         except Exception:
             return None
+
+
+class ContactSubmissionSerializer(serializers.ModelSerializer):
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = ContactSubmission
+        fields = [
+            "id",
+            "name",
+            "email",
+            "subject",
+            "message",
+            "status",
+            "status_label",
+            "admin_notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "status_label", "created_at", "updated_at"]
+
+
+class PublicContactSubmissionSerializer(serializers.ModelSerializer):
+    """Public form intake — only the visitor-supplied fields are writable."""
+    class Meta:
+        model = ContactSubmission
+        fields = ["id", "name", "email", "subject", "message"]
+        read_only_fields = ["id"]
+
+
+class CompanyInformationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CompanyInformation
+        fields = [
+            "id",
+            "company_name",
+            "email",
+            "phone",
+            "address",
+            "map_embed_code",
+            "is_active",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

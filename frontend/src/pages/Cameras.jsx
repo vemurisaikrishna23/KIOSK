@@ -325,6 +325,15 @@ export default function Cameras() {
   }
 
   /* ----------------------- render ----------------------- */
+  if (!canView) {
+    return (
+      <div className="kiosk-app">
+        <TopBar />
+        <div className="admin-page"><PermissionDenied resource="cameras" /></div>
+      </div>
+    )
+  }
+
   return (
     <div className="kiosk-app kiosk-app-fixed">
       <TopBar />
@@ -649,19 +658,15 @@ function CameraCard({ camera, isViewing, canUpdate, canDelete, onOpen, onEdit, o
             </svg>
           </div>
           <div className="camera-card-title">
-            <h4>{camera.camera_name}</h4>
-            <p ref={descRef} className="camera-card-desc">
+            <h4 title={camera.camera_name}>{camera.camera_name}</h4>
+            <p
+              ref={descRef}
+              className={'camera-card-desc' + (descOverflows ? ' is-clickable' : '')}
+              title={descOverflows ? camera.description : undefined}
+              onClick={descOverflows ? (e) => { e.stopPropagation(); onShowDesc?.() } : undefined}
+            >
               {camera.description || <span className="muted">No description</span>}
             </p>
-            <button
-              type="button"
-              className={'camera-readmore' + (descOverflows ? '' : ' is-empty')}
-              onClick={(e) => { e.stopPropagation(); onShowDesc?.() }}
-              tabIndex={descOverflows ? 0 : -1}
-              aria-hidden={!descOverflows}
-            >
-              Read more
-            </button>
           </div>
         </div>
         <div className={'camera-status' + (camera.status ? ' is-online' : ' is-offline')} title={camera.status ? 'Online — reachable via MediaMTX' : 'Offline — not currently reachable'}>
@@ -682,11 +687,14 @@ function CameraCard({ camera, isViewing, canUpdate, canDelete, onOpen, onEdit, o
         <div><dt>Added</dt><dd>{formatDate(camera.created_at)}</dd></div>
       </dl>
 
-      <div className={'camera-url' + (camera.webrtc_url ? '' : ' is-empty')}>
+      <div
+        className={'camera-url' + (camera.webrtc_url ? '' : ' is-empty')}
+        data-url={camera.webrtc_url || undefined}
+      >
         {camera.webrtc_url ? (
           <>
             <span className="camera-url-label">WebRTC</span>
-            <code className="camera-url-value" title={camera.webrtc_url}>{camera.webrtc_url}</code>
+            <code className="camera-url-value">{camera.webrtc_url}</code>
           </>
         ) : null}
       </div>
@@ -775,7 +783,7 @@ function Field({ label, error, children, full, required }) {
   )
 }
 
-function Modal({ title, children, onClose }) {
+export function Modal({ title, children, onClose }) {
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)

@@ -12,6 +12,8 @@ router.register(r'device-events', DeviceEventViewSet, basename='device-event')
 router.register(r'dashboards',DashboardViewSet,basename='dashboard')
 router.register(r"dashboard-components", DashboardComponentViewSet, basename="dashboard-components")
 router.register(r"ssl-certificates",     SSLCertificateViewSet,    basename="ssl-certificates")
+router.register(r"contact-submissions",  ContactSubmissionViewSet, basename="contact-submissions")
+router.register(r"company-information",  CompanyInformationViewSet, basename="company-information")
 router.register(
     r'public/applications',
     PublicApplicationViewSet,
@@ -43,6 +45,46 @@ urlpatterns = [
         "public/analytics/",
         PublicAnalyticsAPIView.as_view(),
         name="public-analytics",
+    ),
+    # Authenticated daily-views time series for the dashboard's views graph.
+    path(
+        "views-timeseries/",
+        ApplicationViewsTimeseriesAPIView.as_view(),
+        name="views-timeseries",
+    ),
+    # Authenticated internal activity log (dashboard recent activity + Activity Log page).
+    path(
+        "activity-logs/",
+        ActivityLogListAPIView.as_view(),
+        name="activity-logs",
+    ),
+    # CSV export of the activity log for a date range (download-permission gated).
+    path(
+        "activity-logs/export/",
+        ActivityLogExportAPIView.as_view(),
+        name="activity-logs-export",
+    ),
+    # Per-user activity trail (view + download, separately permissioned).
+    path(
+        "user-activity/<int:user_id>/",
+        UserActivityLogListAPIView.as_view(),
+        name="user-activity",
+    ),
+    path(
+        "user-activity/<int:user_id>/export/",
+        UserActivityLogExportAPIView.as_view(),
+        name="user-activity-export",
+    ),
+    # Public, no-auth Contact Us intake + company info read for the landing page.
+    path(
+        "public/contact/",
+        PublicContactSubmissionView.as_view(),
+        name="public-contact",
+    ),
+    path(
+        "public/company-information/",
+        PublicCompanyInformationView.as_view(),
+        name="public-company-information",
     ),
 
 ]

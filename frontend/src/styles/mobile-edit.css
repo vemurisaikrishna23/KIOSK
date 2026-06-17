@@ -279,8 +279,8 @@
   box-shadow: 0 1px 2px rgba(20, 22, 28, 0.18);
 }
 .color-dir-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-/* Recently-used color chips. */
-.color-recents {
+/* "Used in this dashboard" color chips — shown above the swatch palette. */
+.color-used {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -291,11 +291,6 @@
   font-weight: 700;
   color: #8A8170;
   margin-right: 2px;
-}
-.color-recents-empty {
-  font-size: 11.5px;
-  color: #A8A092;
-  font-style: italic;
 }
 .color-swatch-recent {
   width: 26px;

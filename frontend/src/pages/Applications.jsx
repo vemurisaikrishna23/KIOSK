@@ -316,6 +316,15 @@ export default function Applications() {
   }
 
   /* ----------------------- render ----------------------- */
+  if (!canView) {
+    return (
+      <div className="kiosk-app">
+        <TopBar />
+        <div className="admin-page"><PermissionDenied resource="applications" /></div>
+      </div>
+    )
+  }
+
   return (
     <div className="kiosk-app">
       <TopBar />

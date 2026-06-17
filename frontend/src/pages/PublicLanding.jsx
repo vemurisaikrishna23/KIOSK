@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import CustomCursor from '../components/CustomCursor.jsx'
+import { api } from '../lib/api.js'
+import { mapSrcFromEmbed, coordsFromCode } from './CompanyInformation.jsx'
 
 /**
  * Public marketing landing for the Smart Kiosk Control Dashboard.
@@ -58,6 +60,15 @@ export default function PublicLanding() {
     return () => clearTimeout(t)
   }, [])
 
+  // Mobile nav drawer — collapses the section links behind a hamburger on
+  // narrow viewports. Closes on navigation (anchor click) and on Escape.
+  const [navOpen, setNavOpen] = useState(false)
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') setNavOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <div className={'pf-page' + (loaded ? ' is-loaded' : '') + (scrolled ? ' is-scrolled' : '')}>
       <CustomCursor />
@@ -82,18 +93,29 @@ export default function PublicLanding() {
 
       {/* ─────────── NAV ─────────── */}
       <div className="pf-nav-wrap">
-        <header className="pf-nav">
+        <header className={'pf-nav' + (navOpen ? ' is-open' : '')}>
           <Link to="/" className="pf-brand" aria-label="MYACCESS">
             <img src="/logos/myaccess.svg" alt="MYACCESS" className="pf-brand-logo" />
           </Link>
-          <nav className="pf-nav-links">
+          <nav className="pf-nav-links" onClick={() => setNavOpen(false)}>
             <a href="#platform">Platform</a>
             <a href="#steps">How It Works</a>
             <a href="#widgets">Designer</a>
             <a href="#architecture">Architecture</a>
+            <Link to="/public" className="pf-nav-links-explore">Explore Applications</Link>
           </nav>
           <Link to="/public" className="pf-nav-explore">Explore Applications</Link>
+          <button
+            type="button"
+            className="pf-nav-burger"
+            aria-label={navOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen((o) => !o)}
+          >
+            <span /><span /><span />
+          </button>
         </header>
+        {navOpen && <button type="button" className="pf-nav-backdrop" aria-label="Close menu" onClick={() => setNavOpen(false)} />}
       </div>
 
       {/* ─────────── HERO ─────────── */}
@@ -444,14 +466,83 @@ export default function PublicLanding() {
 }
 
 /* =====================================================================
-   Contact Us — share project requirements (local UI only, no backend).
+   Contact Us — posts to the public Contact intake and renders the active
+   company info (email / phone / office + office map) loaded from the API.
+   Falls back to sensible defaults if no company info is configured yet.
    ===================================================================== */
+const CONTACT_FALLBACK = {
+  email: 'naveen@myaccessio.com',
+  phone: '+91 00000 00000',
+  company_name: 'MYACCESS PRIVATE LIMITED',
+  address: '',
+  map_embed_code: '',
+}
+
+/**
+ * Resolve the cleanest possible map src for the public page:
+ *  1. mapSrcFromEmbed() — a precise pin from coordinates in the pasted
+ *     link/embed, or the embed src verbatim.
+ *  2. Fall back to geocoding the office address into a pin.
+ */
+function publicMapSrc(company) {
+  const src = mapSrcFromEmbed(company.map_embed_code)
+  if (src) return src
+  const q = String(company.address || company.company_name || '').trim()
+  if (q) return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=16&output=embed`
+  return null
+}
+
 function ContactSection() {
   const [sent, setSent] = useState(false)
-  function onSubmit(e) {
+  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' })
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState(null)
+  const [company, setCompany] = useState(CONTACT_FALLBACK)
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  // Pull the active company info; keep the fallback if none is configured.
+  useEffect(() => {
+    let alive = true
+    api.publicGetCompanyInformation()
+      .then((resp) => {
+        if (!alive) return
+        const c = resp?.company
+        if (c) {
+          setCompany({
+            email: c.email || CONTACT_FALLBACK.email,
+            phone: c.phone || CONTACT_FALLBACK.phone,
+            company_name: c.company_name || CONTACT_FALLBACK.company_name,
+            address: c.address || '',
+            map_embed_code: c.map_embed_code || '',
+          })
+        }
+      })
+      .catch(() => { /* keep fallback */ })
+    return () => { alive = false }
+  }, [])
+
+  async function onSubmit(e) {
     e.preventDefault()
-    setSent(true)
+    setErr(null)
+    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
+      setErr('Please fill in your name, email, and message.')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.publicSubmitContact(form)
+      setSent(true)
+    } catch (e2) {
+      setErr(e2?.message || 'Could not send your message. Please try again.')
+    } finally {
+      setBusy(false)
+    }
   }
+
+  const mapSrc = publicMapSrc(company)
+  const mapCoords = coordsFromCode(company.map_embed_code)
+  const mapQuery = mapCoords || (company.address || company.company_name || '')
+  const phoneHref = 'tel:' + String(company.phone || '').replace(/[^\d+]/g, '')
 
   return (
     <div id="contact" className="pf-contact">
@@ -473,40 +564,73 @@ function ContactSection() {
             <div className="pf-demo-row">
               <label className="pf-field">
                 <span>Full Name</span>
-                <input type="text" name="name" placeholder="John Doe" autoComplete="name" required />
+                <input type="text" name="name" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="John Doe" autoComplete="name" required />
               </label>
               <label className="pf-field">
                 <span>Email</span>
-                <input type="email" name="email" placeholder="john@company.com" autoComplete="email" required />
+                <input type="email" name="email" value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="john@company.com" autoComplete="email" required />
               </label>
             </div>
             <label className="pf-field">
               <span>Subject</span>
-              <input type="text" name="subject" placeholder="How can we help?" />
+              <input type="text" name="subject" value={form.subject} onChange={(e) => set('subject', e.target.value)} placeholder="How can we help?" />
             </label>
             <label className="pf-field">
               <span>Message</span>
-              <textarea name="message" rows={5} placeholder="Write your message…" required />
+              <textarea name="message" rows={5} value={form.message} onChange={(e) => set('message', e.target.value)} placeholder="Write your message…" required />
             </label>
-            <button type="submit" className="pf-contact-submit pf-cta-shimmer">Send Message</button>
+            {err && <div className="pf-contact-error" role="alert">{err}</div>}
+            <button type="submit" className="pf-contact-submit pf-cta-shimmer" disabled={busy}>
+              {busy ? 'Sending…' : 'Send Message'}
+            </button>
           </form>
         )}
       </div>
 
       <div className="pf-contact-methods">
-        <a className="pf-contact-method" href="mailto:naveen@myaccessio.com">
+        <a className="pf-contact-method" href={`mailto:${company.email}`}>
           <span className="pf-contact-ic"><MailSvg /></span>
-          <span><b>Email</b>naveen@myaccessio.com</span>
+          <span className="pf-contact-method-text">
+            <b>Email</b>
+            <span className="pf-contact-value">{company.email}</span>
+          </span>
         </a>
-        <a className="pf-contact-method" href="tel:+910000000000">
+        <a className="pf-contact-method" href={phoneHref}>
           <span className="pf-contact-ic"><PhoneSvg /></span>
-          <span><b>Phone</b>+91 00000 00000</span>
+          <span className="pf-contact-method-text">
+            <b>Phone</b>
+            <span className="pf-contact-value">{company.phone}</span>
+          </span>
         </a>
-        <span className="pf-contact-method">
+        <span className="pf-contact-method pf-contact-method-office">
           <span className="pf-contact-ic"><PinSvg /></span>
-          <span><b>Office</b>MYACCESS PRIVATE LIMITED</span>
+          <span className="pf-contact-method-text">
+            <b>Office</b>
+            <span className="pf-contact-value">{company.company_name}</span>
+            {company.address ? <span className="pf-contact-address">{company.address}</span> : null}
+          </span>
         </span>
       </div>
+
+      {mapSrc && (
+        <div className="pf-contact-map">
+          <iframe
+            title="Office location"
+            src={mapSrc}
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            allowFullScreen
+          />
+          <a
+            className="pf-contact-map-link"
+            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapQuery)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Open in Google Maps →
+          </a>
+        </div>
+      )}
     </div>
   )
 }

@@ -52,6 +52,8 @@ const EMPTY_DASHBOARD = {
   name: '',
   description: '',
   publish: false,
+  queue_enabled: false,
+  queue_control_seconds: 60,
 }
 
 export default function ApplicationDetail() {
@@ -345,6 +347,8 @@ export default function ApplicationDetail() {
         name: d.name || '',
         description: d.description || '',
         publish: !!d.publish,
+        queue_enabled: !!d.queue_enabled,
+        queue_control_seconds: d.queue_control_seconds ?? 60,
       },
     })
   }
@@ -354,6 +358,8 @@ export default function ApplicationDetail() {
       name: form.name.trim(),
       description: form.description.trim() || null,
       publish: !!form.publish,
+      queue_enabled: !!form.queue_enabled,
+      queue_control_seconds: Math.max(5, parseInt(form.queue_control_seconds, 10) || 60),
     }
     setSaving(true)
     try {
@@ -586,6 +592,14 @@ export default function ApplicationDetail() {
                 </ul>
               )}
             </section>
+
+            {/* ---------- 3D Scene (Spline) ---------- */}
+            <SplineSection
+              app={app}
+              canUpdate={canUpdate}
+              onSaved={(vals) => setApp((a) => ({ ...a, ...vals }))}
+              setToast={setToast}
+            />
           </>
         )}
       </div>
@@ -954,6 +968,82 @@ function DashboardRow({ dashboard, canUpdate, canDelete, onOpen, onEdit, onDelet
   )
 }
 
+/* ----------------------- 3D scene (Spline) section -----------------------
+   Application-level config (sits alongside Devices / Cameras / Dashboards).
+   The scene is shown on every dashboard's camera area, after the cameras. */
+function SplineSection({ app, canUpdate, onSaved, setToast }) {
+  const [url, setUrl] = useState(app?.spline_url || '')
+  const [enabled, setEnabled] = useState(!!app?.spline_url_enable)
+  const [saving, setSaving] = useState(false)
+
+  // Re-sync if the app is (re)loaded externally.
+  useEffect(() => {
+    setUrl(app?.spline_url || '')
+    setEnabled(!!app?.spline_url_enable)
+  }, [app?.spline_url, app?.spline_url_enable])
+
+  const dirty = url !== (app?.spline_url || '') || enabled !== !!app?.spline_url_enable
+
+  async function save() {
+    if (!app?.id) return
+    setSaving(true)
+    const vals = { spline_url: url.trim() || null, spline_url_enable: !!enabled }
+    try {
+      await api.updateApplication(app.id, vals)
+      onSaved?.(vals)
+      setToast?.({ type: 'success', text: '3D scene settings saved.' })
+    } catch {
+      setToast?.({ type: 'error', text: 'Could not save 3D scene settings.' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <section className="admin-card list-card detail-section">
+      <div className="card-head">
+        <h3 className="card-title">3D Scene</h3>
+        <div className="card-head-actions">
+          <span className={'spline-status' + (enabled && url.trim() ? ' is-on' : '')}>
+            {enabled && url.trim() ? 'Shown on dashboards' : 'Hidden'}
+          </span>
+        </div>
+      </div>
+      <div className="spline-section">
+        <p className="spline-section-lead">
+          Embed a Spline 3D scene. When enabled it appears in each dashboard's camera area, after all linked cameras.
+        </p>
+        <label className="form-field full">
+          <span className="form-label">Spline scene URL</span>
+          <input
+            type="url"
+            value={url}
+            disabled={!canUpdate || saving}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://my.spline.design/…  (embed / viewer URL)"
+          />
+        </label>
+        <label className="form-toggle">
+          <input
+            type="checkbox"
+            checked={enabled}
+            disabled={!canUpdate || saving}
+            onChange={(e) => setEnabled(e.target.checked)}
+          />
+          <span>Show the 3D scene on dashboards <small>— appears after all cameras</small></span>
+        </label>
+        {canUpdate && (
+          <div className="spline-section-foot">
+            <button type="button" className="btn-primary btn-sm" onClick={save} disabled={saving || !dirty} aria-busy={saving}>
+              {saving ? 'Saving…' : 'Save 3D scene'}
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 /* ----------------------- dashboard modal ----------------------- */
 function DashboardModal({ initial, onClose, onSubmit }) {
   const [form, setForm] = useState(initial)
@@ -1001,6 +1091,21 @@ function DashboardModal({ initial, onClose, onSubmit }) {
                 onChange={(e) => set('description', e.target.value)}
                 placeholder="What does this dashboard show or control?" />
             </DField>
+
+            {/* Access queue — turn-based control for the published dashboard
+                (desktop + mobile). Each person gets control for N seconds. */}
+            <label className="form-toggle">
+              <input type="checkbox" checked={form.queue_enabled} disabled={saving}
+                onChange={(e) => set('queue_enabled', e.target.checked)} />
+              <span>Enable access queue <small>— viewers take turns controlling; everyone else is read-only</small></span>
+            </label>
+            {form.queue_enabled && (
+              <DField label="Control time per person (seconds)" error={errors.queue_control_seconds}>
+                <input type="number" min={5} step={5} value={form.queue_control_seconds} disabled={saving}
+                  onChange={(e) => set('queue_control_seconds', e.target.value)} placeholder="60" />
+              </DField>
+            )}
+
             <div className="modal-foot">
               <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>Cancel</button>
               <button type="submit" className="btn-primary" disabled={saving} aria-busy={saving}>
