@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import Avatar from './Avatar.jsx'
 import { auth } from '../lib/api.js'
@@ -16,8 +16,17 @@ const NAV = [
   // { label: 'Activity',     to: '/activity-logs', perm: 'activity_log_view' },
 ]
 
+// Must match the `.kiosk-nav` gap in CSS — used to measure item fit.
+const NAV_GAP = 28
+// Width reserved for the "More ▾" button (incl. trailing gap) when overflowing.
+const MORE_RESERVE = 96
+
 /**
  * Shared top bar used on every authenticated page.
+ *
+ * On desktop the nav shows as many items as fit on one line; any that would
+ * overflow collapse into a "More ▾" dropdown (so links are never cut off).
+ * On compact/tablet widths (≤960px) the whole nav moves behind a hamburger.
  *
  * Props:
  *   centerSlot — optional React node placed between the nav and the user
@@ -30,28 +39,91 @@ export default function TopBar({ centerSlot = null }) {
   const displayName = user?.name || user?.email || 'User'
   const roleName = user?.roles?.[0]?.name || 'Member'
 
+  const items = NAV.filter((n) => !n.perm || auth.hasPerm(n.perm))
+
   // Hamburger / drawer state for narrow viewports.
   const [menuOpen, setMenuOpen] = useState(false)
+  // "More" overflow dropdown state (desktop).
+  const [moreOpen, setMoreOpen] = useState(false)
+  // How many nav items fit inline; the rest go into "More".
+  const [visibleCount, setVisibleCount] = useState(items.length)
+  // Whether we're in the compact (hamburger) breakpoint.
+  const [isCompact, setIsCompact] = useState(
+    typeof window !== 'undefined'
+      ? window.matchMedia('(max-width: 960px)').matches
+      : false,
+  )
+
   const navRef = useRef(null)
   const burgerRef = useRef(null)
+  const measureRef = useRef(null)
+  const moreRef = useRef(null)
 
-  // Auto-close the drawer when navigating to a different route, when the
-  // viewport grows back to desktop size, or when Escape is pressed.
-  useEffect(() => { setMenuOpen(false) }, [location.pathname])
+  // Track the compact breakpoint (hamburger takes over there).
   useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') setMenuOpen(false) }
-    function onResize() { if (window.innerWidth > 920) setMenuOpen(false) }
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('resize', onResize)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('resize', onResize)
-    }
+    const mq = window.matchMedia('(max-width: 960px)')
+    const onChange = () => setIsCompact(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
   }, [])
 
-  // Close the drawer on any click/tap outside the menu (and outside the
-  // burger, so the burger's own toggle keeps working). This is the reliable
-  // close path — it doesn't depend on the dimming backdrop's z-index/coverage.
+  // Measure how many items fit on the nav line; overflow → "More".
+  useLayoutEffect(() => {
+    if (isCompact) { setVisibleCount(items.length); return undefined }
+    const nav = navRef.current
+    const measure = measureRef.current
+    if (!nav || !measure) return undefined
+
+    let cancelled = false
+    const recompute = () => {
+      if (cancelled) return
+      const avail = nav.clientWidth
+      if (!avail) return
+      const widths = Array.from(measure.children).map(
+        (el) => el.getBoundingClientRect().width,
+      )
+      const totalAll =
+        widths.reduce((a, b) => a + b, 0) + NAV_GAP * Math.max(0, widths.length - 1)
+      if (totalAll <= avail) { setVisibleCount(widths.length); return }
+      let used = 0
+      let count = 0
+      for (let i = 0; i < widths.length; i++) {
+        const add = widths[i] + (count > 0 ? NAV_GAP : 0)
+        if (used + add + NAV_GAP + MORE_RESERVE <= avail) {
+          used += add
+          count++
+        } else break
+      }
+      setVisibleCount(count)
+    }
+
+    recompute()
+    const ro = new ResizeObserver(recompute)
+    ro.observe(nav)
+    window.addEventListener('resize', recompute)
+    // Re-measure once the web font finishes loading (widths can shift).
+    if (document.fonts?.ready) document.fonts.ready.then(recompute)
+    return () => {
+      cancelled = true
+      ro.disconnect()
+      window.removeEventListener('resize', recompute)
+    }
+  }, [isCompact, items.length])
+
+  // Close the drawer / More menu when navigating to a different route.
+  useEffect(() => { setMenuOpen(false); setMoreOpen(false) }, [location.pathname])
+
+  // Escape closes both popups.
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') { setMenuOpen(false); setMoreOpen(false) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Close the mobile drawer on any click/tap outside the menu (and burger).
   useEffect(() => {
     if (!menuOpen) return undefined
     function onPointerDown(e) {
@@ -64,10 +136,52 @@ export default function TopBar({ centerSlot = null }) {
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [menuOpen])
 
+  // Close the "More" dropdown on outside click.
+  useEffect(() => {
+    if (!moreOpen) return undefined
+    function onPointerDown(e) {
+      if (moreRef.current?.contains(e.target)) return
+      setMoreOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [moreOpen])
+
   function logout() {
     auth.clear()
     navigate('/signin', { replace: true })
   }
+
+  function renderLink(n) {
+    if (n.to === '#') {
+      return (
+        <span
+          key={n.label}
+          className="nav-link is-disabled"
+          aria-disabled="true"
+          title="Coming soon"
+        >
+          {n.label}
+        </span>
+      )
+    }
+    return (
+      <NavLink
+        key={n.label}
+        to={n.to}
+        className={({ isActive }) => 'nav-link' + (isActive ? ' is-active' : '')}
+        onClick={() => { setMenuOpen(false); setMoreOpen(false) }}
+      >
+        {n.label}
+      </NavLink>
+    )
+  }
+
+  const visibleItems = isCompact ? items : items.slice(0, visibleCount)
+  const overflowItems = isCompact ? [] : items.slice(visibleCount)
+  const moreActive = overflowItems.some(
+    (n) => n.to !== '#' && location.pathname.startsWith(n.to),
+  )
 
   return (
     <header className={'kiosk-topbar' + (centerSlot ? '' : ' no-center') + (menuOpen ? ' menu-open' : '')}>
@@ -76,28 +190,32 @@ export default function TopBar({ centerSlot = null }) {
       </Link>
 
       <nav ref={navRef} id="kiosk-nav-drawer" className={'kiosk-nav' + (menuOpen ? ' is-open' : '')}>
-        {NAV.filter((n) => !n.perm || auth.hasPerm(n.perm)).map((n) =>
-          n.to === '#' ? (
-            <span
-              key={n.label}
-              className="nav-link is-disabled"
-              aria-disabled="true"
-              title="Coming soon"
+        {/* Hidden measurement row — all items, used to compute how many fit. */}
+        <div className="kiosk-nav-measure" ref={measureRef} aria-hidden="true">
+          {items.map((n) => (
+            <span key={n.label} className="nav-link">{n.label}</span>
+          ))}
+        </div>
+
+        {visibleItems.map((n) => renderLink(n))}
+
+        {overflowItems.length > 0 && (
+          <div className={'kiosk-more' + (moreOpen ? ' is-open' : '')} ref={moreRef}>
+            <button
+              type="button"
+              className={'nav-link kiosk-more-btn' + (moreActive ? ' is-active' : '')}
+              aria-haspopup="true"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpen((o) => !o)}
             >
-              {n.label}
-            </span>
-          ) : (
-            <NavLink
-              key={n.label}
-              to={n.to}
-              className={({ isActive }) =>
-                'nav-link' + (isActive ? ' is-active' : '')
-              }
-              onClick={() => setMenuOpen(false)}
-            >
-              {n.label}
-            </NavLink>
-          )
+              More <span className="kiosk-more-chev" aria-hidden="true">▾</span>
+            </button>
+            {moreOpen && (
+              <div className="kiosk-more-menu" role="menu">
+                {overflowItems.map((n) => renderLink(n))}
+              </div>
+            )}
+          </div>
         )}
       </nav>
 

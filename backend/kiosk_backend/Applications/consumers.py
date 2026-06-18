@@ -981,20 +981,27 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
         self.bindings = []
         self.device_index = {}
 
-        # The internal editor connects with ?token=<JWT>. A valid token marks
-        # this as an authenticated admin session, which bypasses the public
-        # access-queue write gate (the queue is meant to ration control among
-        # anonymous public viewers, not the admin building/testing the board).
+        # Authenticated internal users connect with ?token=<JWT>.
+        #   • editor=1  → the admin building the board: full bypass of the queue.
+        #   • no editor → previewing the public dashboard: must take the admin
+        #     override (queue_manager admin lock) to write; one admin at a time.
+        # Anonymous public viewers send no token and stay subject to the queue.
         self.is_admin = False
+        self.is_editor = False
+        self.user_id = None
         try:
             params = parse_qs(self.scope.get("query_string", b"").decode())
             token = (params.get("token") or [None])[0]
+            self.is_editor = (params.get("editor") or [None])[0] == "1"
             if token:
                 from rest_framework_simplejwt.tokens import AccessToken
-                AccessToken(token)   # validates signature + expiry (raises if bad)
-                self.is_admin = True
+                t = AccessToken(token)   # validates signature + expiry (raises if bad)
+                uid = t.get("user_id")
+                self.user_id = str(uid) if uid is not None else None
+                self.is_admin = self.user_id is not None
         except Exception:
             self.is_admin = False
+            self.user_id = None
 
         print("\n=== DASHBOARD WS CONNECT ===", flush=True)
         print("PATH:", self.scope.get("path"), flush=True)
@@ -1090,16 +1097,25 @@ class DashboardRealtimeConsumer(AsyncWebsocketConsumer):
         if not action:
             return await self._send_error("Missing action")
 
-        # Access-queue gate: when the dashboard runs a turn-based queue, only the
-        # member currently holding control may write. Reads ("get") are always
-        # allowed; everyone else is read-only until their turn. Authenticated
-        # admins (the internal editor, identified by a valid ?token=) bypass the
-        # queue so they can test controls while building the dashboard.
+        # Keepalive — the client pings periodically so idle networks/proxies
+        # don't drop this socket when no device values are changing (unlike the
+        # queue socket, which gets a server tick every second).
+        if action == "ping":
+            return await self._send_json({"action": "pong", "timestamp": now().isoformat()})
+
+        # Access-queue gate (reads are always allowed):
+        #   • Editor (admin building the board) → full bypass.
+        #   • Admin override active → only the internal user holding it may write.
+        #   • Otherwise → only the current public queue controller may write.
         if (action in ("put", "patch", "post", "delete")
                 and getattr(self.dashboard, "queue_enabled", False)
-                and not getattr(self, "is_admin", False)):
+                and not (getattr(self, "is_admin", False) and getattr(self, "is_editor", False))):
             from . import queue_manager
-            if not queue_manager.is_controller(self.dashboard_id, data.get("member_id")):
+            if queue_manager.is_admin_locked(self.dashboard_id):
+                if not (getattr(self, "is_admin", False)
+                        and queue_manager.is_admin_controller(self.dashboard_id, getattr(self, "user_id", None))):
+                    return await self._send_error("An administrator is controlling this dashboard.", code=403)
+            elif not queue_manager.is_controller(self.dashboard_id, data.get("member_id")):
                 return await self._send_error("It's not your turn to control this dashboard.", code=403)
 
         # device_id required for all except maybe future features
@@ -1528,6 +1544,12 @@ class DashboardQueueConsumer(AsyncWebsocketConsumer):
         self.group = f"dashqueue_{self.dashboard_id}"
         self._closed = False
         self._viewer_added = False
+        # Internal-user identity (admin override). Resolved from the JWT in the
+        # query string (?token=) — set in _setup once the DB is reachable.
+        self._token = (parse_qs(self.scope.get("query_string", b"").decode()).get("token") or [None])[0]
+        self.user_id = None
+        self.user_name = None
+        self.is_admin = False
         # Accept FIRST so the WS handshake completes instantly — the (possibly
         # slow, remote-DB) dashboard load + channel-layer join then run on a
         # background task. Doing them before accept() was blocking the
@@ -1555,6 +1577,9 @@ class DashboardQueueConsumer(AsyncWebsocketConsumer):
                 await self._raw({"type": "queue_state", "enabled": False})
                 return
             self.control_seconds = int(getattr(self.dashboard, "queue_control_seconds", 60) or 60)
+            # Resolve internal-user identity (for the admin override "take control").
+            self.user_id, self.user_name = await self._resolve_user(self._token)
+            self.is_admin = self.user_id is not None
             queue_manager.add_viewer(self.dashboard_id)
             self._viewer_added = True
             await self.channel_layer.group_add(self.group, self.channel_name)
@@ -1602,9 +1627,47 @@ class DashboardQueueConsumer(AsyncWebsocketConsumer):
             if self.member_id:
                 queue_manager.leave(self.dashboard_id, self.member_id)
             await self._broadcast()
+        elif action == "take_control":
+            # Internal-user override: seize exclusive control for a fixed window,
+            # freezing the public queue. A second internal user can't override.
+            if not self.is_admin:
+                await self._raw({"type": "queue_error", "error": "Only internal users can take control."})
+                return
+            # Duration (seconds) chosen by the admin; default 60 when unset/invalid.
+            try:
+                seconds = int(data.get("seconds"))
+            except (TypeError, ValueError):
+                seconds = 60
+            if seconds <= 0:
+                seconds = 60
+            res = queue_manager.admin_take_control(self.dashboard_id, self.user_id, self.user_name, seconds=seconds)
+            if not res.get("ok"):
+                who = res.get("occupied_by") or "another administrator"
+                await self._raw({
+                    "type": "queue_error",
+                    "error": f"This dashboard is occupied by {who}.",
+                    "occupied_by": res.get("occupied_by"),
+                    "remaining": res.get("remaining"),
+                })
+                return
+            self._ensure_ticker()
+            await self._send_state()
+            await self._broadcast()
+        elif action == "release_control":
+            if self.is_admin:
+                queue_manager.admin_release(self.dashboard_id, self.user_id)
+                await self._send_state()
+                await self._broadcast()
 
     async def queue_update(self, event):
         await self._send_state()
+
+    async def queue_closed(self, event):
+        """The dashboard was unpublished — tell the client to exit the queue."""
+        await self._raw({
+            "type": "queue_closed",
+            "reason": event.get("reason") or "This dashboard was unpublished by an administrator.",
+        })
 
     async def _broadcast(self):
         try:
@@ -1625,6 +1688,11 @@ class DashboardQueueConsumer(AsyncWebsocketConsumer):
                         you = {"in_queue": True, "is_controller": False,
                                "position": m["position"], "wait_seconds": m["wait_seconds"]}
                         break
+        # Internal-user override flags.
+        you["is_admin"] = bool(self.is_admin)
+        you["is_admin_controller"] = bool(
+            self.is_admin and self.user_id and snap.get("admin_user_id") == self.user_id
+        )
         await self._raw({
             "type": "queue_state",
             "enabled": True,
@@ -1632,6 +1700,9 @@ class DashboardQueueConsumer(AsyncWebsocketConsumer):
             "control_remaining": snap["control_remaining"],
             "control_seconds": snap["control_seconds"],
             "waiting_count": snap["waiting_count"],
+            "admin_active": snap["admin_active"],
+            "admin_name": snap["admin_name"],
+            "admin_remaining": snap["admin_remaining"],
             "you": you,
         })
 
@@ -1655,6 +1726,25 @@ class DashboardQueueConsumer(AsyncWebsocketConsumer):
             return Dashboard.objects.get(id=dashboard_id)
         except Exception:
             return None
+
+    @database_sync_to_async
+    def _resolve_user(self, token):
+        """Decode the JWT → (user_id_str, display_name). Returns (None, None)
+        for anonymous public viewers (no/invalid token)."""
+        if not token:
+            return (None, None)
+        try:
+            from rest_framework_simplejwt.tokens import AccessToken
+            from django.contrib.auth import get_user_model
+            uid = AccessToken(token).get("user_id")
+            if uid is None:
+                return (None, None)
+            u = get_user_model().objects.filter(pk=uid).only("id", "name", "email").first()
+            if not u:
+                return (None, None)
+            return (str(uid), (getattr(u, "name", None) or getattr(u, "email", "") or f"#{uid}"))
+        except Exception:
+            return (None, None)
 
     @database_sync_to_async
     def _count_view(self):

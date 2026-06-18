@@ -374,6 +374,12 @@
     height: auto;
     max-height: calc(100dvh - 230px);
   }
+  /* Published (locked) → the include toggles are disabled; dim them so it's
+     clear the selection can't be changed until the layout is unpublished. */
+  .db-page.is-mobile-edit .db-mobile-picker.is-locked .db-mobile-picker-list {
+    opacity: 0.55;
+    pointer-events: none;
+  }
   /* List grows to fill the panel and scrolls; footer stays pinned at bottom. */
   .db-page.is-mobile-edit .db-mobile-picker-list {
     flex: 1 1 auto;
@@ -436,14 +442,20 @@
     padding-top: 0;
     margin-top: -120px;
     justify-content: flex-start;
+    /* Left-align the phone + device card so the phone hugs the left and clears
+       the right-aligned Desktop/Mobile/Preview controls it's pulled up beside.
+       (Centering let the phone drift right under those controls on wide screens.)
+       A little left padding nudges the phone in from the edge without pushing it
+       back under the toolbar controls. */
+    align-items: flex-start;
+    padding-left: 180px;
   }
   .db-page.is-mobile-edit .db-mobile-stage .db-sim-area {
     margin-top: 0;
   }
-  /* Center the hint under the PHONE, not the phone+card pair. Offset it left
-     by the side card's footprint (card width 208 + gap 22 = 230). */
+  /* Hint sits under the phone (the first, left-most item in the row). */
   .db-page.is-mobile-edit .db-mobile-stage .db-mobile-hint {
-    margin-right: 230px;
+    align-self: flex-start;
     text-align: center;
   }
 

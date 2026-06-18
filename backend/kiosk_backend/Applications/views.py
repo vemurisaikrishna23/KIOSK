@@ -482,6 +482,63 @@ class DeviceViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 
+def _close_dashboard_queue(dashboard_id, reason="This dashboard was unpublished by an administrator."):
+    """Notify public viewers in the access queue that the dashboard was
+    unpublished, then tear down its in-memory queue state."""
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        layer = get_channel_layer()
+        if layer is not None:
+            async_to_sync(layer.group_send)(
+                f"dashqueue_{int(dashboard_id)}",
+                {"type": "queue.closed", "reason": reason},
+            )
+    except Exception:
+        pass
+    try:
+        from . import queue_manager
+        queue_manager.close(dashboard_id)
+    except Exception:
+        pass
+
+
+class DashboardQueueStatusAPIView(APIView):
+    """
+    Lightweight read of a dashboard's live access-queue activity. Used by the
+    editor to warn an admin before unpublishing if public viewers are currently
+    waiting in / controlling the dashboard.
+    """
+    permission_classes = [IsAuthenticated, HasCustomPermission]
+    required_permissions = {"list": "application_view"}
+
+    def get(self, request, dashboard_id):
+        from . import queue_manager
+        dash = Dashboard.objects.filter(pk=dashboard_id).first()
+        if not dash:
+            return Response({"detail": "Dashboard not found."}, status=status.HTTP_404_NOT_FOUND)
+        secs = int(getattr(dash, "queue_control_seconds", 60) or 60)
+        snap = queue_manager.snapshot(dashboard_id, secs)
+        active = snap.get("active")
+        waiting = snap.get("waiting_count", 0)
+        admin_active = snap.get("admin_active", False)
+        # People actually participating in the access queue: those waiting in
+        # line PLUS the one currently in control. (NOT passive viewers / stray
+        # sockets — those inflate the raw "viewers" tally.)
+        in_queue = waiting + (1 if active else 0)
+        return Response({
+            "enabled": bool(getattr(dash, "queue_enabled", False)),
+            "waiting_count": waiting,
+            "in_queue": in_queue,
+            "has_controller": bool(active),
+            "controller_name": (active or {}).get("name"),
+            "admin_active": admin_active,
+            "admin_name": snap.get("admin_name"),
+            # Caution only when someone is genuinely in the queue or controlling.
+            "active": bool(in_queue or admin_active),
+        }, status=status.HTTP_200_OK)
+
+
 class DashboardViewSet(viewsets.ModelViewSet):
     """
     CRUD for dashboards under an Application. Each Application can own many
@@ -534,7 +591,12 @@ class DashboardViewSet(viewsets.ModelViewSet):
         )
 
         if serializer.is_valid():
+            was_published = bool(instance.publish)
             dashboard = serializer.save()
+            # Going fully public → unpublished: evict any public viewers waiting
+            # in / controlling the access queue and tear down its live state.
+            if was_published and not dashboard.publish:
+                _close_dashboard_queue(dashboard.id)
             return Response(
                 {
                     "message": "Dashboard updated successfully",

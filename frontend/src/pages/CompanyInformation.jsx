@@ -60,6 +60,39 @@ export function mapSrcFromEmbed(code) {
   return null
 }
 
+/* Shimmer placeholder block (reuses the global `.sk` shimmer). */
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+/* One company-record placeholder (mirrors the .ci-record layout). */
+function CiRecordSkeleton() {
+  return (
+    <li className="ci-record" aria-hidden="true">
+      <div className="ci-record-main">
+        <div className="ci-record-head">
+          <div className="ci-record-title">
+            <Sk w={10} h={10} r={999} style={{ flexShrink: 0 }} />
+            <Sk w={180} h={14} />
+            <Sk w={58} h={18} r={999} />
+          </div>
+          <div className="detail-row-actions">
+            <Sk w={64} h={30} r={8} />
+            <Sk w={56} h={30} r={8} />
+          </div>
+        </div>
+        <div className="ci-record-body">
+          <dl className="ci-fields">
+            <div><Sk w={40} h={9} style={{ marginBottom: 6 }} /><Sk w={130} h={13} /></div>
+            <div><Sk w={40} h={9} style={{ marginBottom: 6 }} /><Sk w={100} h={13} /></div>
+          </dl>
+        </div>
+      </div>
+    </li>
+  )
+}
+
 /**
  * Company Information — admin management of the contact details shown on
  * the public landing page (email / phone / office) plus a Google-Maps
@@ -260,10 +293,9 @@ export default function CompanyInformation() {
           </div>
           <div className="list-scroll">
             {loading ? (
-              <div className="admin-empty admin-loading">
-                <span className="admin-spinner" aria-hidden="true" />
-                <span>Loading…</span>
-              </div>
+              <ul className="detail-list ci-list">
+                {Array.from({ length: 3 }).map((_, i) => <CiRecordSkeleton key={i} />)}
+              </ul>
             ) : list.length === 0 ? (
               <div className="admin-empty">
                 <div className="admin-empty-title">No company information yet.</div>

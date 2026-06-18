@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
+import WsStatus from '../components/WsStatus.jsx'
 import { PermissionDenied } from './Cameras.jsx'
 import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
 
@@ -45,7 +46,7 @@ export default function DeviceDetail() {
 
   // WebSocket — hoisted so the polling effect and tree can both react.
   const wsRef = useRef(null)
-  const [wsStatus, setWsStatus] = useState('idle') // idle | connecting | live | offline
+  const [wsStatus, setWsStatus] = useState('idle') // idle | connecting | reconnecting | live | offline
 
   // Pending node-delete confirmation (replaces window.confirm). Carries
   // enough context for the modal copy: { name, path, kind: 'leaf'|'branch' }
@@ -147,9 +148,9 @@ export default function DeviceDetail() {
     function scheduleReconnect() {
       if (cancelled) return
       attempt += 1
-      // 1, 2, 4, 8, 16, 30, 30, ... (jittered by ±20% so a herd of clients
-      // doesn't pile back onto the server in lock-step after an outage).
-      const base   = Math.min(30000, 1000 * Math.pow(2, attempt - 1))
+      // Fast recovery: ~250ms first retry, backing off to a 4s cap (jittered by
+      // ±20% so a herd of clients doesn't pile back on in lock-step).
+      const base   = Math.min(4000, 250 * Math.pow(2, attempt - 1))
       const jitter = base * (0.8 + Math.random() * 0.4)
       reconnectTimer = setTimeout(connect, jitter)
     }
@@ -160,7 +161,7 @@ export default function DeviceDetail() {
 
       let ws
       try { ws = new WebSocket(url) }
-      catch { setWsStatus('offline'); scheduleReconnect(); return }
+      catch { setWsStatus('reconnecting'); scheduleReconnect(); return }
       currentWs    = ws
       wsRef.current = ws
 
@@ -182,14 +183,15 @@ export default function DeviceDetail() {
         if (wsRef.current === ws) wsRef.current = null
         currentWs = null
         if (cancelled) return
-        setWsStatus('offline')
         // Auth-style close codes from the consumer:
         //   4001 — device not found / token invalid
         //   4002 — device disabled
-        // Both are user-fixable but reconnect would just loop forever.
-        // The persistent banner (wsError) was already set from the
-        // preceding error message frame, so the user knows what to do.
-        if (event && (event.code === 4001 || event.code === 4002)) return
+        // Both are user-fixable but reconnect would just loop forever, so we
+        // stop and show Offline. The persistent banner (wsError) was already
+        // set from the preceding error frame, so the user knows what to do.
+        if (event && (event.code === 4001 || event.code === 4002)) { setWsStatus('offline'); return }
+        // Everything else keeps auto-reconnecting until it's back.
+        setWsStatus('reconnecting')
         scheduleReconnect()
       }
 
@@ -447,13 +449,7 @@ export default function DeviceDetail() {
               <div className="card-head">
                 <h3 className="card-title">Payload</h3>
                 <div className="card-head-actions">
-                  <span className={'ws-status ws-' + wsStatus}>
-                    <span className="ws-dot" aria-hidden="true" />
-                    {wsStatus === 'live'         ? 'Live' :
-                     wsStatus === 'connecting'   ? 'Connecting…' :
-                     wsStatus === 'reconnecting' ? 'Reconnecting…' :
-                     'Offline'}
-                  </span>
+                  <WsStatus status={wsStatus} />
                   <span className="card-count">{device.last_payload_update ? formatRelative(device.last_payload_update) : 'never'}</span>
                 </div>
               </div>
@@ -590,8 +586,6 @@ export default function DeviceDetail() {
           >×</button>
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
   )
 }

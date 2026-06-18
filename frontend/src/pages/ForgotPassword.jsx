@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
-import SignInIllustration from '../components/SignInIllustration.jsx'
+import KioskRightPanel from '../components/KioskRightPanel.jsx'
 import { api, ApiError, parseApiErrors } from '../lib/api.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -50,6 +50,7 @@ export default function ForgotPassword() {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
+  const [showToken, setShowToken] = useState(false)
   const [resetErrors, setResetErrors] = useState({
     token: [],
     new_password: [],
@@ -309,7 +310,7 @@ export default function ForgotPassword() {
                   <label htmlFor="fp-token" className="float-label">Reset Code</label>
                   <input
                     id="fp-token"
-                    type="text"
+                    type={showToken ? 'text' : 'password'}
                     value={token}
                     onChange={(e) => {
                       setToken(e.target.value)
@@ -320,6 +321,15 @@ export default function ForgotPassword() {
                     aria-describedby={hasTokenErr ? 'fp-token-err' : undefined}
                     disabled={submitting}
                   />
+                  <button
+                    type="button"
+                    className="float-eye"
+                    onClick={() => setShowToken((v) => !v)}
+                    aria-label={showToken ? 'Hide reset code' : 'Show reset code'}
+                    tabIndex={-1}
+                  >
+                    <Icon name="eye" size={18} />
+                  </button>
                   {hasTokenErr && (
                     <p id="fp-token-err" className="field-error">
                       {resetErrors.token[0]}
@@ -432,14 +442,9 @@ export default function ForgotPassword() {
           </div>
         </div>
 
-        <div className="signin-v2-foot">
-          © 2026 myaccess Inc. · KIOSK IoT Platform
-        </div>
       </div>
 
-      <div className="signin-v2-right">
-        <SignInIllustration />
-      </div>
+      <KioskRightPanel />
     </div>
   )
 }

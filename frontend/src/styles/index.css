@@ -2342,7 +2342,9 @@ input, textarea, select, [contenteditable="true"] {
 .signin-v2 {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(360px, 1fr) 1.25fr;
+  /* Right column sizes to the 100vh-tall 6:5 hero image; the left column
+     (form + intro) flexes to fill whatever horizontal space remains. */
+  grid-template-columns: 1fr auto;
   background:
     radial-gradient(900px 700px at 0% 0%, rgba(255,255,255,0.85) 0%, transparent 55%),
     radial-gradient(900px 700px at 100% 100%, rgba(243,106,30,0.12) 0%, transparent 55%),
@@ -2354,10 +2356,34 @@ input, textarea, select, [contenteditable="true"] {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
   padding: 48px 64px;
   position: relative;
   background: transparent;
 }
+
+/* Soft peach glow behind the login card, so the left panel doesn't read
+   as empty and ties into the right panel's warm palette. */
+.signin-v2-left::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: 50%;
+  width: 560px;
+  height: 560px;
+  max-width: 88%;
+  max-height: 72vh;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at center,
+    rgba(243, 106, 30, 0.18) 0%,
+    rgba(243, 106, 30, 0.07) 38%,
+    transparent 68%);
+  filter: blur(22px);
+  pointer-events: none;
+}
+.signin-v2-left .form-wrap,
+.signin-v2-left .signin-intro { position: relative; z-index: 1; }
 .signin-v2-right {
   background:
     radial-gradient(700px 500px at 70% 30%, rgba(243,106,30,0.10) 0%, transparent 55%),
@@ -2368,17 +2394,74 @@ input, textarea, select, [contenteditable="true"] {
   position: relative;
   overflow: hidden;
 }
-.signin-illustration {
-  width: 100%;
-  max-width: 620px;
-  height: auto;
-  display: block;
-}
 
 .signin-v2 .form-wrap {
   width: 100%;
   max-width: 440px;
   margin: 0 auto;
+}
+
+/* Left-panel intro (title + description) above the login card.
+   Hidden on desktop (the right-side scene already carries the message);
+   shown only on mobile, where the scene is hidden. */
+.signin-intro {
+  display: none;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 0 26px;
+}
+.signin-intro-eyebrow {
+  display: inline-block;
+  margin-bottom: 14px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(243, 106, 30, 0.10);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+.signin-intro h2 {
+  margin: 0 0 12px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.signin-intro h2 .accent { color: var(--accent); }
+.signin-intro p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--ink-3);
+}
+
+/* Welcome subtitle under the "Login" heading */
+.signin-v2 .signin-sub {
+  margin: -16px 0 26px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+/* Secure-connection reassurance at the bottom of the card */
+.signin-secure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 20px 0 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-4);
+}
+.signin-secure svg {
+  width: 14px;
+  height: 14px;
+  color: var(--ink-3);
+  flex-shrink: 0;
 }
 
 /* Elevated card around the form */
@@ -2530,11 +2613,12 @@ input, textarea, select, [contenteditable="true"] {
   cursor: not-allowed;
 }
 
-/* Page-level brand mark (top-left, sits above the column grid) */
+/* Page-level brand mark (top-left) — matches the in-app top bar
+   (padding 20px 36px, 30px logo) so it sits the same as other pages. */
 .signin-v2-brand {
   position: absolute;
-  top: 28px;
-  left: 32px;
+  top: 20px;
+  left: 36px;
   z-index: 20;
   display: inline-flex;
   align-items: center;
@@ -2685,25 +2769,30 @@ input, textarea, select, [contenteditable="true"] {
 @media (max-width: 1040px) {
   .signin-v2-left { padding: 40px 40px; }
   .signin-v2-foot { left: 40px; }
+  .signin-v2-brand { left: 36px; }
 }
-@media (max-width: 860px) {
+@media (max-width: 1024px) {
   .signin-v2 { grid-template-columns: 1fr; }
-  .signin-v2-right { display: none; }
+  .signin-v2-right,
+  .kiosk-right-panel { display: none; }
+  .signin-intro { display: block; }
   .signin-v2-left {
     min-height: 100vh;
     padding: 96px 28px 72px;
   }
   .signin-v2-foot { left: 28px; right: 28px; text-align: center; }
-  .signin-v2-brand { top: 22px; left: 24px; }
+  .signin-v2-brand { top: 22px; left: 28px; }
   .signin-v2-brand .logo-wordmark { height: 26px; }
 }
 @media (max-width: 560px) {
   .signin-v2-left { padding: 88px 16px 64px; }
   .signin-v2 h1 { font-size: 26px; margin-bottom: 22px; }
   .signin-v2 .form-card { padding: 32px 24px 28px; border-radius: 20px; }
-  .signin-v2-brand { top: 18px; left: 18px; }
+  .signin-v2-brand { top: 18px; left: 16px; }
   .signin-v2-brand .logo-wordmark { height: 22px; }
   .signin-v2-foot { left: 20px; right: 20px; }
+  .signin-intro { margin-bottom: 20px; }
+  .signin-intro h2 { font-size: 24px; }
 }
 
 /* ============================================================
@@ -3014,7 +3103,80 @@ input, textarea, select, [contenteditable="true"] {
   display: flex;
   align-items: center;
   gap: 28px;
-  justify-self: center;
+  /* Fill the grid track (instead of shrinking to content) so the available
+     width can be measured for the overflow "More" dropdown. Items stay
+     centered via justify-content. */
+  justify-self: stretch;
+  justify-content: center;
+  min-width: 0;
+  position: relative;
+}
+
+/* Hidden row used only to measure each nav item's natural width. */
+.kiosk-nav-measure {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  gap: 28px;
+  white-space: nowrap;
+}
+
+/* "More ▾" overflow dropdown */
+.kiosk-more {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.kiosk-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.kiosk-more-chev {
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+.kiosk-more.is-open .kiosk-more-chev { transform: rotate(180deg); }
+.kiosk-more-menu {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  min-width: 184px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  border-radius: 14px;
+  box-shadow: 0 24px 50px -16px rgba(20, 22, 28, 0.25);
+  z-index: 40;
+  transform-origin: top right;
+  animation: kiosk-more-pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+@keyframes kiosk-more-pop {
+  from { opacity: 0; transform: scale(0.94) translateY(-4px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.kiosk-more-menu .nav-link {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-bottom: 0;
+  text-align: left;
+  width: 100%;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.kiosk-more-menu .nav-link:hover { background: rgba(20, 22, 28, 0.04); }
+.kiosk-more-menu .nav-link.is-active {
+  background: rgba(243, 106, 30, 0.10);
+  color: #B5500F;
+  border-bottom: 0;
 }
 .kiosk-nav .nav-link {
   background: none;
@@ -3236,6 +3398,22 @@ input, textarea, select, [contenteditable="true"] {
 .dbar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #FFA45C, #F36A1E); }
 .dbar-val { font-size: 13px; font-weight: 800; color: var(--ink,#14161C); text-align: right; }
 .dash-ph { padding: 28px 4px; text-align: center; color: var(--ink-3,#948B7E); font-size: 13px; font-weight: 600; }
+
+/* ---- Loading skeletons (Platform Overview) ---- */
+.sk {
+  background: linear-gradient(100deg, #F1E7DA 26%, #FBF5EC 48%, #F1E7DA 70%);
+  background-size: 220% 100%;
+  animation: sk-shimmer 1.25s linear infinite;
+  border-radius: 8px;
+}
+.sk-circle { border-radius: 50%; }
+@keyframes sk-shimmer { to { background-position: -220% 0; } }
+@media (prefers-reduced-motion: reduce) { .sk { animation: none; } }
+/* KPI skeleton keeps the real card chrome, swaps content for shimmer blocks */
+.dash-kpi.is-skeleton { min-height: 116px; background: #fff; }
+/* Views-chart skeleton — shimmer bars sitting on the chart baseline */
+.dash-chart-skel { width: 100%; height: 220px; display: flex; align-items: flex-end; gap: 14px; padding: 8px 14px 0; }
+.dash-chart-skel .sk { flex: 1; border-radius: 8px 8px 3px 3px; }
 
 /* Views graph — controls (app dropdown + range pills) + caption */
 .dash-views-head { row-gap: 12px; }
@@ -4019,6 +4197,8 @@ input, textarea, select, [contenteditable="true"] {
   border-color: #F36A1E;
   box-shadow: 0 0 0 4px rgba(243, 106, 30, 0.18);
 }
+.camera-card.is-skeleton { cursor: default; }
+.camera-card.is-skeleton:hover { border-color: rgba(20, 22, 28, 0.08); transform: none; box-shadow: none; }
 .camera-card.is-inactive { opacity: 0.75; cursor: default; }
 .camera-card.is-inactive:hover {
   border-color: rgba(20, 22, 28, 0.08);
@@ -4144,6 +4324,8 @@ input, textarea, select, [contenteditable="true"] {
   transform: translateY(-2px);
   box-shadow: 0 22px 36px -22px rgba(243, 106, 30, 0.32);
 }
+.app-card-v2.is-skeleton { cursor: default; }
+.app-card-v2.is-skeleton:hover { border-color: rgba(20, 22, 28, 0.06); transform: none; box-shadow: 0 6px 18px -14px rgba(20, 22, 28, 0.18); }
 .app-card-v2.is-inactive { opacity: 0.78; filter: grayscale(0.15); }
 .app-card-v2.is-inactive:hover {
   border-color: rgba(20, 22, 28, 0.06);
@@ -4354,6 +4536,24 @@ input, textarea, select, [contenteditable="true"] {
 /* Public dashboard: a compact circular back-arrow button (no text). */
 /* Public dashboard header — a sticky bar with the back arrow + application
    name. The page scrolls normally beneath it. */
+/* WS status badge placement: pushed to the right of the public header,
+   grouped with the queue/admin badges; and inline in the editor toolbar. */
+.db-public-topbar .db-public-ws { margin-left: auto; flex: 0 0 auto; }
+.db-public-topbar .db-public-ws + .db-queue-badge,
+.db-public-topbar .db-public-ws + .db-admin-bar { margin-left: 0; }
+.db-toolbar-ws { flex: 0 0 auto; }
+/* In the cramped mobile-edit toolbar the phone is pulled up into this band, so
+   the right-aligned controls sit beside it. Show the connection status as a DOT
+   ONLY here — otherwise the label width ("Live" vs "Reconnecting…") shifts the
+   whole cluster left and it overlaps the phone. (font-size:0 hides the text;
+   the dot is sized in px so it stays.) Full text still shows in the public header. */
+.db-page.is-mobile-edit .db-toolbar-ws {
+  order: 4;
+  font-size: 0;
+  gap: 0;
+  padding: 6px;
+}
+.db-page.is-mobile-edit .db-toolbar-ws .ws-dot { width: 9px; height: 9px; }
 .db-public-topbar {
   position: sticky;
   top: 0;
@@ -4489,6 +4689,59 @@ input, textarea, select, [contenteditable="true"] {
   transition: background 0.15s;
 }
 .db-queue-join:hover { background: #D85510; }
+
+/* ---- Admin override bar (public dashboard / preview) ---- */
+.db-admin-bar {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(20, 22, 28, 0.06);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #3C4458;
+  white-space: nowrap;
+}
+.db-admin-bar strong { font-weight: 800; font-variant-numeric: tabular-nums; }
+.db-admin-bar.is-mine { background: rgba(31, 174, 107, 0.14); color: #14794B; }
+.db-admin-bar.is-locked { background: rgba(243, 106, 30, 0.12); color: #9A4A12; }
+.db-admin-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #1FAE6B;
+  animation: dbQueuePulse 1.6s ease-out infinite;
+}
+.db-admin-btn {
+  border: 0;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+.db-admin-take { background: #F36A1E; color: #fff; }
+.db-admin-take:hover { background: #D85510; }
+.db-admin-release { margin-left: 4px; background: rgba(20, 22, 28, 0.14); color: #2A3142; }
+.db-admin-release:hover { background: rgba(20, 22, 28, 0.22); }
+
+/* ---- "Editing locked" notice (published layout) ---- */
+.db-edit-lock-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: rgba(243, 106, 30, 0.08);
+  border: 1px solid rgba(243, 106, 30, 0.22);
+  color: #9A4A12;
+  font-size: 13px;
+  font-weight: 600;
+}
+.db-edit-lock-note svg { flex: 0 0 auto; }
+.db-edit-lock-note strong { font-weight: 800; text-transform: capitalize; }
 
 /* ---- Access-queue lobby overlay ---- */
 .db-queue-lobby {
@@ -5811,6 +6064,8 @@ input, textarea, select, [contenteditable="true"] {
   gap: 10px;
   flex-wrap: wrap;
 }
+/* New stacked upload layout: title → drop zone / file chip → name + button. */
+.ssl-upload-form { display: flex; flex-direction: column; gap: 12px; }
 .ssl-inline-title {
   font-size: 13.5px;
   font-weight: 800;
@@ -5818,15 +6073,58 @@ input, textarea, select, [contenteditable="true"] {
   letter-spacing: -0.01em;
   margin-right: 6px;
 }
-.ssl-inline-file {
-  font-family: inherit;
-  font-size: 12.5px;
-  padding: 6px 8px;
-  border: 1px dashed #ECE2D2;
-  border-radius: 8px;
-  background: #FFFCF6;
-  max-width: 280px;
+
+/* Visually-hidden native file input (drop zone drives it). */
+.ssl-file-hidden {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
 }
+
+/* Drag & drop zone */
+.ssl-dropzone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px;
+  padding: 24px 16px; text-align: center;
+  border: 2px dashed #E4D8C6; border-radius: 14px;
+  background: #FFFCF6; cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ssl-dropzone:hover { border-color: rgba(243, 106, 30, 0.5); background: #FFF7EE; }
+.ssl-dropzone:focus-visible { outline: none; border-color: #F36A1E; box-shadow: 0 0 0 4px rgba(243, 106, 30, 0.16); }
+.ssl-dropzone.is-drag { border-color: #F36A1E; background: rgba(243, 106, 30, 0.07); }
+.ssl-dz-icon {
+  width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+  background: #FFF3E7; border: 1px solid rgba(243, 106, 30, 0.18); color: #F36A1E;
+}
+.ssl-dz-text { font-size: 13.5px; color: var(--ink-2, #463F36); font-weight: 600; }
+.ssl-dz-text strong { color: #F36A1E; font-weight: 800; }
+.ssl-dz-hint { font-size: 11.5px; color: var(--ink-3); font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; }
+
+/* Selected-file chip */
+.ssl-file-chip {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border: 1px solid #ECE2D2; border-radius: 12px; background: #fff;
+}
+.ssl-file-ic {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  display: grid; place-items: center; background: #FFF3E7; color: #F36A1E;
+}
+.ssl-file-meta { min-width: 0; flex: 1; }
+.ssl-file-name { font-size: 13.5px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ssl-file-size { font-size: 12px; color: var(--ink-3); font-weight: 600; margin-top: 2px; }
+.ssl-file-remove {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid rgba(20, 22, 28, 0.10); background: #fff; color: var(--ink-2, #463F36);
+  font-size: 18px; line-height: 1; cursor: pointer; display: grid; place-items: center;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.ssl-file-remove:hover:not(:disabled) { background: rgba(224, 70, 61, 0.08); color: #C0392B; border-color: rgba(224, 70, 61, 0.3); }
+.ssl-file-remove:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Name + submit row */
+.ssl-upload-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ssl-upload-row .ssl-inline-name { flex: 1; max-width: none; min-width: 200px; }
+
 .ssl-inline-name {
   flex: 1;
   min-width: 200px;
@@ -6508,6 +6806,29 @@ input, textarea, select, [contenteditable="true"] {
   gap: 14px;
   align-items: center;
 }
+/* Drag & drop variant of the image picker */
+.app-image-dropzone {
+  padding: 14px;
+  border: 2px dashed #E4D8C6;
+  border-radius: 14px;
+  background: #FFFCF6;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.app-image-dropzone.is-drag { border-color: #F36A1E; background: rgba(243, 106, 30, 0.07); }
+.app-image-dropzone.is-disabled { opacity: 0.7; }
+.app-image-cta {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: #fff; border: 1px solid rgba(20, 22, 28, 0.12); border-radius: 10px;
+  padding: 9px 12px; font: inherit; font-size: 13px; color: var(--ink-2, #463F36);
+  cursor: pointer; text-align: left; transition: border-color 0.15s, background 0.15s;
+}
+.app-image-cta:hover:not(:disabled) { border-color: rgba(243, 106, 30, 0.5); background: #FFF7EE; }
+.app-image-cta:disabled { cursor: not-allowed; }
+.app-image-cta-ic {
+  width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center; background: #FFF3E7; color: #F36A1E;
+}
+.app-image-cta-text strong { color: #F36A1E; font-weight: 800; }
 .app-image-preview {
   /* Match the crop output aspect (16:9) so the preview fills edge-to-edge,
      just like it will in the card hero — no peach letterbox. */
@@ -6792,6 +7113,54 @@ input, textarea, select, [contenteditable="true"] {
 }
 .form-toggle input { accent-color: #F36A1E; transform: translateY(2px); flex-shrink: 0; }
 .form-toggle small { display: block; color: var(--ink-3); font-weight: 500; font-size: 12px; margin-top: 2px; }
+
+/* ---- Rich-text editor (application description) ---- */
+.rt-editor {
+  border: 1px solid rgba(20, 22, 28, 0.10);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.rt-editor:focus-within { border-color: #F36A1E; box-shadow: 0 0 0 4px rgba(243, 106, 30, 0.14); }
+.rt-editor.is-disabled { background: #FAF8F4; opacity: 0.75; }
+.has-error .rt-editor { border-color: rgba(224, 70, 61, 0.5); }
+.rt-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  padding: 6px 8px; border-bottom: 1px solid #F1E6D6; background: #FBF7F1;
+}
+.rt-btn {
+  min-width: 30px; height: 30px; padding: 0 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 7px;
+  background: transparent; color: var(--ink-2, #463F36);
+  font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.rt-btn:hover:not(:disabled) { background: #fff; border-color: rgba(20, 22, 28, 0.10); }
+.rt-btn.is-active { background: #FFF3E7; border-color: rgba(243, 106, 30, 0.30); color: #F36A1E; }
+.rt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rt-sep { width: 1px; height: 18px; background: rgba(20, 22, 28, 0.12); margin: 0 4px; }
+.rt-area {
+  min-height: 110px; max-height: 320px; overflow-y: auto;
+  padding: 12px 14px; font-size: 14px; line-height: 1.55; color: var(--ink);
+  outline: none;
+}
+.rt-area.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--ink-3); pointer-events: none;
+}
+/* In-editor + rendered rich-text element spacing */
+.rt-area p, .rt-body p { margin: 0 0 8px; }
+.rt-area p:last-child, .rt-body p:last-child { margin-bottom: 0; }
+.rt-area h2, .rt-body h2 { font-size: 16px; font-weight: 800; margin: 8px 0 6px; }
+.rt-area h3, .rt-body h3 { font-size: 14.5px; font-weight: 800; margin: 8px 0 6px; }
+.rt-area ul, .rt-area ol, .rt-body ul, .rt-body ol { margin: 4px 0 8px; padding-left: 22px; }
+.rt-area a, .rt-body a, .rt-inline a { color: #B5500F; }
+.rt-area code, .rt-body code, .rt-inline code {
+  background: rgba(20, 22, 28, 0.06); padding: 1px 5px; border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9em;
+}
 
 /* ============================================================
    Live-stream modal
@@ -7091,6 +7460,35 @@ input, textarea, select, [contenteditable="true"] {
 }
 .user-row:last-child { border-bottom: 0; }
 .user-row.is-deleted { opacity: 0.7; }
+
+/* Active / Deleted status dropdown (replaces the old "Show deleted" toggle) */
+.view-select-wrap { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.view-select {
+  appearance: none; -webkit-appearance: none;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='m6 9 6 6 6-6' stroke='%236b6258' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid rgba(20, 22, 28, 0.14); border-radius: 10px;
+  padding: 9px 32px 9px 12px; font: inherit; font-size: 13.5px; font-weight: 600; color: var(--ink);
+  cursor: pointer; outline: none;
+}
+.view-select:focus { border-color: rgba(243, 106, 30, 0.5); box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.12); }
+.view-select:disabled { cursor: progress; opacity: 0.7; }
+
+/* Restore-in-progress: dim the row content and float a spinner overlay. */
+.user-row.is-restoring { position: relative; }
+.user-row.is-restoring > *:not(.user-row-loading) { opacity: 0.4; pointer-events: none; }
+.user-row-loading {
+  position: absolute; inset: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: rgba(255, 255, 255, 0.55); backdrop-filter: blur(1px);
+  border-radius: 10px;
+  font-size: 13px; font-weight: 700; color: var(--ink-2, #463F36);
+}
+.user-row-spinner {
+  width: 18px; height: 18px;
+  border: 2.5px solid rgba(243, 106, 30, 0.18);
+  border-top-color: #F36A1E; border-radius: 50%;
+  animation: admin-spin 0.72s linear infinite;
+}
 .user-cell {
   display: flex;
   align-items: center;
@@ -7377,6 +7775,62 @@ input, textarea, select, [contenteditable="true"] {
   grid-template-columns: 1fr 1fr;
   gap: 14px;
 }
+/* The Add/Edit User form is the sole child of .modal-body, so the body's
+   own gap is wasted. Make the form itself a flex column so its sections
+   (fields grid → Roles → footer) keep an even gap — fixes the password
+   "Set custom" input butting up against the Roles section. */
+.user-modal-form,
+.modal-form { display: flex; flex-direction: column; gap: 16px; }
+
+/* Searchable country-code picker (Add/Edit User → Country code) */
+.cc-select { position: relative; }
+.cc-trigger {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border: 1px solid rgba(20, 22, 28, 0.10);
+  border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px;
+  color: var(--ink); cursor: pointer; text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.cc-trigger:hover:not(:disabled) { border-color: rgba(20, 22, 28, 0.20); }
+.cc-select.is-open .cc-trigger,
+.cc-trigger:focus-visible { border-color: #F36A1E; box-shadow: 0 0 0 4px rgba(243, 106, 30, 0.14); outline: none; }
+.cc-trigger:disabled { background: #FAF8F4; color: var(--ink-3); cursor: not-allowed; }
+.has-error .cc-trigger { border-color: rgba(224, 70, 61, 0.5); }
+.cc-cur { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.cc-flag { font-size: 16px; line-height: 1; flex-shrink: 0; }
+.cc-dial { font-weight: 700; color: var(--ink); flex-shrink: 0; }
+.cc-name { color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-ph { flex: 1; color: var(--ink-3); }
+.cc-caret { color: #6b6258; font-size: 11px; flex-shrink: 0; transition: transform 0.15s; }
+.cc-select.is-open .cc-caret { transform: rotate(180deg); }
+
+.cc-pop {
+  position: absolute; z-index: 30; left: 0; right: 0;
+  background: #fff; border: 1px solid rgba(20, 22, 28, 0.12);
+  border-radius: 12px; box-shadow: 0 18px 40px -16px rgba(20, 22, 28, 0.28);
+  overflow: hidden;
+  display: flex; flex-direction: column; min-height: 0;
+}
+.cc-pop-down { top: calc(100% + 6px); }
+.cc-pop-up { bottom: calc(100% + 6px); }
+.cc-search-wrap { padding: 8px; border-bottom: 1px solid #F1E6D6; flex-shrink: 0; }
+.cc-search {
+  width: 100%; border: 1px solid rgba(20, 22, 28, 0.12); border-radius: 8px;
+  padding: 8px 10px; font: inherit; font-size: 13.5px; color: var(--ink); outline: none;
+}
+.cc-search:focus { border-color: #F36A1E; box-shadow: 0 0 0 3px rgba(243, 106, 30, 0.12); }
+.cc-list { list-style: none; margin: 0; padding: 4px; flex: 1; min-height: 0; overflow-y: auto; }
+.cc-opt {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  background: none; border: 0; border-radius: 8px; padding: 8px 10px;
+  font: inherit; font-size: 13.5px; color: var(--ink); cursor: pointer; text-align: left;
+}
+.cc-opt:hover { background: #FBF3EA; }
+.cc-opt.is-on { background: #FFF3E7; }
+.cc-opt-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-opt-dial { color: var(--ink-3); font-weight: 700; flex-shrink: 0; }
+.cc-empty { padding: 14px 10px; text-align: center; color: var(--ink-3); font-size: 13px; }
 .form-field {
   display: flex;
   flex-direction: column;
@@ -7682,7 +8136,112 @@ input, textarea, select, [contenteditable="true"] {
     0 0 0 4px rgba(243, 106, 30, 0.12),
     0 14px 32px -10px rgba(20, 22, 28, 0.18);
 }
+.profile-hero-avwrap { position: relative; flex-shrink: 0; line-height: 0; }
+.profile-av-edit {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: var(--accent, #F36A1E);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 4px 10px rgba(243, 106, 30, 0.4);
+  transition: transform 0.12s, filter 0.12s;
+}
+.profile-av-edit:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .profile-hero-body { min-width: 0; }
+
+/* Icon picker */
+.pip-close {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--ink-3);
+  line-height: 1;
+  padding: 4px 6px;
+}
+.pip-close:hover { color: var(--ink); }
+.pip-row {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.pip-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 22px;
+  background: #FAF7F2;
+  border: 1px solid rgba(20, 22, 28, 0.06);
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.pip-preview-cap { font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.pip-controls { flex: 1; min-width: 240px; }
+.pip-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-2, var(--ink));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 9px;
+}
+.pip-swatches { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+.pip-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 0 0 1px rgba(20, 22, 28, 0.08);
+  transition: transform 0.12s;
+}
+.pip-swatch:hover { transform: scale(1.08); }
+.pip-swatch.is-sel { border-color: #fff; box-shadow: 0 0 0 2px var(--accent, #F36A1E); }
+.pip-shapes { display: flex; flex-wrap: wrap; gap: 10px; }
+.pip-shape {
+  background: #fff;
+  border: 2px solid rgba(20, 22, 28, 0.08);
+  border-radius: 12px;
+  padding: 5px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  line-height: 0;
+  transition: border-color 0.12s, transform 0.12s;
+}
+.pip-shape:hover { transform: translateY(-1px); }
+.pip-shape.is-sel { border-color: var(--accent, #F36A1E); }
+.pip-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(20, 22, 28, 0.06);
+}
+.pip-reset-btn {
+  background: #fff;
+  border: 1px solid rgba(20, 22, 28, 0.12);
+  color: var(--ink);
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+}
+.pip-reset-btn:hover { border-color: rgba(243, 106, 30, 0.5); color: var(--accent, #F36A1E); }
 .profile-hero-name {
   margin: 0 0 4px;
   font-size: 22px;
@@ -8039,6 +8598,8 @@ body { overflow-x: hidden; }
   .admin-page-actions { flex-direction: column; align-items: stretch; gap: 10px; }
   .admin-search { width: 100%; flex: none; }
   .admin-toggle { align-self: flex-start; }
+  .view-select-wrap { width: 100%; }
+  .view-select { flex: 1; width: 100%; }
   .admin-page-actions .btn-primary { width: 100%; padding: 12px 16px; }
 
   .admin-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px; }
@@ -9614,6 +10175,19 @@ body { overflow-x: hidden; }
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 .db-theme-swatch:hover { transform: scale(1.08); }
+/* Theme locked (dashboard published) — dim the swatches and block interaction. */
+.db-theme-picker.is-locked .db-theme-swatch,
+.db-theme-picker.is-locked .db-theme-swatch-custom { opacity: 0.4; cursor: not-allowed; }
+.db-theme-picker.is-locked .db-theme-swatch:hover,
+.db-theme-picker.is-locked .db-theme-swatch-custom:hover { transform: none; }
+.db-theme-swatch:disabled { cursor: not-allowed; }
+.db-theme-swatch-custom.is-disabled { pointer-events: none; }
+.db-theme-lock-note {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.02em;
+  color: #9A4A12; background: rgba(243, 106, 30, 0.10);
+  padding: 3px 8px; border-radius: 999px;
+}
 .db-theme-swatch.is-active {
   box-shadow:
     0 0 0 2px #fff,
@@ -9687,36 +10261,29 @@ body { overflow-x: hidden; }
 }
 .db-page.is-preview {
   background: var(--db-page-bg, #FBF7F1);
-  /* In preview the entire page is the viewport; the shell is pinned
-     center and scaled by JS via transform. */
-  padding: 0;
+  /* Responsive preview (matches the public view): the dashboard fills the page
+     width and the bottom. A top reserve clears the Exit / Take-control row, and
+     the page scrolls if the dashboard is taller than the viewport. */
+  padding: 54px 16px 16px;
   margin: 0;
   max-width: none;
   width: 100vw;
   height: 100vh;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto;
   position: relative;
   transition: background 0.3s ease;
 }
 .db-page.is-preview .db-shell {
-  /* Natural authored size — JS applies transform: scale(...) on resize
-     to shrink-to-fit. The translate keeps it centered in the viewport.
-     The base width/height are reference dimensions; choose values that
-     give the dashboard generous breathing room at native scale. */
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 1480px;
-  /* Let height grow with content; the JS scale uses 760 as the
-     reference height. */
+  /* Fill the available width; no fixed size / scale transform. */
+  position: static;
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   min-width: 0;
   margin: 0;
-  transform-origin: center center;
-  /* Default transform (before JS runs) so the layout is at least visible. */
-  transform: translate(-50%, -50%) scale(0.55);
-  padding: 14px 0;
+  transform: none;
+  padding: 0;
 }
 .db-page.is-preview .db-group,
 .db-page.is-preview .db-group-right,
@@ -9788,7 +10355,7 @@ body { overflow-x: hidden; }
   height: auto;
   max-height: none;
   max-width: none;
-  border-radius: 0;
+  border-radius: 18px;
   padding: 0;
 }
 /* Hide the cell-grid surface in preview mode — the empty cells are an
@@ -9824,6 +10391,31 @@ body { overflow-x: hidden; }
   box-shadow: 0 10px 22px -10px rgba(20, 22, 28, 0.45);
 }
 .db-preview-exit:hover { background: #14161C; }
+/* Take-control bar floats top-centre while previewing a published dashboard.
+   position:fixed keeps it pinned to the viewport, so it stays in place while the
+   preview's panels scroll. z-index sits above the exit button (60) and the
+   mobile-fullscreen preview overlay (50). */
+.db-preview-take {
+  position: fixed;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+}
+.db-preview-take .db-admin-bar {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(20, 22, 28, 0.12);
+  box-shadow: 0 10px 26px -12px rgba(20, 22, 28, 0.4);
+  backdrop-filter: blur(6px);
+}
+/* Mobile preview: the phone is centred, so a page-centred bar overlaps its
+   notch / camera. Pin Take control to the top-left corner instead — clear of
+   the phone and symmetric with "Exit preview" at the top-right. (The bar is a
+   sibling of .db-page, so the state class lives on the bar itself.) */
+.db-preview-take.is-mobile-preview {
+  left: 24px;
+  transform: none;
+}
 .db-head {
   margin: 4px 0 16px;
 }
@@ -10208,9 +10800,12 @@ body { overflow-x: hidden; }
 .db-mobile-screen .db-mobile-widgets {
   flex: 1 1 0;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: thin;
+  /* Clip to the panel's rounded corners and let the INNER wrapper scroll, so
+     the scrollbar sits inside the panel padding — never overlapping/poking out
+     past the rounded border at the corners. */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 /* With widgets, the container closes around the content (no extra empty
    grid rows filling the panel); it scrolls only if the widgets are taller
@@ -10219,8 +10814,17 @@ body { overflow-x: hidden; }
   flex: 0 1 auto;
   max-height: 100%;
 }
-.db-mobile-screen .db-mobile-widgets::-webkit-scrollbar { width: 4px; }
-.db-mobile-screen .db-mobile-widgets::-webkit-scrollbar-thumb { background: rgba(20,22,28,0.18); border-radius: 999px; }
+/* Inner scroll layer — no border-radius, so its scrollbar can't clash with a
+   rounded corner; the rounded clipping lives on the panel above. */
+.db-mobile-screen .db-mobile-widgets-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.db-mobile-screen .db-mobile-widgets-scroll::-webkit-scrollbar { width: 4px; }
+.db-mobile-screen .db-mobile-widgets-scroll::-webkit-scrollbar-thumb { background: rgba(20,22,28,0.18); border-radius: 999px; }
 
 /* iOS-style status bar — fixed at the top of the screen (never scrolls). */
 .db-mobile-statusbar {
@@ -10398,7 +11002,25 @@ body { overflow-x: hidden; }
   padding: 0;
   background: transparent;
 }
-.db-mobile-public .db-mobile-content { padding: 2px 2px 28px; gap: 12px; }
+/* Real-phone / public mobile dashboard.
+   Main container = the content box (camera + widget panel): padded + bordered
+   so the dashboard reads as a single framed card inside the phone screen.
+   Inner container = the widget panel that holds the cards: its own padding. */
+.db-mobile-public .db-mobile-content {
+  padding: 12px 12px 28px;
+  gap: 12px;
+  border: 1px solid var(--db-cell-border, rgba(244, 212, 175, 0.7));
+  /* Curved corners, matching the camera/panel/cards for a uniform rounded look. */
+  border-radius: 18px;
+}
+/* Camera banner, widget panel and the cards share ONE corner radius so the
+   nested containers read as a tidy stack. */
+.db-mobile-public .db-cam-card.is-compact .db-cam-player,
+.db-mobile-public .db-mobile-widgets,
+.db-mobile-public .db-card-wrap .cv-card {
+  border-radius: 18px;
+}
+.db-mobile-public .db-mobile-widgets { padding: 10px; }
 /* Public mobile + a camera / 3D scene is present: render the SAME fixed-screen
    layout as the editor preview (the `.db-mobile-screen` panel: fixed camera +
    shrink-to-fit, internally-scrolling widgets) but sized to the real viewport.
@@ -10430,7 +11052,9 @@ body { overflow-x: hidden; }
   min-height: 0;
   height: auto;
   max-width: none;
-  border-radius: 0;
+  /* Match the content's rounded corners so the square screen corner no longer
+     shows in the triangle around the rounded content border. */
+  border-radius: 18px;
 }
 /* On a real phone, trim the public dashboard page chrome so the widget
    stack uses the full screen width and fits any device. */

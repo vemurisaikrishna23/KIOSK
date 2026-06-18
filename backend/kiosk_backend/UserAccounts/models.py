@@ -74,6 +74,9 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, null=True, blank=True)
     country_code = models.CharField(max_length=10, blank=True, null=True)
     mobile = models.CharField(max_length=20, unique=True, null=True, blank=True)
+    # Chosen avatar variant ("<palette>-<pattern>", e.g. "3-2"). Blank = the
+    # default auto-generated icon. Picked by the user on their Profile page.
+    avatar = models.CharField(max_length=20, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)

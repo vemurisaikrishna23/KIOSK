@@ -52,7 +52,24 @@ export default function SslCertificate() {
   const [form, setForm] = useState({ name: '', file: null })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }))
+
+  function pickFile(f) {
+    if (!f) return
+    set('file', f)
+    setFormError(null)
+  }
+  function onDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    if (saving) return
+    pickFile(e.dataTransfer?.files?.[0] || null)
+  }
+  function clearFile() {
+    set('file', null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const load = useCallback(async () => {
     if (!canView) { setLoading(false); return }
@@ -178,28 +195,72 @@ export default function SslCertificate() {
         {/* ─────────── Upload (single inline row) ─────────── */}
         {canUpload && (
           <section className="admin-card ssl-upload-bar">
-            <form className="ssl-upload-inline" onSubmit={onUpload}>
+            <form className="ssl-upload-form" onSubmit={onUpload}>
               <div className="ssl-inline-title">Upload new certificate</div>
+
+              {/* Visually-hidden native input — driven by the drop zone below. */}
               <input
                 ref={fileRef}
                 type="file"
-                className="ssl-inline-file"
+                className="ssl-file-hidden"
                 accept=".crt,.pem,.cer,.der,application/x-x509-ca-cert,application/pkix-cert"
-                onChange={(e) => set('file', e.target.files?.[0] || null)}
+                onChange={(e) => pickFile(e.target.files?.[0] || null)}
                 disabled={saving}
-                aria-label="Certificate file"
+                tabIndex={-1}
+                aria-hidden="true"
               />
-              <input
-                type="text"
-                className="ssl-inline-name"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                placeholder="Label (optional — defaults to file name)"
-                disabled={saving}
-              />
-              <button type="submit" className="btn-primary ssl-inline-btn" disabled={saving}>
-                {saving ? 'Uploading…' : 'Upload as active'}
-              </button>
+
+              {!form.file ? (
+                <div
+                  className={'ssl-dropzone' + (dragOver ? ' is-drag' : '')}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Upload certificate file — click or drag and drop"
+                  onClick={() => !saving && fileRef.current?.click()}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!saving) fileRef.current?.click() } }}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+                  onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
+                  onDragLeave={(e) => { e.preventDefault(); setDragOver(false) }}
+                  onDrop={onDrop}
+                >
+                  <div className="ssl-dz-icon" aria-hidden="true">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                      <path d="M12 16V8m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M20 16.5A4.5 4.5 0 0 0 17.5 8h-1.05A7 7 0 1 0 5 14.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div className="ssl-dz-text"><strong>Upload a file</strong> or drag and drop</div>
+                  <div className="ssl-dz-hint">CRT, PEM, CER or DER</div>
+                </div>
+              ) : (
+                <div className="ssl-file-chip">
+                  <div className="ssl-file-ic" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                      <path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div className="ssl-file-meta">
+                    <div className="ssl-file-name" title={form.file.name}>{form.file.name}</div>
+                    <div className="ssl-file-size">{formatBytes(form.file.size)}</div>
+                  </div>
+                  <button type="button" className="ssl-file-remove" onClick={clearFile} disabled={saving} aria-label="Remove file">×</button>
+                </div>
+              )}
+
+              <div className="ssl-upload-row">
+                <input
+                  type="text"
+                  className="ssl-inline-name"
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  placeholder="Label (optional — defaults to file name)"
+                  disabled={saving}
+                />
+                <button type="submit" className="btn-primary ssl-inline-btn" disabled={saving || !form.file}>
+                  {saving ? 'Uploading…' : 'Upload as active'}
+                </button>
+              </div>
               {active && (
                 <span className="ssl-replace-hint">replaces <code>{active.filename || active.name}</code></span>
               )}
@@ -216,10 +277,9 @@ export default function SslCertificate() {
           </div>
           <div className="list-scroll">
             {loading ? (
-              <div className="admin-empty admin-loading">
-                <span className="admin-spinner" aria-hidden="true" />
-                <span>Loading…</span>
-              </div>
+              <ul className="detail-list ssl-record-list">
+                {Array.from({ length: 5 }).map((_, i) => <SslRowSkeleton key={i} />)}
+              </ul>
             ) : list.length === 0 ? (
               <div className="admin-empty">
                 <div className="admin-empty-title">No certificate uploaded yet.</div>
@@ -328,6 +388,34 @@ export default function SslCertificate() {
         </div>
       )}
     </div>
+  )
+}
+
+/* Shimmer placeholder block (reuses the global `.sk` shimmer). */
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+/* One certificate-record row placeholder (mirrors .detail-row ssl-record). */
+function SslRowSkeleton() {
+  return (
+    <li className="detail-row ssl-record" aria-hidden="true">
+      <div className="detail-row-id">
+        <Sk w={10} h={10} r={999} style={{ marginTop: 5, flexShrink: 0 }} />
+        <div className="detail-row-text" style={{ flex: 1, minWidth: 0 }}>
+          <div className="ssl-record-head">
+            <Sk w={150} h={14} />
+            <Sk w={58} h={18} r={999} />
+          </div>
+          <Sk w="68%" h={11} style={{ marginTop: 10 }} />
+        </div>
+      </div>
+      <div className="detail-row-actions">
+        <Sk w={66} h={30} r={8} />
+        <Sk w={78} h={30} r={8} />
+      </div>
+    </li>
   )
 }
 

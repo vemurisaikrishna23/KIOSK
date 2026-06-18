@@ -386,9 +386,8 @@ export default function Cameras() {
             {!canView ? (
               <PermissionDenied resource="cameras" />
             ) : loading ? (
-              <div className="admin-empty admin-loading">
-                <span className="admin-spinner" aria-hidden="true" />
-                <span>Loading cameras…</span>
+              <div className="camera-grid">
+                {Array.from({ length: 6 }).map((_, i) => <CameraCardSkeleton key={i} />)}
               </div>
             ) : filtered.length === 0 ? (
               <div className="admin-empty">
@@ -589,9 +588,53 @@ export default function Cameras() {
           {toast.text}
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
+  )
+}
+
+/* ----------------------- loading skeleton ----------------------- */
+// Shimmer placeholder block (reuses the global `.sk` shimmer).
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+// Mirrors a CameraCard's sections so the grid keeps its shape while loading.
+function CameraCardSkeleton() {
+  return (
+    <article className="camera-card is-skeleton" aria-hidden="true">
+      <header className="camera-card-head">
+        <div className="camera-card-id">
+          <Sk w={36} h={36} r={10} style={{ flexShrink: 0 }} />
+          <div className="camera-card-title" style={{ flex: 1, minWidth: 0 }}>
+            <Sk w="62%" h={14} style={{ marginBottom: 8 }} />
+            <Sk w="88%" h={11} />
+          </div>
+        </div>
+        <Sk w={72} h={22} r={999} />
+      </header>
+
+      <div className="camera-meta">
+        <Sk w={64} h={22} r={999} />
+        <Sk w={120} h={22} r={999} />
+        <Sk w={54} h={22} r={999} />
+      </div>
+
+      <dl className="camera-stats">
+        <div><Sk w={46} h={9} style={{ marginBottom: 6 }} /><Sk w={30} h={13} /></div>
+        <div><Sk w={46} h={9} style={{ marginBottom: 6 }} /><Sk w={64} h={13} /></div>
+      </dl>
+
+      <div className="camera-url">
+        <Sk w={52} h={11} />
+        <Sk w="60%" h={11} />
+      </div>
+
+      <div className="camera-actions">
+        <Sk w={56} h={30} r={8} />
+        <Sk w={56} h={30} r={8} />
+      </div>
+    </article>
   )
 }
 

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import TopBar from '../components/TopBar.jsx'
 import { Pager } from './Users.jsx'
 import { PermissionDenied } from './Cameras.jsx'
+import { RichTextEditor, RichTextInline, RichTextBlock } from '../components/RichText.jsx'
 import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
 
 // Deterministic gradient picker — same hash → same palette per app, so the
@@ -377,9 +376,8 @@ export default function Applications() {
             {!canView ? (
               <PermissionDenied resource="applications" />
             ) : loading ? (
-              <div className="admin-empty admin-loading">
-                <span className="admin-spinner" aria-hidden="true" />
-                <span>Loading applications…</span>
+              <div className="camera-grid app-grid">
+                {Array.from({ length: 6 }).map((_, i) => <AppCardSkeleton key={i} />)}
               </div>
             ) : filtered.length === 0 ? (
               <div className="admin-empty">
@@ -441,7 +439,7 @@ export default function Applications() {
       {/* ---------- Create / Edit modal ---------- */}
       {modalOpen && (
         <Modal title={modalMode === 'create' ? 'Add Application' : 'Edit Application'} onClose={closeModal}>
-          <form onSubmit={submit} noValidate>
+          <form className="modal-form" onSubmit={submit} noValidate>
             {formBanner && <div className={'admin-banner ' + formBanner.type}>{formBanner.text}</div>}
 
             <div className="form-grid-2">
@@ -456,10 +454,9 @@ export default function Applications() {
                 />
               </Field>
               <Field label="Description" error={formErrors.description} full>
-                <textarea
-                  rows={3}
+                <RichTextEditor
                   value={form.description}
-                  onChange={(e) => setFormField('description', e.target.value)}
+                  onChange={(html) => setFormField('description', html)}
                   placeholder="Optional — what does this application do?"
                   disabled={saving}
                 />
@@ -550,9 +547,39 @@ export default function Applications() {
           {toast.text}
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
+  )
+}
+
+/* ----------------------- loading skeleton ----------------------- */
+// Shimmer placeholder block (reuses the global `.sk` shimmer).
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+// Mirrors an ApplicationCard (hero · body · meta · actions) while loading.
+function AppCardSkeleton() {
+  return (
+    <article className="app-card-v2 is-skeleton" aria-hidden="true">
+      <div className="app-hero"><span className="sk" style={{ position: 'absolute', inset: 0, borderRadius: 0 }} /></div>
+      <div className="app-body">
+        <Sk w="58%" h={16} style={{ marginBottom: 4 }} />
+        <Sk w="92%" h={11} />
+        <Sk w="76%" h={11} />
+      </div>
+      <div className="app-meta-row">
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Sk w={22} h={22} r={999} />
+          <Sk w={84} h={11} />
+        </span>
+        <Sk w={52} h={11} />
+      </div>
+      <div className="app-actions">
+        <Sk w={56} h={30} r={8} />
+        <Sk w={56} h={30} r={8} />
+      </div>
+    </article>
   )
 }
 
@@ -628,7 +655,7 @@ function ApplicationCard({ app, canUpdate, canDelete, onEdit, onDelete, onShowDe
         <h4 className="app-name">{app.name}</h4>
         <div ref={descRef} className="app-desc">
           {app.description
-            ? <InlineMarkdown text={app.description} />
+            ? <RichTextInline value={app.description} />
             : <span className="muted">No description</span>}
         </div>
         {/* Only render when the description was actually clipped by the
@@ -676,39 +703,6 @@ function AvatarDot({ text }) {
   return <span className="app-avatar-dot" aria-hidden="true">{initial}</span>
 }
 
-/* ----------------------- inline markdown ----------------------- */
-/* Renders bold / italic / strikethrough / inline code from a markdown
-   string, but flattens every block-level element to inline so the result
-   still fits inside a 1-line clamp on the card. Used only on the card
-   preview — the full popup renders block markdown normally. */
-const INLINE_MD_COMPONENTS = {
-  p:          ({ children }) => <>{children}</>,
-  h1:         ({ children }) => <strong>{children}</strong>,
-  h2:         ({ children }) => <strong>{children}</strong>,
-  h3:         ({ children }) => <strong>{children}</strong>,
-  h4:         ({ children }) => <strong>{children}</strong>,
-  h5:         ({ children }) => <strong>{children}</strong>,
-  h6:         ({ children }) => <strong>{children}</strong>,
-  ul:         ({ children }) => <span>{children}</span>,
-  ol:         ({ children }) => <span>{children}</span>,
-  li:         ({ children }) => <span>{children} </span>,
-  blockquote: ({ children }) => <span>{children}</span>,
-  pre:        ({ children }) => <span>{children}</span>,
-  hr:         () => null,
-  img:        () => null,
-  // Render links as plain text inline — the whole card is clickable, so
-  // an embedded anchor would steal the navigation target.
-  a:          ({ children }) => <>{children}</>,
-}
-
-function InlineMarkdown({ text }) {
-  return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={INLINE_MD_COMPONENTS}>
-      {text}
-    </ReactMarkdown>
-  )
-}
-
 /* ----------------------- description popup ----------------------- */
 function DescriptionModal({ app, onClose }) {
   useEffect(() => {
@@ -726,21 +720,7 @@ function DescriptionModal({ app, onClose }) {
         </header>
         <div className="app-desc-body">
           {app?.description ? (
-            <div className="app-desc-full md-body">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  // Force links to open in a new tab and not let kiosk markdown
-                  // navigate the SPA away. (Defense in depth — the markdown
-                  // input itself is admin-authored.)
-                  a: ({ node, ...props }) => (
-                    <a {...props} target="_blank" rel="noopener noreferrer" />
-                  ),
-                }}
-              >
-                {app.description}
-              </ReactMarkdown>
-            </div>
+            <RichTextBlock className="app-desc-full md-body" value={app.description} />
           ) : (
             <p className="app-desc-full app-desc-empty">No description.</p>
           )}
@@ -755,6 +735,8 @@ function AppImagePicker({ imageFile, imageUrl, cleared, onPick, onClear, disable
   const previewUrl = imageFile
     ? URL.createObjectURL(imageFile)
     : (cleared ? null : imageUrl)
+  const inputRef = useRef(null)
+  const [dragOver, setDragOver] = useState(false)
 
   // Revoke object URLs when the picked file changes — otherwise we leak.
   useEffect(() => {
@@ -764,28 +746,46 @@ function AppImagePicker({ imageFile, imageUrl, cleared, onPick, onClear, disable
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageFile])
 
+  function openDialog() { if (!disabled) inputRef.current?.click() }
+  function onDrop(e) {
+    e.preventDefault()
+    setDragOver(false)
+    if (disabled) return
+    const file = e.dataTransfer?.files?.[0]
+    // Reuse the parent's event-based handler (validates + opens the cropper).
+    if (file) onPick({ target: { files: [file], value: '' } })
+  }
+
   return (
-    <div className="app-image-picker">
+    <div
+      className={'app-image-picker app-image-dropzone' + (dragOver ? ' is-drag' : '') + (disabled ? ' is-disabled' : '')}
+      onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true) }}
+      onDragEnter={(e) => { e.preventDefault(); if (!disabled) setDragOver(true) }}
+      onDragLeave={(e) => { e.preventDefault(); setDragOver(false) }}
+      onDrop={onDrop}
+    >
       <div className="app-image-preview" aria-hidden="true">
         {previewUrl ? <img src={previewUrl} alt="" /> : <DefaultAppIcon large />}
       </div>
       <div className="app-image-controls">
-        <label className="btn-secondary file-pick">
-          {previewUrl ? 'Change image' : 'Choose image'}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={onPick}
-            disabled={disabled}
-            hidden
-          />
-        </label>
+        <input ref={inputRef} type="file" accept="image/*" onChange={onPick} disabled={disabled} hidden />
+        <button type="button" className="app-image-cta" onClick={openDialog} disabled={disabled}>
+          <span className="app-image-cta-ic" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M12 16V8m0 0-3 3m3-3 3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M20 16.5A4.5 4.5 0 0 0 17.5 8h-1.05A7 7 0 1 0 5 14.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </span>
+          <span className="app-image-cta-text">
+            <strong>{previewUrl ? 'Replace image' : 'Upload a file'}</strong> or drag and drop
+          </span>
+        </button>
+        <p className="form-hint">PNG / JPG / SVG · Max 5 MB</p>
         {previewUrl && (
           <button type="button" className="btn-link danger" onClick={onClear} disabled={disabled}>
-            Remove
+            Remove image
           </button>
         )}
-        <p className="form-hint">PNG / JPG / SVG. Max 5 MB.</p>
       </div>
     </div>
   )

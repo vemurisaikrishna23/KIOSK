@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 /**
  * Deterministic gradient + geometric-shape avatar generator.
  *
@@ -91,12 +93,93 @@ const PATTERNS = [
   patternDotsCluster,
 ]
 
-export default function Avatar({ seed = '', size = 36, title, className = '' }) {
+/* --------------------------------------------------------------------
+   Per-user override — lets a user pick their own colour + shape in the
+   Profile page. Saved in localStorage (per device), keyed by the same
+   seed used to render the avatar, so the choice shows everywhere the
+   user's avatar appears. Changes broadcast a custom event so every
+   on-screen Avatar updates live (no reload needed).
+   -------------------------------------------------------------------- */
+const AV_EVENT = 'kiosk-avatar-change'
+const avKey = (seed) => 'kiosk:av:' + String(seed || 'kiosk')
+
+export const AVATAR_PALETTES = PALETTES
+export const AVATAR_PATTERN_COUNT = PATTERNS.length
+
+/** The default {p, pat} variant a seed would render without any override. */
+export function avatarVariantFor(seed) {
+  const h = djb2(String(seed || 'kiosk'))
+  return { p: h % PALETTES.length, pat: Math.floor(h / PALETTES.length) % PATTERNS.length }
+}
+export function getAvatarOverride(seed) {
+  try {
+    const raw = localStorage.getItem(avKey(seed))
+    if (raw) {
+      const v = JSON.parse(raw)
+      if (typeof v?.p === 'number' && typeof v?.pat === 'number') return v
+    }
+  } catch { /* ignore */ }
+  return null
+}
+export function setAvatarOverride(seed, variant) {
+  try { localStorage.setItem(avKey(seed), JSON.stringify(variant)) } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent(AV_EVENT, { detail: { seed: String(seed) } })) } catch { /* ignore */ }
+}
+export function clearAvatarOverride(seed) {
+  try { localStorage.removeItem(avKey(seed)) } catch { /* ignore */ }
+  try { window.dispatchEvent(new CustomEvent(AV_EVENT, { detail: { seed: String(seed) } })) } catch { /* ignore */ }
+}
+
+/* ---- backend <-> variant bridge ----
+   The server stores the choice as a short "<palette>-<pattern>" string on
+   the user (e.g. "3-2"). These helpers convert to/from the {p, pat} variant
+   and mirror the server value into the local override so the icon renders
+   everywhere — including the first time the user logs in on a new device. */
+export function parseAvatarString(str) {
+  if (!str || typeof str !== 'string') return null
+  const [p, pat] = str.split('-').map((n) => parseInt(n, 10))
+  if (Number.isInteger(p) && Number.isInteger(pat)) return { p, pat }
+  return null
+}
+export function avatarToString(variant) {
+  return variant ? `${variant.p}-${variant.pat}` : ''
+}
+export function syncAvatarFromUser(user) {
+  if (!user) return
+  const seed = String(user.id ?? user.email ?? user.name ?? 'kiosk')
+  const v = parseAvatarString(user.avatar)
+  if (v) setAvatarOverride(seed, v)
+  else clearAvatarOverride(seed)
+}
+
+export default function Avatar({ seed = '', size = 36, title, className = '', variant = null }) {
   const s = String(seed || 'kiosk')
+
+  // When `variant` is supplied (e.g. live preview in the picker) use it
+  // directly; otherwise track the saved override and react to changes.
+  const [stored, setStored] = useState(() => (variant ? null : getAvatarOverride(s)))
+  useEffect(() => {
+    if (variant) return undefined
+    setStored(getAvatarOverride(s))
+    const onChange = (e) => {
+      if (!e?.detail || e.detail.seed === s) setStored(getAvatarOverride(s))
+    }
+    window.addEventListener(AV_EVENT, onChange)
+    window.addEventListener('storage', onChange)
+    return () => {
+      window.removeEventListener(AV_EVENT, onChange)
+      window.removeEventListener('storage', onChange)
+    }
+  }, [s, variant])
+
   const h = djb2(s)
-  const [c1, c2] = PALETTES[h % PALETTES.length]
-  const pattern = PATTERNS[Math.floor(h / PALETTES.length) % PATTERNS.length]
-  const gradId = `av-g-${h}`
+  const chosen = variant || stored || {
+    p: h % PALETTES.length,
+    pat: Math.floor(h / PALETTES.length) % PATTERNS.length,
+  }
+  const [c1, c2] = PALETTES[chosen.p % PALETTES.length]
+  const pattern = PATTERNS[chosen.pat % PATTERNS.length]
+  const gradId = `av-g-${chosen.p}-${chosen.pat}-${h}`
 
   return (
     <span

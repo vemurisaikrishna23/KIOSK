@@ -1,7 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
-import Avatar from '../components/Avatar.jsx'
+import Avatar, {
+  AVATAR_PALETTES,
+  AVATAR_PATTERN_COUNT,
+  avatarVariantFor,
+  avatarToString,
+  parseAvatarString,
+  getAvatarOverride,
+  setAvatarOverride,
+  clearAvatarOverride,
+  syncAvatarFromUser,
+} from '../components/Avatar.jsx'
 import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
 
 function formatDate(iso) {
@@ -39,7 +49,14 @@ export default function Profile() {
   const [showNext, setShowNext] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
+  // Profile icon (avatar) picker
+  const [iconOpen, setIconOpen] = useState(false)
+  const [iconSel, setIconSel] = useState(null)
+  const [savingIcon, setSavingIcon] = useState(false)
+
   if (!user) { navigate('/signin', { replace: true }); return null }
+
+  const avatarSeed = String(user.id ?? user.email ?? user.name)
 
   const reload = useCallback(async () => {
     setLoading(true); setError(null)
@@ -47,6 +64,8 @@ export default function Profile() {
       const resp = await api.me()
       const fresh = resp?.data || resp
       setUser(fresh)
+      // Mirror the server-saved avatar into the local override so it renders.
+      syncAvatarFromUser(fresh)
       // Keep the localStorage cache in sync so other pages see updates too.
       const stored = auth.getUser()
       if (stored) auth.setSession({
@@ -70,6 +89,60 @@ export default function Profile() {
     const t = setTimeout(() => setToast(null), 3500)
     return () => clearTimeout(t)
   }, [toast])
+
+  // Initialise the icon picker selection from the saved choice (or default).
+  useEffect(() => {
+    setIconSel(
+      parseAvatarString(user.avatar) ||
+      getAvatarOverride(avatarSeed) ||
+      avatarVariantFor(avatarSeed),
+    )
+  }, [avatarSeed, user.avatar])
+
+  function cacheAvatar(avatarStr) {
+    setUser((u) => (u ? { ...u, avatar: avatarStr } : u))
+    const stored = auth.getUser()
+    if (stored) auth.setSession({
+      access: auth.getAccess(),
+      refresh: auth.getRefresh(),
+      user: { ...stored, avatar: avatarStr },
+      remember: auth.hasRememberFlag(),
+    })
+  }
+
+  async function saveIcon() {
+    if (!iconSel || savingIcon) return
+    const str = avatarToString(iconSel)
+    setSavingIcon(true)
+    try {
+      await api.updateMe({ avatar: str })
+      setAvatarOverride(avatarSeed, iconSel) // live update everywhere
+      cacheAvatar(str)
+      setIconOpen(false)
+      setToast({ type: 'success', text: 'Profile icon saved.' })
+    } catch {
+      setToast({ type: 'error', text: 'Could not save icon. Please try again.' })
+    } finally {
+      setSavingIcon(false)
+    }
+  }
+
+  async function resetIcon() {
+    if (savingIcon) return
+    setSavingIcon(true)
+    try {
+      await api.updateMe({ avatar: '' })
+      clearAvatarOverride(avatarSeed)
+      cacheAvatar('')
+      setIconSel(avatarVariantFor(avatarSeed))
+      setIconOpen(false)
+      setToast({ type: 'success', text: 'Icon reset to default.' })
+    } catch {
+      setToast({ type: 'error', text: 'Could not reset icon. Please try again.' })
+    } finally {
+      setSavingIcon(false)
+    }
+  }
 
   /* ----------------------- Password form ----------------------- */
   function setPwdField(k, v) {
@@ -164,12 +237,26 @@ export default function Profile() {
           <>
             {/* ---------- Identity card ---------- */}
             <section className="profile-hero admin-card">
-              <Avatar
-                seed={user.id ?? user.email ?? user.name}
-                size={84}
-                title={user.name || user.email}
-                className="profile-hero-av"
-              />
+              <div className="profile-hero-avwrap">
+                <Avatar
+                  seed={avatarSeed}
+                  size={84}
+                  title={user.name || user.email}
+                  className="profile-hero-av"
+                />
+                <button
+                  type="button"
+                  className="profile-av-edit"
+                  onClick={() => setIconOpen((o) => !o)}
+                  aria-label="Change profile icon"
+                  title="Change icon"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 20h4l10-10a2.83 2.83 0 0 0-4-4L4 16v4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+                    <path d="M13.5 6.5l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </button>
+              </div>
               <div className="profile-hero-body">
                 <h2 className="profile-hero-name">
                   {user.name || '—'}
@@ -186,6 +273,66 @@ export default function Profile() {
                 )}
               </div>
             </section>
+
+            {/* ---------- Icon picker ---------- */}
+            {iconOpen && iconSel && (
+              <section className="admin-card profile-icon-picker">
+                <div className="card-head">
+                  <h3 className="card-title">Choose your icon</h3>
+                  <button
+                    type="button"
+                    className="pip-close"
+                    onClick={() => setIconOpen(false)}
+                    aria-label="Close"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="pip-row">
+                  <div className="pip-preview">
+                    <Avatar seed={avatarSeed} variant={iconSel} size={88} title="Preview" />
+                    <span className="pip-preview-cap">Preview</span>
+                  </div>
+                  <div className="pip-controls">
+                    <div className="pip-label">Colour</div>
+                    <div className="pip-swatches">
+                      {AVATAR_PALETTES.map((pal, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className={'pip-swatch' + (iconSel.p === i ? ' is-sel' : '')}
+                          style={{ background: `linear-gradient(135deg, ${pal[0]}, ${pal[1]})` }}
+                          onClick={() => setIconSel((s) => ({ ...s, p: i }))}
+                          aria-label={`Colour ${i + 1}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="pip-label">Shape</div>
+                    <div className="pip-shapes">
+                      {Array.from({ length: AVATAR_PATTERN_COUNT }).map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          className={'pip-shape' + (iconSel.pat === i ? ' is-sel' : '')}
+                          onClick={() => setIconSel((s) => ({ ...s, pat: i }))}
+                          aria-label={`Shape ${i + 1}`}
+                        >
+                          <Avatar seed={avatarSeed} variant={{ p: iconSel.p, pat: i }} size={44} />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="pip-foot">
+                  <button type="button" className="pip-reset-btn" onClick={resetIcon} disabled={savingIcon}>
+                    Reset to default
+                  </button>
+                  <button type="button" className="btn-primary" onClick={saveIcon} disabled={savingIcon} aria-busy={savingIcon}>
+                    {savingIcon ? 'Saving…' : 'Save icon'}
+                  </button>
+                </div>
+              </section>
+            )}
 
             <div className="profile-grid">
               {/* ---------- Account details (read-only) ----------
@@ -290,8 +437,6 @@ export default function Profile() {
           {toast.text}
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
   )
 }

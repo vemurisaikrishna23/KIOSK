@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Responsive, WidthProvider } from 'react-grid-layout'
 import TopBar from '../components/TopBar.jsx'
+import WsStatus from '../components/WsStatus.jsx'
 import { PermissionDenied } from './Cameras.jsx'
 import { api, auth, ApiError, parseApiErrors } from '../lib/api.js'
 
@@ -910,7 +911,52 @@ function fmtDuration(s) {
   const m = Math.floor(s / 60), sec = s % 60
   return m > 0 ? `${m}m ${String(sec).padStart(2, '0')}s` : `${sec}s`
 }
-function QueueBadge({ queue, onJoin }) {
+/* Admin override bar (public dashboard / preview). Shows the live admin-control
+   state to everyone, and lets an internal user seize / release control. */
+function AdminControlBar({ queue, canTake, ready = true, onTake, onRelease }) {
+  const adminActive = !!queue?.admin_active
+  const iAmController = !!queue?.you?.is_admin_controller
+  const adminName = queue?.admin_name
+  const remaining = queue?.admin_remaining || 0
+  if (iAmController) {
+    return (
+      <div className="db-admin-bar is-mine" title="You have taken control of this dashboard">
+        <span className="db-admin-dot" aria-hidden="true" />
+        You're in control · <strong>{fmtDuration(remaining)}</strong> left
+        <button type="button" className="db-admin-btn db-admin-release" onClick={onRelease} disabled={!ready}>Release</button>
+      </div>
+    )
+  }
+  if (adminActive) {
+    // Shown to public viewers and to other internal users (occupied).
+    return (
+      <div className="db-admin-bar is-locked" title="An administrator has taken control">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.9" />
+          <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+        </svg>
+        <strong>{adminName || 'An administrator'}</strong> is in control · {fmtDuration(remaining)}
+      </div>
+    )
+  }
+  if (canTake) {
+    return (
+      <div className="db-admin-bar">
+        <button
+          type="button"
+          className="db-admin-btn db-admin-take"
+          onClick={onTake}
+          disabled={!ready}
+          title={ready ? 'Override the access queue and control the dashboard for a set time' : 'Connecting…'}
+        >
+          {ready ? 'Take control' : 'Connecting…'}
+        </button>
+      </div>
+    )
+  }
+  return null
+}
+function QueueBadge({ queue, ready = true, onJoin }) {
   const you = queue?.you || {}
   const active = queue?.active
   const waiting = queue?.waiting_count || 0
@@ -928,14 +974,16 @@ function QueueBadge({ queue, onJoin }) {
         <span className="db-queue-pos">#{you.position}</span>
         ~<strong>{fmtDuration(you.wait_seconds)}</strong>
         <span className="db-queue-sep">·</span>
-        {active ? `Now: ${active.name}` : 'Waiting…'}
+        {queue?.admin_active ? 'Admin is controlling' : (active ? `Now: ${active.name}` : 'Waiting…')}
       </div>
     )
   }
   return (
     <div className="db-queue-badge">
       <span className="db-queue-count">{waiting}</span> waiting
-      <button type="button" className="db-queue-join" onClick={onJoin}>Join queue</button>
+      <button type="button" className="db-queue-join" onClick={onJoin} disabled={!ready}>
+        {ready ? 'Join queue' : 'Connecting…'}
+      </button>
     </div>
   )
 }
@@ -943,7 +991,12 @@ function QueueLobby({ queue, ready = true, onJoin }) {
   const active = queue?.active
   const waiting = queue?.waiting_count || 0
   const controlSeconds = queue?.control_seconds || 60
-  const estimate = (queue?.control_remaining || 0) + waiting * controlSeconds
+  // While an admin override is active the public timer is frozen, so the
+  // "current control" time left is the admin's remaining window. Public viewers
+  // never see the admin's name — only the time it adds to their wait.
+  const adminActive = !!queue?.admin_active
+  const currentRemaining = adminActive ? (queue?.admin_remaining || 0) : (queue?.control_remaining || 0)
+  const estimate = currentRemaining + waiting * controlSeconds
   // Local "joining" spinner shown from the click until the server confirms
   // (which unmounts this lobby). A timeout re-enables the button if no
   // confirmation arrives, so it can never get stuck.
@@ -971,11 +1024,15 @@ function QueueLobby({ queue, ready = true, onJoin }) {
         </p>
         <div className="db-queue-lobby-stats">
           <div><div className="n">{waiting}</div><div className="l">In queue</div></div>
-          <div><div className="n">{fmtDuration(queue?.control_remaining)}</div><div className="l">Turn left</div></div>
+          <div><div className="n">{fmtDuration(currentRemaining)}</div><div className="l">Turn left</div></div>
           <div><div className="n">~{fmtDuration(estimate)}</div><div className="l">Your wait</div></div>
         </div>
         <div className="db-queue-lobby-now">
-          {active ? <>Now controlling: <strong>{active.name}</strong></> : 'No one is controlling right now.'}
+          {adminActive
+            ? 'An administrator is controlling right now.'
+            : active
+              ? <>Now controlling: <strong>{active.name}</strong></>
+              : 'No one is controlling right now.'}
         </div>
         <button
           type="button"
@@ -1094,10 +1151,22 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // viewport is currently being edited. Persisted immediately (optimistic).
   const publishKey = editViewport === 'mobile' ? 'publish_mobile' : 'publish_desktop'
   const isViewportPublished = !!dashboard?.[publishKey]
+  // Widgets can only be edited while the layout shown in the editor is
+  // UNPUBLISHED. Publishing a viewport locks it (no add / edit / delete /
+  // drag / resize) — the admin unpublishes to make changes, then re-publishes.
+  const editingLocked = !publicMode && isViewportPublished
+  const canEditLayout = canUpdate && !editingLocked
+  const canDeleteLayout = canDelete && !editingLocked
+  // The theme/colours are shared across BOTH viewports, so changing them would
+  // alter a live published layout. Lock the theme picker whenever either the
+  // desktop OR the mobile layout is published (unpublish to recolour).
+  const themeLocked = !publicMode && (!!dashboard?.publish_desktop || !!dashboard?.publish_mobile)
   const [publishBusy, setPublishBusy] = useState(false)
-  async function togglePublish() {
-    if (publicMode || !dashboard?.id || publishBusy) return
-    const next = !dashboard[publishKey]
+  // Caution shown before unpublishing while public viewers are live on the
+  // dashboard: { next, status } — confirmed via the modal below.
+  const [publishCaution, setPublishCaution] = useState(null)
+
+  async function applyPublish(next) {
     const label = editViewport === 'mobile' ? 'Mobile' : 'Desktop'
     setPublishBusy(true)
     setDashboard((d) => ({ ...d, [publishKey]: next }))   // optimistic
@@ -1112,6 +1181,19 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     } finally {
       setPublishBusy(false)
     }
+  }
+
+  async function togglePublish() {
+    if (publicMode || !dashboard?.id || publishBusy) return
+    const next = !dashboard[publishKey]
+    // Unpublishing → if public viewers are currently in the access queue or
+    // controlling the dashboard, warn first (they'll be evicted on confirm).
+    if (!next) {
+      let status = null
+      try { status = await api.dashboardQueueStatus(dashboard.id) } catch { /* best-effort */ }
+      if (status?.active) { setPublishCaution({ next, status }); return }
+    }
+    applyPublish(next)
   }
 
   const activeTheme = getTheme(themeId)
@@ -1512,35 +1594,22 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     return () => clearTimeout(t)
   }, [toast])
 
-  // Esc exits preview — common pattern for fullscreen-style views.
+  // Esc exits preview — common pattern for fullscreen-style views. Releasing
+  // control on the way out (no-op if not holding) so the public queue resumes.
   useEffect(() => {
     if (!previewMode) return undefined
-    const handler = (e) => { if (e.key === 'Escape') setPreviewMode(false) }
+    const handler = (e) => { if (e.key === 'Escape') { releaseControl(); setPreviewMode(false) } }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [previewMode])
 
-  // Scale-to-fit in preview: the dashboard is laid out at its natural
-  // ~1480 × 760 px size and a CSS transform shrinks it to fit the viewport
-  // while keeping the exact layout (no card reflow, no cuts, no headers).
+  // The desktop preview renders the dashboard RESPONSIVELY (exactly like the
+  // public view) so it fills the page width and bottom — no fixed-size scaling
+  // that would leave side margins. Clear any leftover inline transform; the CSS
+  // (.db-page.is-preview) handles the full-width, top-reserved layout.
   useEffect(() => {
     const shell = previewShellRef.current
-    if (!shell) return undefined
-    if (!previewMode) {
-      shell.style.transform = ''
-      return undefined
-    }
-    function fit() {
-      const baseW = 1480
-      const baseH = 760
-      const innerW = Math.max(320, window.innerWidth)
-      const innerH = Math.max(320, window.innerHeight)
-      const scale = Math.min(1, innerW / baseW, innerH / baseH)
-      shell.style.transform = `translate(-50%, -50%) scale(${scale})`
-    }
-    fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    if (shell) shell.style.transform = ''
   }, [previewMode])
 
   /* ---- loaders ---- */
@@ -1628,6 +1697,9 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // (toggle / button / slider / text input) can write back to the
   // device payload through the same socket the dashboard reads from.
   const dashboardWsRef = useRef(null)
+  // Live connection status of that socket. Auto-reconnects forever with
+  // exponential backoff (no manual reconnect button).
+  const [wsStatus, setWsStatus] = useState('connecting') // connecting | reconnecting | live | offline
 
   // Stable per-session identity for the access queue (kept across reconnects).
   const queueMemberRef = useRef(null)
@@ -1645,6 +1717,12 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // Live queue state (null until the queue socket reports). Refs mirror the
   // derived gate so the stable sendDashboardCommand callback isn't stale.
   const [queue, setQueue] = useState(null)
+  // Live connection status of the queue socket — gates Join queue / Take control
+  // so they're disabled until the socket is actually connected.
+  const [queueWsStatus, setQueueWsStatus] = useState('connecting')
+  // Set when the backend tells us the dashboard was unpublished while we were
+  // viewing it publicly — flips the view to the "no dashboard published" state.
+  const [queueClosed, setQueueClosed] = useState(false)
   const queueWsRef = useRef(null)
   const controlRef = useRef(true)
   const queueOnRef = useRef(false)
@@ -1668,13 +1746,55 @@ export default function DashboardDetail({ publicMode = false } = {}) {
 
   // Derived gate: queue active (public + enabled) and whether we hold control.
   const queueOn = publicMode && !!queue?.enabled
-  const hasControl = !queueOn || !!queue?.you?.is_controller
+  const iAmAdminController = !!queue?.you?.is_admin_controller
+  // Control is held if: no queue, OR you're the public controller, OR you're
+  // the internal user who took the admin override.
+  const hasControl = !queueOn || !!queue?.you?.is_controller || iAmAdminController
   useEffect(() => { controlRef.current = hasControl; queueOnRef.current = queueOn }, [hasControl, queueOn])
+  // Take control is offered ONLY in the editor's Preview, and only when the
+  // VIEWPORT being previewed is itself published (with the access queue on) —
+  // so it reacts when you publish/unpublish that viewport. Using the per-
+  // viewport flag (not the desktop-OR-mobile `publish`) means unpublishing the
+  // layout you're previewing hides Take control even if the other is still live.
+  const canTakeControl = !publicMode && previewMode && isViewportPublished && !!dashboard?.queue_enabled
+  // Sockets must be connected before any action is allowed.
+  const wsReady = wsStatus === 'live'            // dashboard (device) socket
+  const queueReady = queueWsStatus === 'live'    // access-queue socket
+  // Control widgets only WRITE from the public view or the editor Preview —
+  // never from the config (editor) view itself, where they render disabled.
+  // Also disabled until the dashboard socket is connected, and (in public)
+  // unless the viewer currently holds control.
+  const inConfigView = !publicMode && !previewMode
+  // In Preview of a published, queue-enabled dashboard, writing stays disabled
+  // until the admin actually takes control (then iAmAdminController is true).
+  // (On an unpublished / no-queue preview there's no public to disrupt → free.)
+  const previewBlocked = canTakeControl && !iAmAdminController
+  const liveSendCommand = (!wsReady || inConfigView || previewBlocked || (publicMode && queueOn && !hasControl))
+    ? null
+    : sendDashboardCommand
   // The dashboard is gated behind the queue: when the dashboard's queue is on
   // (known from the REST load, so no flash) and the viewer hasn't joined yet,
   // we show ONLY the lobby — the dashboard isn't rendered until they join.
   const queueEnabled = publicMode && !!dashboard?.queue_enabled
   const joinedQueue = !!queue?.you?.in_queue
+
+  // One-time apology popup for people already in the queue when an admin seizes
+  // control. Detected from the admin_active false→true transition so it fires
+  // once per take-over (someone who joins AFTER never sees it — they already
+  // see the "admin is controlling" state). It's a plain overlay: dismissing it
+  // changes nothing — the queue/countdowns keep ticking in the background.
+  const [adminTookOver, setAdminTookOver] = useState(false)
+  const prevAdminActiveRef = useRef(false)
+  useEffect(() => {
+    const nowActive = !!queue?.admin_active
+    const was = prevAdminActiveRef.current
+    prevAdminActiveRef.current = nowActive
+    if (nowActive && !was && joinedQueue && !iAmAdminController) {
+      setAdminTookOver(true)
+    } else if (!nowActive && was) {
+      setAdminTookOver(false)   // admin released / window ended — auto-dismiss
+    }
+  }, [queue?.admin_active, joinedQueue, iAmAdminController])
 
   // Join / leave the access queue.
   const joinQueue = useCallback(() => {
@@ -1685,30 +1805,52 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     }
   }, [])
 
-  // Queue WebSocket — public viewers, and ONLY for queue-enabled dashboards
-  // (known from the REST load). Skipping it for non-queue dashboards avoids a
-  // pointless socket and keeps control ungated there.
+  // Internal-user override: take / release exclusive control, overriding the
+  // access queue for a chosen window (seconds). Used from the editor Preview.
+  const takeControl = useCallback((seconds) => {
+    const ws = queueWsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'take_control', seconds }))
+  }, [])
+  const releaseControl = useCallback(() => {
+    const ws = queueWsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'release_control' }))
+  }, [])
+  // Duration prompt before taking control (default 60s).
+  const [takeControlPrompt, setTakeControlPrompt] = useState(false)
+
+  // Queue WebSocket — opened for the public view AND for the editor's Preview
+  // (so an admin can take control there), but only for queue-enabled dashboards.
   useEffect(() => {
-    if (!publicMode || !dashboardId) return undefined
+    if (!dashboardId) return undefined
+    if (!publicMode && !previewMode) return undefined
     if (!dashboard?.queue_enabled) return undefined
     const loc = typeof window !== 'undefined' ? window.location : null
     const host = loc?.hostname || 'localhost'
     const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
+    // Authenticated internal users pass their JWT so the backend recognises
+    // them for the admin override ("take control"). Anonymous viewers omit it.
+    const qToken = auth.getAccess()
     const url = `${proto}//${host}:8001/ws/dashboard-queue/${dashboardId}/`
+      + (qToken ? `?token=${encodeURIComponent(qToken)}` : '')
     let cancelled = false, reconnectTimer = null, ws = null, attempt = 0
-    function schedule() { attempt += 1; reconnectTimer = setTimeout(connect, Math.min(15000, 800 * Math.pow(2, attempt))) }
+    // Fast recovery: ~250ms first retry, backing off to a 4s cap.
+    function schedule() { attempt += 1; reconnectTimer = setTimeout(connect, Math.min(4000, 250 * Math.pow(2, attempt - 1))) }
     function connect() {
       if (cancelled) return
-      try { ws = new WebSocket(url) } catch { schedule(); return }
+      setQueueWsStatus(attempt === 0 ? 'connecting' : 'reconnecting')
+      try { ws = new WebSocket(url) } catch { setQueueWsStatus('reconnecting'); schedule(); return }
       queueWsRef.current = ws
-      ws.onopen = () => { attempt = 0 }
+      ws.onopen = () => { attempt = 0; setQueueWsStatus('live') }
       ws.onmessage = (e) => {
         let msg; try { msg = JSON.parse(e.data) } catch { return }
         if (msg?.type === 'queue_state') setQueue(msg)
+        else if (msg?.type === 'queue_error') setToast({ type: 'error', text: msg.error || 'Could not take control.' })
+        else if (msg?.type === 'queue_closed') { setQueueClosed(true); setToast({ type: 'error', text: msg.reason || 'This dashboard was unpublished.' }) }
       }
       ws.onclose = () => {
         if (queueWsRef.current === ws) queueWsRef.current = null
         ws = null
+        setQueueWsStatus('reconnecting')
         if (!cancelled) schedule()
       }
       ws.onerror = () => { try { ws?.close() } catch {} }
@@ -1720,7 +1862,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
       try { ws?.close() } catch {}
       queueWsRef.current = null
     }
-  }, [publicMode, dashboardId, dashboard?.queue_enabled])
+  }, [publicMode, previewMode, dashboardId, dashboard?.queue_enabled])
 
   // ---- Live device-payload updates over WebSocket ----
   // The backend's DashboardRealtimeConsumer joins every device this
@@ -1734,18 +1876,21 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     const loc   = typeof window !== 'undefined' ? window.location : null
     const host  = loc?.hostname || 'localhost'
     const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
-    // The internal editor authenticates the socket with its JWT so it can
-    // write/test controls even when the dashboard's public access-queue is on
-    // (the queue gates anonymous public viewers, not the admin building it).
-    // The public view connects without a token and stays subject to the queue.
-    const token = !publicMode ? auth.getAccess() : null
+    // Authenticate the socket with the user's JWT when present:
+    //   • editor (not publicMode) → editor=1: full bypass of the access queue
+    //     so the admin can build/test the board.
+    //   • preview (publicMode + authenticated) → token only: the backend knows
+    //     who they are so the "take control" admin override can authorise their
+    //     writes. Anonymous public viewers send nothing and stay queue-gated.
+    const token = auth.getAccess()
     const url   = `${proto}//${host}:8001/ws/dashboards/${dashboardId}/`
-      + (token ? `?token=${encodeURIComponent(token)}` : '')
+      + (token ? `?token=${encodeURIComponent(token)}${publicMode ? '' : '&editor=1'}` : '')
 
     let cancelled       = false
     let reconnectTimer  = null
     let attempt         = 0
     let ws              = null
+    let pingTimer       = null   // keepalive so idle networks don't drop the socket
 
     function applyEvent(msg) {
       const action = msg.action
@@ -1786,34 +1931,46 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     function scheduleReconnect() {
       if (cancelled) return
       attempt += 1
-      const base   = Math.min(30000, 1000 * Math.pow(2, attempt - 1))
+      // Fast recovery: ~250ms first retry, backing off to a 4s cap.
+      const base   = Math.min(4000, 250 * Math.pow(2, attempt - 1))
       const jitter = base * (0.8 + Math.random() * 0.4)
       reconnectTimer = setTimeout(connect, jitter)
     }
 
     function connect() {
       if (cancelled) return
+      setWsStatus(attempt === 0 ? 'connecting' : 'reconnecting')
       // eslint-disable-next-line no-console
       console.debug('[dashboard-ws] connecting', url)
       try { ws = new WebSocket(url) }
       catch (err) {
         // eslint-disable-next-line no-console
         console.warn('[dashboard-ws] WebSocket constructor threw', err)
-        scheduleReconnect(); return
+        setWsStatus('reconnecting'); scheduleReconnect(); return
       }
       dashboardWsRef.current = ws
 
       ws.onopen = () => {
         attempt = 0
+        setWsStatus('live')
         // eslint-disable-next-line no-console
         console.debug('[dashboard-ws] connected')
+        // Heartbeat: ping every 25s. The dashboard socket is otherwise silent
+        // when no device value changes, so idle-timeout proxies (common on
+        // mobile networks) would drop it and it'd flap "reconnecting".
+        if (pingTimer) clearInterval(pingTimer)
+        pingTimer = setInterval(() => {
+          try { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ action: 'ping' })) } catch { /* noop */ }
+        }, 25000)
       }
       ws.onclose = (ev) => {
         // eslint-disable-next-line no-console
         console.debug('[dashboard-ws] closed', ev?.code, ev?.reason)
+        if (pingTimer) { clearInterval(pingTimer); pingTimer = null }
         if (dashboardWsRef.current === ws) dashboardWsRef.current = null
         if (cancelled) return
         ws = null
+        setWsStatus('reconnecting')
         scheduleReconnect()
       }
       ws.onerror = (ev) => {
@@ -1844,6 +2001,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     return () => {
       cancelled = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (pingTimer) clearInterval(pingTimer)
       try { ws?.close() } catch {}
     }
   }, [canView, dashboardId, wsBindingsKey])
@@ -2220,7 +2378,8 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   // instead of opening anything.
   const publicMobileOk  = !!dashboard?.publish_mobile
   const publicDesktopOk = !!dashboard?.publish_desktop
-  const publicBlocked = publicMode && !!dashboard && (isNarrow ? !publicMobileOk : !publicDesktopOk)
+  const publicBlocked = (publicMode && !!dashboard && (isNarrow ? !publicMobileOk : !publicDesktopOk))
+    || (publicMode && queueClosed)
   // Queue gate: show only the lobby (not the dashboard) until the viewer joins.
   const queueGate = queueEnabled && !publicBlocked && !joinedQueue
 
@@ -2271,7 +2430,8 @@ export default function DashboardDetail({ publicMode = false } = {}) {
           <span className="db-public-topbar-title">
             {dashboard?.application_name || dashboard?.name || 'Live dashboard'}
           </span>
-          {queueEnabled && !publicBlocked && joinedQueue && <QueueBadge queue={queue} onJoin={joinQueue} />}
+          <WsStatus status={wsStatus} className="db-public-ws" />
+          {queueEnabled && !publicBlocked && joinedQueue && <QueueBadge queue={queue} ready={queueReady} onJoin={joinQueue} />}
         </header>
       )}
 
@@ -2279,7 +2439,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
           the viewer hasn't joined. The dashboard isn't rendered behind it; it
           only appears once they join. */}
       {queueGate && (
-        <QueueLobby queue={queue} ready={!!queue} onJoin={joinQueue} />
+        <QueueLobby queue={queue} ready={queueReady} onJoin={joinQueue} />
       )}
 
       <div className={'admin-page db-page'
@@ -2287,6 +2447,18 @@ export default function DashboardDetail({ publicMode = false } = {}) {
         + (!previewMode && !publicMode && showMobileLayout ? ' is-mobile-edit' : '')
         + (previewMode && showMobileLayout && !isNarrow ? ' is-mobile-preview' : '')
         + (previewMode && showMobileLayout && isNarrow ? ' is-mobile-fullscreen' : '')}>
+        {!publicMode && !previewMode && editingLocked && (
+          <div className="db-edit-lock-note" role="status">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.8" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            <span>
+              The <strong>{editViewport === 'mobile' ? 'mobile' : 'desktop'}</strong> layout is published — editing is locked.
+              Unpublish it to add, move, resize or delete widgets.
+            </span>
+          </div>
+        )}
         {!previewMode && !publicMode && (
           <div className="db-page-actions-row">
             <Link
@@ -2299,17 +2471,27 @@ export default function DashboardDetail({ publicMode = false } = {}) {
               Back to Application
             </Link>
             {!publicMode && (
-            <div className="db-theme-picker" role="group" aria-label="Dashboard theme">
+            <div className={'db-theme-picker' + (themeLocked ? ' is-locked' : '')} role="group" aria-label="Dashboard theme">
               <span className="db-theme-picker-label">Theme</span>
+              {themeLocked && (
+                <span className="db-theme-lock-note" title="Unpublish the dashboard to change its colours">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                    <path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="1.8" />
+                  </svg>
+                  Published
+                </span>
+              )}
               {DASHBOARD_THEMES.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   className={'db-theme-swatch' + (themeId === t.id ? ' is-active' : '')}
                   style={{ background: t.panelBg, borderColor: t.border }}
-                  title={t.label}
+                  title={themeLocked ? 'Unpublish to change colours' : t.label}
                   aria-label={t.label}
                   aria-pressed={themeId === t.id}
+                  disabled={themeLocked}
                   onClick={() => setThemeId(t.id)}
                 />
               ))}
@@ -2317,13 +2499,14 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                   Picking a color builds a full palette around it, honoring
                   the current gradient/solid mode. */}
               <label
-                className={'db-theme-swatch db-theme-swatch-custom' + (isCustomTheme ? ' is-active' : '')}
-                title="Custom color"
+                className={'db-theme-swatch db-theme-swatch-custom' + (isCustomTheme ? ' is-active' : '') + (themeLocked ? ' is-disabled' : '')}
+                title={themeLocked ? 'Unpublish to change colours' : 'Custom color'}
                 style={{ background: getTheme(customThemeId(customHex, customMode)).panelBg, borderColor: customHex }}
               >
                 <input
                   type="color"
                   value={customHex}
+                  disabled={themeLocked}
                   onChange={(e) => { setCustomHex(e.target.value); setThemeId(customThemeId(e.target.value, customMode)) }}
                 />
                 {!isCustomTheme && (
@@ -2344,6 +2527,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                     className={'db-theme-mode-btn' + (customMode === 'gradient' ? ' is-active' : '')}
                     onClick={() => { setCustomMode('gradient'); setThemeId(customThemeId(customHex, 'gradient')) }}
                     aria-pressed={customMode === 'gradient'}
+                    disabled={themeLocked}
                     title="Linear gradient"
                   >
                     Gradient
@@ -2353,6 +2537,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                     className={'db-theme-mode-btn' + (customMode === 'solid' ? ' is-active' : '')}
                     onClick={() => { setCustomMode('solid'); setThemeId(customThemeId(customHex, 'solid')) }}
                     aria-pressed={customMode === 'solid'}
+                    disabled={themeLocked}
                     title="Solid color"
                   >
                     Solid
@@ -2419,6 +2604,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                 Preview
               </button>
             )}
+            {!publicMode && <WsStatus status={wsStatus} className="db-toolbar-ws" />}
           </div>
         )}
 
@@ -2464,7 +2650,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                   components={mobileComponents}
                   layout={mLayout}
                   devicesById={devicesById}
-                  sendCommand={sendDashboardCommand}
+                  sendCommand={liveSendCommand}
                   cameras={stageItems}
                   activeCamera={activeCamera}
                   onSelectCam={setSelectedCamId}
@@ -2480,9 +2666,10 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                   mobileComponents={mobileComponents}
                   layout={mLayout}
                   devicesById={devicesById}
-                  sendCommand={sendDashboardCommand}
+                  sendCommand={liveSendCommand}
                   canDelete={canDelete}
                   editable={canUpdate && !previewMode}
+                  locked={editingLocked}
                   mobileBusy={mobileBusy}
                   themeVars={themeVars}
                   cameras={stageItems}
@@ -2539,8 +2726,8 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                                nearest non-overlapping cell instead of
                                pushing widgets around — minimal motion. */
                             preventCollision
-                            isDraggable={canUpdate && !previewMode}
-                            isResizable={canUpdate && !previewMode}
+                            isDraggable={canEditLayout && !previewMode}
+                            isResizable={canEditLayout && !previewMode}
                             resizeHandles={C2_RESIZE_HANDLES}
                             draggableHandle=".db-c2-widget-drag"
                             draggableCancel=".row-btn, button"
@@ -2569,9 +2756,9 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                                   <DashWidgetView
                                     component={c}
                                     devicesById={devicesById}
-                                    canUpdate={canUpdate && !previewMode}
-                                    canDelete={canDelete && !previewMode}
-                                    sendCommand={sendDashboardCommand}
+                                    canUpdate={canEditLayout && !previewMode}
+                                    canDelete={canDeleteLayout && !previewMode}
+                                    sendCommand={liveSendCommand}
                                     onEdit={() => {
                                       // Card- AND control-variant widgets go through
                                       // the new picker-driven configure (preserves
@@ -2594,7 +2781,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                       )}
                     </div>
                   </div>
-                  {canUpdate && !previewMode && (
+                  {canEditLayout && !previewMode && (
                     <button
                       type="button"
                       className="db-c2-add"
@@ -2655,9 +2842,9 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                               <div key={String(c.id)} className="db-c2-rgl-item" data-grid={dg}>
                                 <DashWidgetView
                                   component={c} devicesById={devicesById}
-                                  canUpdate={canUpdate && !previewMode}
-                                  canDelete={canDelete && !previewMode}
-                                  sendCommand={sendDashboardCommand}
+                                  canUpdate={canEditLayout && !previewMode}
+                                  canDelete={canDeleteLayout && !previewMode}
+                                  sendCommand={liveSendCommand}
                                   onEdit={() => {
                                     const v = c?.config?.variant
                                     if (v && (CARD_VARIANT_DEFS[v] || CONTROL_VARIANT_DEFS[v] || DIAL_VARIANT_DEFS[v] || FILL_VARIANT_DEFS[v] || CHART_VARIANT_DEFS[v] || LOG_VARIANT_DEFS[v])) {
@@ -2674,7 +2861,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
                     )}
                   </div>
                 </div>
-                {canUpdate && !previewMode && (
+                {canEditLayout && !previewMode && (
                   <button type="button" className="db-c2-add db-c3-add"
                     onClick={() => openWidgetCreate(3)} aria-label="Add widget" title="Add widget to bottom panel">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2693,7 +2880,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
         <button
           type="button"
           className="db-preview-exit"
-          onClick={() => setPreviewMode(false)}
+          onClick={() => { releaseControl(); setPreviewMode(false) }}
           aria-label="Exit preview"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -2701,6 +2888,27 @@ export default function DashboardDetail({ publicMode = false } = {}) {
           </svg>
           Exit preview
         </button>
+      )}
+
+      {/* Take control — editor Preview only, and only for a published,
+          queue-enabled dashboard (so there are public users to override). */}
+      {previewMode && canTakeControl && (
+        <div className={'db-preview-take' + (showMobileLayout && !isNarrow ? ' is-mobile-preview' : '')}>
+          <AdminControlBar
+            queue={queue}
+            canTake={canTakeControl}
+            ready={queueReady && wsReady}
+            onTake={() => setTakeControlPrompt(true)}
+            onRelease={releaseControl}
+          />
+        </div>
+      )}
+
+      {takeControlPrompt && (
+        <TakeControlPrompt
+          onCancel={() => setTakeControlPrompt(false)}
+          onConfirm={(seconds) => { setTakeControlPrompt(false); takeControl(seconds) }}
+        />
       )}
 
       {(pickerOpen || editingWidget) && (
@@ -2741,6 +2949,52 @@ export default function DashboardDetail({ publicMode = false } = {}) {
           onCancel={() => setConfirmDelete(null)}
           onConfirm={performWidgetDelete}
         />
+      )}
+
+      {publishCaution && (
+        <UnpublishCaution
+          status={publishCaution.status}
+          viewport={editViewport === 'mobile' ? 'Mobile' : 'Desktop'}
+          onCancel={() => setPublishCaution(null)}
+          onConfirm={async () => {
+            const next = publishCaution.next
+            setPublishCaution(null)
+            await applyPublish(next)
+          }}
+        />
+      )}
+
+      {/* An administrator took control while you were in the queue. Pure
+          overlay — the queue + countdowns keep running behind it; OK dismisses. */}
+      {adminTookOver && (
+        <div className="modal-overlay" onMouseDown={() => setAdminTookOver(false)}>
+          <div className="modal-card" onMouseDown={(e) => e.stopPropagation()}>
+            <header className="modal-head">
+              <h2>Control paused</h2>
+              <button type="button" className="modal-x" aria-label="Close" onClick={() => setAdminTookOver(false)}>×</button>
+            </header>
+            <div className="modal-body">
+              <div className="confirm-body">
+                <div className="confirm-icon" aria-hidden="true">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke="#B5500F" strokeWidth="1.7" />
+                    <path d="M12 8v5" stroke="#B5500F" strokeWidth="1.8" strokeLinecap="round" />
+                    <circle cx="12" cy="16.3" r="0.6" fill="#B5500F" stroke="#B5500F" strokeWidth="0.8" />
+                  </svg>
+                </div>
+                <p className="confirm-lead">Apologies for the inconvenience.</p>
+                <p className="confirm-sub">
+                  An administrator has taken control of this dashboard for a few minutes.
+                  You'll keep your place in the queue — control resumes automatically afterwards,
+                  and you can keep watching live in the meantime.
+                </p>
+              </div>
+              <div className="modal-foot">
+                <button type="button" className="btn-primary" onClick={() => setAdminTookOver(false)}>OK</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {toast && (
@@ -2823,6 +3077,7 @@ function MobileGrid({ components, layout, editable, devicesById, sendCommand, ca
           cell grid that the cards snap to. The 1fr columns make every cell
           scale to the phone width automatically. */}
       <section className="db-mobile-widgets" ref={widgetsRef}>
+        <div className="db-mobile-widgets-scroll">
         <div className="db-mobile-grid-stage" style={{ height: stageH }}>
           <CellGrid cols={MOBILE_COLS} rows={rows} rowH={rowH} gap={MOBILE_GAP} />
           {components.length === 0 ? (
@@ -2877,6 +3132,7 @@ function MobileGrid({ components, layout, editable, devicesById, sendCommand, ca
             </div>
           )}
         </div>
+        </div>
       </section>
     </div>
   )
@@ -2887,7 +3143,7 @@ function MobileGrid({ components, layout, editable, devicesById, sendCommand, ca
    is hidden and the frame just renders the read-only stack. */
 function MobileEditorShell({
   allComponents, mobileComponents, layout, devicesById, sendCommand, canDelete,
-  editable, mobileBusy, themeVars, cameras, activeCamera, onSelectCam,
+  editable, locked = false, mobileBusy, themeVars, cameras, activeCamera, onSelectCam,
   onToggleInclude, onLayoutChange, onPersistAll, onEditWidget, onDeleteWidget,
 }) {
   const [deviceId, setDeviceId] = useState('ip-15')
@@ -2949,10 +3205,10 @@ function MobileEditorShell({
     <div className="db-shell db-mobile-shell" style={themeVars}>
       <div className={'db-mobile-editor' + (editable ? '' : ' is-preview')}>
         {editable && (
-          <aside className="db-mobile-picker">
+          <aside className={'db-mobile-picker' + (locked ? ' is-locked' : '')}>
             <div className="db-mobile-picker-head">
               <h3>Phone widgets</h3>
-              <p>Pick widgets to show on the phone.</p>
+              <p>{locked ? 'Published — unpublish the mobile layout to change which widgets show.' : 'Pick widgets to show on the phone.'}</p>
             </div>
             {allComponents.length === 0 ? (
               <div className="db-mobile-picker-empty">Build the desktop dashboard first.</div>
@@ -2971,7 +3227,7 @@ function MobileEditorShell({
                         type="button"
                         className={'db-mp-switch' + (on ? ' is-on' : '')}
                         onClick={() => onToggleInclude(c)}
-                        disabled={mobileBusy === c.id}
+                        disabled={mobileBusy === c.id || locked}
                         role="switch"
                         aria-checked={on}
                         aria-label={on ? `Remove ${title} from phone` : `Add ${title} to phone`}
@@ -3053,10 +3309,10 @@ function MobileEditorShell({
               <MobileGrid
                 components={mobileComponents}
                 layout={layout}
-                editable={editable}
+                editable={editable && !locked}
                 devicesById={devicesById}
                 sendCommand={sendCommand}
-                canDelete={canDelete}
+                canDelete={canDelete && !locked}
                 cameras={cameras}
                 activeCamera={activeCamera}
                 onSelectCam={onSelectCam}
@@ -3072,7 +3328,7 @@ function MobileEditorShell({
           </div>
           </div>
           </div>
-          {editable && (
+          {editable && !locked && (
             <p className="db-mobile-hint">Drag a widget to move · pull an edge to resize · widgets stack automatically</p>
           )}
         </div>
@@ -3574,6 +3830,102 @@ function WidgetDeleteConfirm({ widget, onCancel, onConfirm }) {
             <button type="button" className="btn-danger" onClick={go} disabled={busy} aria-busy={busy}>
               {busy ? 'Working…' : 'Remove'}
             </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UnpublishCaution({ status, viewport, onCancel, onConfirm }) {
+  const [busy, setBusy] = useState(false)
+  async function go() { setBusy(true); try { await onConfirm() } finally { setBusy(false) } }
+  // Only count people actually in the access queue: those waiting + the one in
+  // control. (Server already excludes passive viewers / stray sockets.)
+  const inQueue = status?.in_queue
+    ?? ((status?.waiting_count || 0) + (status?.has_controller ? 1 : 0))
+  const hasController = !!status?.has_controller
+  const adminName = status?.admin_active ? status?.admin_name : null
+  return (
+    <div className="modal-overlay" onMouseDown={() => !busy && onCancel()}>
+      <div className="modal-card modal-wide" onMouseDown={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <h2>Unpublish — people are in the queue</h2>
+          <button type="button" className="modal-x" aria-label="Close" onClick={() => !busy && onCancel()}>×</button>
+        </header>
+        <div className="modal-body">
+          <div className="confirm-body">
+            <div className="confirm-icon" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3 2.5 20h19L12 3Z" stroke="#C97A12" strokeWidth="1.7" strokeLinejoin="round" />
+                <path d="M12 10v4M12 17.5v.5" stroke="#C97A12" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </div>
+            <p className="confirm-lead">
+              This dashboard is being used by the public right now.
+            </p>
+            <p className="confirm-sub">
+              {adminName
+                ? <><strong>{adminName}</strong> (admin) is currently in control. </>
+                : null}
+              {inQueue > 0
+                ? <><strong>{inQueue}</strong> {inQueue === 1 ? 'person is' : 'people are'} in the queue{hasController ? ' (including the one in control)' : ''}. </>
+                : adminName
+                  ? null
+                  : <>Someone is in the queue. </>}
+              Unpublishing the {viewport} layout will remove them from the live dashboard and end any active control — they'll be notified immediately.
+            </p>
+          </div>
+          <div className="modal-foot">
+            <button type="button" className="btn-secondary" onClick={onCancel} disabled={busy}>Keep published</button>
+            <button type="button" className="btn-danger" onClick={go} disabled={busy} aria-busy={busy}>
+              {busy ? 'Unpublishing…' : 'Unpublish anyway'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TakeControlPrompt({ onCancel, onConfirm }) {
+  const [secs, setSecs] = useState('60')
+  function go() {
+    let n = parseInt(secs, 10)
+    if (!Number.isFinite(n) || n <= 0) n = 60   // default 60s when blank/invalid
+    onConfirm(n)
+  }
+  return (
+    <div className="modal-overlay" onMouseDown={onCancel}>
+      <div className="modal-card" onMouseDown={(e) => e.stopPropagation()}>
+        <header className="modal-head">
+          <h2>Take control</h2>
+          <button type="button" className="modal-x" aria-label="Close" onClick={onCancel}>×</button>
+        </header>
+        <div className="modal-body">
+          <div className="confirm-body">
+            <p className="confirm-lead">For how long?</p>
+            <p className="confirm-sub">
+              The public access queue will be paused and everyone watching is notified.
+              Enter a duration in seconds — leave it at 60 if you're not sure.
+            </p>
+            <label className="form-field" style={{ maxWidth: 220, margin: '0 auto' }}>
+              <span className="form-label">Duration (seconds)</span>
+              <input
+                type="number"
+                min="5"
+                inputMode="numeric"
+                value={secs}
+                onChange={(e) => setSecs(e.target.value)}
+                placeholder="60"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === 'Enter') go() }}
+              />
+            </label>
+          </div>
+          <div className="modal-foot">
+            <button type="button" className="btn-secondary" onClick={onCancel}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={go}>Take control</button>
           </div>
         </div>
       </div>

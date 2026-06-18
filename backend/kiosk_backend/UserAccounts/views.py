@@ -586,6 +586,7 @@ def _serialise_me(user):
         'email': user.email,
         'country_code': user.country_code,
         'mobile': user.mobile,
+        'avatar': user.avatar,
         'created_at': user.created_at,
         'updated_at': user.updated_at,
         'roles': roles,
@@ -613,6 +614,11 @@ class MeView(APIView):
                 if isinstance(value, str):
                     value = value.strip() or None
                 setattr(user, field, value)
+
+        # Avatar is a short string ("<palette>-<pattern>", blank = default).
+        # Handled separately from EDITABLE so blank stays "" (not NULL).
+        if 'avatar' in data:
+            user.avatar = (str(data.get('avatar') or '')).strip()[:20]
 
         # Validate uniqueness explicitly so we return a clean field-level error
         # rather than letting the DB raise an IntegrityError.

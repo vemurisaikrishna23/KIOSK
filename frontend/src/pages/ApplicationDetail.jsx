@@ -447,10 +447,23 @@ export default function ApplicationDetail() {
         </Link>
 
         {appLoading ? (
-          <div className="admin-empty admin-loading">
-            <span className="admin-spinner" aria-hidden="true" />
-            <span>Loading application…</span>
-          </div>
+          <>
+            <header className="app-detail-title"><Sk w={220} h={26} r={8} /></header>
+            <section className="admin-stats">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div className="dash-stat" key={i}>
+                  <Sk w={48} h={24} style={{ marginBottom: 8 }} />
+                  <Sk w={72} h={11} />
+                </div>
+              ))}
+            </section>
+            {[0, 1].map((s) => (
+              <section className="admin-card list-card detail-section" key={s}>
+                <div className="card-head"><Sk w={130} h={16} /></div>
+                <DetailListSkeleton rows={3} />
+              </section>
+            ))}
+          </>
         ) : appError ? (
           <div className="admin-banner error">{appError}</div>
         ) : !app ? null : (
@@ -482,10 +495,7 @@ export default function ApplicationDetail() {
                 </div>
               </div>
               {devicesLoading ? (
-                <div className="admin-empty admin-loading">
-                  <span className="admin-spinner" aria-hidden="true" />
-                  <span>Loading devices…</span>
-                </div>
+                <DetailListSkeleton rows={3} />
               ) : devices.length === 0 ? (
                 <div className="admin-empty">
                   {canUpdate ? 'No devices yet. Click "+ Add Device" to register one.' : 'No devices yet.'}
@@ -521,10 +531,7 @@ export default function ApplicationDetail() {
                 </div>
               </div>
               {dashboardsLoading ? (
-                <div className="admin-empty admin-loading">
-                  <span className="admin-spinner" aria-hidden="true" />
-                  <span>Loading dashboards…</span>
-                </div>
+                <DetailListSkeleton rows={2} />
               ) : dashboards.length === 0 ? (
                 <div className="admin-empty">
                   {canUpdate ? 'No dashboards yet. Click "+ Add Dashboard" to build one.' : 'No dashboards yet.'}
@@ -566,10 +573,7 @@ export default function ApplicationDetail() {
                 </div>
               </div>
               {camerasLoading ? (
-                <div className="admin-empty admin-loading">
-                  <span className="admin-spinner" aria-hidden="true" />
-                  <span>Loading cameras…</span>
-                </div>
+                <DetailListSkeleton rows={2} />
               ) : appCameras.length === 0 ? (
                 <div className="admin-empty">
                   {canUpdate ? 'No cameras linked yet. Use "+ Assign Camera" to add one.' : 'No cameras linked yet.'}
@@ -656,11 +660,41 @@ export default function ApplicationDetail() {
           {toast.text}
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
   )
 }
+
+/* ----------------------- loading skeletons ----------------------- */
+// Shimmer placeholder block (reuses the global `.sk` shimmer).
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+// One generic .detail-row placeholder — used for the Devices, Dashboards
+// and Linked-Cameras lists (they all share the .detail-list row layout).
+function DetailRowSkeleton() {
+  return (
+    <li className="detail-row" aria-hidden="true">
+      <div className="detail-row-id">
+        <Sk w={10} h={10} r={999} style={{ marginTop: 5, flexShrink: 0 }} />
+        <div className="detail-row-text" style={{ flex: 1, minWidth: 0 }}>
+          <Sk w={170} h={14} />
+          <Sk w="52%" h={11} style={{ marginTop: 10 }} />
+        </div>
+      </div>
+      <div className="detail-row-actions">
+        <Sk w={56} h={30} r={8} />
+        <Sk w={64} h={30} r={8} />
+      </div>
+    </li>
+  )
+}
+const DetailListSkeleton = ({ rows = 3 }) => (
+  <ul className="detail-list">
+    {Array.from({ length: rows }).map((_, i) => <DetailRowSkeleton key={i} />)}
+  </ul>
+)
 
 /* ----------------------- device row ----------------------- */
 function DeviceRow({ device, canUpdate, canDelete, onOpen, onEdit, onDelete }) {

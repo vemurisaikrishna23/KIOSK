@@ -496,6 +496,11 @@ export const api = {
   // Either pass `days` (rolling window: 7 | 15 | 30 …) OR both `start` & `end`
   // (YYYY-MM-DD custom range). application: app id to scope to one app
   // (omit/'all' = every app).
+  // Live access-queue activity for a dashboard (used to warn before unpublishing
+  // if public viewers are currently waiting in / controlling it).
+  dashboardQueueStatus: (dashboardId) =>
+    request(`${APPS_BASE}/dashboard-queue-status/${dashboardId}/`, { withAuth: true }),
+
   appViewsTimeseries: ({ days = 7, start, end, application } = {}) => {
     const params = new URLSearchParams()
     if (start && end) { params.set('start', start); params.set('end', end) }

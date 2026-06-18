@@ -29,6 +29,28 @@ function formatAbs(iso) {
   try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) } catch { return String(iso) }
 }
 
+/* Shimmer placeholder block (reuses the global `.sk` shimmer). */
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+/* One submission-row placeholder (mirrors the .user-row cs-row grid). */
+function CsRowSkeleton() {
+  return (
+    <div className="user-row cs-row" aria-hidden="true">
+      <div className="cs-cell-name" data-col="Name"><Sk w="60%" h={13} /></div>
+      <div className="cs-cell-email" data-col="Email"><Sk w="82%" h={12} /></div>
+      <div data-col="Status"><Sk w={76} h={20} r={999} /></div>
+      <div className="user-sub" data-col="Received"><Sk w="55%" h={11} /></div>
+      <div className="user-actions" data-col="Actions">
+        <Sk w={92} h={30} r={8} />
+        <Sk w={56} h={30} r={8} />
+      </div>
+    </div>
+  )
+}
+
 /**
  * Contact Us submissions — admin triage, laid out like the Users page
  * (search · stat tiles · table that collapses to cards on mobile). Reading a
@@ -227,10 +249,7 @@ export default function ContactSubmissions() {
 
           <div className="list-scroll">
             {loading ? (
-              <div className="admin-empty admin-loading">
-                <span className="admin-spinner" aria-hidden="true" />
-                <span>Loading…</span>
-              </div>
+              Array.from({ length: 6 }).map((_, i) => <CsRowSkeleton key={i} />)
             ) : total === 0 ? (
               <div className="admin-empty">
                 {query

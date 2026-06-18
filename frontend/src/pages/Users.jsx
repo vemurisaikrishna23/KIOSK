@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import Avatar from '../components/Avatar.jsx'
 import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
 import { PermissionDenied } from './Cameras.jsx'
+import { COUNTRIES, flagOf, countryByCode, countryByDial } from '../lib/countries.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MOBILE_RE = /^\+?[0-9]{6,15}$/
@@ -17,11 +18,13 @@ function formatDate(iso) {
   } catch { return '—' }
 }
 
+const DEFAULT_COUNTRY = 'IN'   // India — pre-selected, field is mandatory
+
 const EMPTY_FORM = {
   id: null,
   name: '',
   email: '',
-  country_code: '',
+  country: DEFAULT_COUNTRY,   // ISO-3166 alpha-2 of the selected country (dial code derived from it)
   mobile: '',
   password: '',
   pwdMode: 'auto',  // 'auto' | 'custom' — applies on Create only
@@ -89,6 +92,9 @@ export default function Users() {
   // In-app delete confirmation (replaces window.confirm).
   const [confirmDelete, setConfirmDelete] = useState(null) // null | user object
   const [deleting, setDeleting] = useState(false)
+
+  // Id of the user row currently being restored (drives its loading overlay).
+  const [restoringId, setRestoringId] = useState(null)
 
   /* ----------------------- data load ----------------------- */
   // Debounce search input so we don't fire a request on every keystroke.
@@ -190,8 +196,8 @@ export default function Users() {
       id: u.id,
       name: u.name || '',
       email: u.email || '',
-      country_code: u.country_code || '',
-      mobile: u.mobile || '',
+      country: countryByDial(u.country_code)?.code || DEFAULT_COUNTRY,
+      mobile: (u.mobile || '').replace(/\D/g, ''),
       password: '',
       pwdMode: 'auto',
       roles: (u.role_details || []).map((r) => r.id),
@@ -227,10 +233,19 @@ export default function Users() {
       errs.email = 'Enter a valid email.'
     }
 
-    // Mobile — required and format-checked in both modes.
-    const mobileStripped = form.mobile.replace(/[\s-]/g, '')
+    // Country code — mandatory (drives the mobile length rule below).
+    const sel = countryByCode(form.country)
+    if (!sel) errs.country_code = 'Country code is required.'
+
+    // Mobile — required and format-checked in both modes. The length is
+    // constrained to the selected country's national range.
+    const mobileStripped = form.mobile.replace(/\D/g, '')
     if (!form.mobile.trim()) {
       errs.mobile = 'Mobile is required.'
+    } else if (sel && (mobileStripped.length < sel.min || mobileStripped.length > sel.max)) {
+      errs.mobile = sel.min === sel.max
+        ? `Enter ${sel.max} digits for ${sel.name}.`
+        : `Enter ${sel.min}–${sel.max} digits for ${sel.name}.`
     } else if (!MOBILE_RE.test(mobileStripped)) {
       errs.mobile = 'Enter a valid mobile (digits only).'
     }
@@ -263,8 +278,8 @@ export default function Users() {
     const payload = {
       name: form.name.trim(),
       email: form.email.trim() || null,
-      country_code: form.country_code.trim() || null,
-      mobile: form.mobile.replace(/[\s-]/g, '') || null,
+      country_code: countryByCode(form.country)?.dial || null,
+      mobile: form.mobile.replace(/\D/g, '') || null,
       roles: form.roles,
     }
     // Password handling:
@@ -356,6 +371,8 @@ export default function Users() {
     }
   }
   async function onRestore(u) {
+    if (restoringId) return
+    setRestoringId(u.id)
     try {
       await api.restoreUser(u.id)
       setResults((prev) => prev.filter((x) => x.id !== u.id))
@@ -364,6 +381,8 @@ export default function Users() {
       setToast({ type: 'success', text: `User “${u.name || u.email}” restored.` })
     } catch (e) {
       setToast({ type: 'error', text: 'Failed to restore user.' })
+    } finally {
+      setRestoringId(null)
     }
   }
 
@@ -425,19 +444,24 @@ export default function Users() {
                 </button>
               )}
             </div>
-            <label className={'admin-toggle' + (viewSwitching ? ' is-busy' : '')}>
-              <input
-                type="checkbox"
-                checked={showDeleted}
+            <div className={'view-select-wrap' + (viewSwitching ? ' is-busy' : '')}>
+              <select
+                className="view-select"
+                value={showDeleted ? 'deleted' : 'active'}
                 disabled={viewSwitching}
+                aria-label="Filter users by status"
                 onChange={(e) => {
-                  setShowDeleted(e.target.checked)
+                  const next = e.target.value === 'deleted'
+                  if (next === showDeleted) return
+                  setShowDeleted(next)
                   setViewSwitching(true)
                 }}
-              />
-              <span>Show deleted</span>
+              >
+                <option value="active">Active</option>
+                <option value="deleted">Deleted</option>
+              </select>
               {viewSwitching && <span className="admin-spinner sm" aria-hidden="true" />}
-            </label>
+            </div>
             {canCreate && (
               <button type="button" className="btn-primary" onClick={openCreate}>+ Add User</button>
             )}
@@ -465,14 +489,7 @@ export default function Users() {
           {!canView ? (
             <PermissionDenied resource="users" />
           ) : loading || viewSwitching ? (
-            <div className="admin-empty admin-loading">
-              <span className="admin-spinner" aria-hidden="true" />
-              <span>
-                {viewSwitching
-                  ? (showDeleted ? 'Loading soft-deleted users…' : 'Loading active users…')
-                  : 'Loading…'}
-              </span>
-            </div>
+            Array.from({ length: 6 }).map((_, i) => <UserRowSkeleton key={i} />)
           ) : filtered.length === 0 ? (
             <div className="admin-empty">
               {debouncedQuery
@@ -486,8 +503,15 @@ export default function Users() {
           ) : (
             filtered.map((u) => {
               const isDeleted = u.deleted_at != null
+              const isRestoring = restoringId === u.id
               return (
-                <div className={'user-row' + (isDeleted ? ' is-deleted' : '')} key={u.id}>
+                <div className={'user-row' + (isDeleted ? ' is-deleted' : '') + (isRestoring ? ' is-restoring' : '')} key={u.id}>
+                  {isRestoring && (
+                    <div className="user-row-loading" aria-live="polite">
+                      <span className="user-row-spinner" aria-hidden="true" />
+                      <span>Restoring…</span>
+                    </div>
+                  )}
                   <div className="user-cell" data-col="User">
                     <Avatar
                       seed={u.id ?? u.email ?? u.name}
@@ -525,7 +549,7 @@ export default function Users() {
                     )}
                     {isDeleted ? (
                       canRestore
-                        ? <button type="button" className="row-btn" onClick={() => onRestore(u)}>Restore</button>
+                        ? <button type="button" className="row-btn" onClick={() => onRestore(u)} disabled={isRestoring}>{isRestoring ? 'Restoring…' : 'Restore'}</button>
                         : (!canViewActivity && <span className="row-actions-none">View only</span>)
                     ) : (
                       <>
@@ -570,7 +594,7 @@ export default function Users() {
       {/* ---------- Create / Edit modal ---------- */}
       {modalOpen && (
         <Modal onClose={closeModal} title={modalMode === 'create' ? 'Add User' : 'Edit User'}>
-          <form onSubmit={submitForm} noValidate>
+          <form className="user-modal-form" onSubmit={submitForm} noValidate>
             {formBanner && <div className={'admin-banner ' + formBanner.type}>{formBanner.text}</div>}
 
             <div className="form-grid-2">
@@ -589,24 +613,32 @@ export default function Users() {
                   value={form.email}
                   onChange={(e) => setFormField('email', e.target.value)}
                   autoComplete="off"
-                  disabled={saving}
+                  disabled={saving || modalMode === 'edit'}
                 />
               </Field>
-              <Field label="Country code" error={formErrors.country_code}>
-                <input
-                  type="text"
-                  value={form.country_code}
-                  onChange={(e) => setFormField('country_code', e.target.value)}
-                  placeholder="+91"
+              <Field label="Country code" required error={formErrors.country_code}>
+                <CountrySelect
+                  value={form.country}
                   disabled={saving}
+                  onChange={(code) => {
+                    // Switching country re-caps the mobile to the new max length.
+                    const max = countryByCode(code)?.max ?? 15
+                    setForm((f) => ({ ...f, country: code, mobile: f.mobile.replace(/\D/g, '').slice(0, max) }))
+                    setFormErrors((er) => ({ ...er, country_code: undefined, mobile: undefined }))
+                  }}
                 />
               </Field>
               <Field label="Mobile" required error={formErrors.mobile}>
                 <input
                   type="tel"
+                  inputMode="numeric"
                   value={form.mobile}
-                  onChange={(e) => setFormField('mobile', e.target.value)}
-                  placeholder="99999 99999"
+                  maxLength={countryByCode(form.country)?.max ?? 15}
+                  onChange={(e) => {
+                    const max = countryByCode(form.country)?.max ?? 15
+                    setFormField('mobile', e.target.value.replace(/\D/g, '').slice(0, max))
+                  }}
+                  placeholder={form.country ? '0'.repeat(countryByCode(form.country)?.max ?? 10) : 'Mobile number'}
                   disabled={saving}
                 />
               </Field>
@@ -755,13 +787,42 @@ export default function Users() {
           {toast.text}
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
   )
 }
 
 /* ----------------------- shared bits ----------------------- */
+// Shimmer placeholder block (reuses the global `.sk` shimmer).
+const Sk = ({ w = '100%', h = 12, r = 6, circle = false, style }) => (
+  <span className={'sk' + (circle ? ' sk-circle' : '')} aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: circle ? '50%' : r, ...style }} />
+)
+
+// One loading row mirroring the .user-row grid (User · Contact · Roles · Created · Actions).
+function UserRowSkeleton() {
+  return (
+    <div className="user-row" aria-hidden="true">
+      <div className="user-cell" data-col="User">
+        <Sk w={36} h={36} circle />
+        <Sk w="56%" h={13} />
+      </div>
+      <div className="user-cell-mono" data-col="Contact">
+        <Sk w="80%" h={12} style={{ marginBottom: 6 }} />
+        <Sk w="50%" h={10} />
+      </div>
+      <div data-col="Roles" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Sk w={62} h={20} r={999} />
+        <Sk w={48} h={20} r={999} />
+      </div>
+      <div data-col="Created"><Sk w="60%" h={12} /></div>
+      <div className="user-actions" data-col="Actions">
+        <Sk w={56} h={30} r={8} />
+        <Sk w={56} h={30} r={8} />
+      </div>
+    </div>
+  )
+}
+
 function Field({ label, error, children, full, required, group }) {
   // `group` renders a <div> instead of <label>. A <label> forwards empty-space
   // clicks to its first labelable descendant (e.g. the first role chip button),
@@ -777,6 +838,123 @@ function Field({ label, error, children, full, required, group }) {
       {children}
       {error && <span className="form-err">{error}</span>}
     </Tag>
+  )
+}
+
+/* Searchable country-code picker. Stores/returns an ISO-3166 alpha-2 code;
+   the dial code + phone-length rules are derived from it by the caller. */
+function CountrySelect({ value, onChange, disabled }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  // Popup direction + height, sized to the space available inside the modal so
+  // the list always has a real scroll container and never gets clipped.
+  const [pop, setPop] = useState({ dir: 'down', maxH: 280 })
+  const rootRef = useRef(null)
+  const searchRef = useRef(null)
+  const sel = countryByCode(value)
+
+  // Close on outside click / Escape.
+  useEffect(() => {
+    if (!open) return undefined
+    const onDown = (e) => { if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false) }
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false) } }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  // Focus the search box on open.
+  useEffect(() => { if (open && searchRef.current) searchRef.current.focus() }, [open])
+
+  // Measure the room above/below the trigger within the scroll boundary
+  // (the modal body, which clips overflow) and bound the popup to it.
+  useLayoutEffect(() => {
+    if (!open) return undefined
+    const measure = () => {
+      const root = rootRef.current
+      if (!root) return
+      const r = root.getBoundingClientRect()
+      const body = root.closest('.modal-body')
+      const top = body ? body.getBoundingClientRect().top : 8
+      const bottom = body ? body.getBoundingClientRect().bottom : window.innerHeight - 8
+      const below = bottom - r.bottom - 10
+      const above = r.top - top - 10
+      const dir = below < 200 && above > below ? 'up' : 'down'
+      const maxH = Math.max(140, Math.min(300, Math.floor(dir === 'down' ? below : above)))
+      setPop({ dir, maxH })
+    }
+    measure()
+    const body = rootRef.current?.closest('.modal-body')
+    window.addEventListener('resize', measure)
+    body?.addEventListener('scroll', measure, { passive: true })
+    return () => { window.removeEventListener('resize', measure); body?.removeEventListener('scroll', measure) }
+  }, [open])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return COUNTRIES
+    const qd = q.replace(/[^\d+]/g, '')   // digits/"+" only, for dial-code matches
+    return COUNTRIES.filter((c) =>
+      c.name.toLowerCase().includes(q) ||
+      c.code.toLowerCase().includes(q) ||
+      (qd && c.dial.includes(qd))
+    )
+  }, [query])
+
+  return (
+    <div className={'cc-select' + (open ? ' is-open' : '')} ref={rootRef}>
+      <button
+        type="button"
+        className="cc-trigger"
+        onClick={() => !disabled && setOpen((o) => !o)}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        {sel ? (
+          <span className="cc-cur">
+            <span className="cc-flag">{flagOf(sel.code)}</span>
+            <span className="cc-dial">{sel.dial}</span>
+            <span className="cc-name">{sel.name}</span>
+          </span>
+        ) : <span className="cc-ph">Select country</span>}
+        <span className="cc-caret" aria-hidden="true">▾</span>
+      </button>
+
+      {open && (
+        <div className={'cc-pop cc-pop-' + pop.dir} style={{ maxHeight: pop.maxH }}>
+          <div className="cc-search-wrap">
+            <input
+              ref={searchRef}
+              className="cc-search"
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search country or code…"
+            />
+          </div>
+          <ul className="cc-list" role="listbox">
+            {filtered.length === 0 ? (
+              <li className="cc-empty">No matches</li>
+            ) : filtered.map((c) => (
+              <li key={c.code}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={c.code === value}
+                  className={'cc-opt' + (c.code === value ? ' is-on' : '')}
+                  onClick={() => { onChange(c.code); setOpen(false); setQuery('') }}
+                >
+                  <span className="cc-flag">{flagOf(c.code)}</span>
+                  <span className="cc-opt-name">{c.name}</span>
+                  <span className="cc-opt-dial">{c.dial}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
 

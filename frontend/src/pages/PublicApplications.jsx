@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api.js'
 import { Pager } from './Users.jsx'
+import { RichTextInline, RichTextBlock } from '../components/RichText.jsx'
 
 // Deterministic gradient per app (same hash → same palette) so imageless
 // cards still look varied. Mirrors the authenticated Applications page.
@@ -38,28 +37,6 @@ function formatDate(iso) {
   if (!iso) return '—'
   try { return new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' }) }
   catch { return '—' }
-}
-// Flatten markdown to inline so bold/italic render without raw ** in the
-// card's clamped description.
-const INLINE_MD_COMPONENTS = {
-  p: ({ children }) => <>{children}</>,
-  h1: ({ children }) => <strong>{children}</strong>,
-  h2: ({ children }) => <strong>{children}</strong>,
-  h3: ({ children }) => <strong>{children}</strong>,
-  h4: ({ children }) => <strong>{children}</strong>,
-  h5: ({ children }) => <strong>{children}</strong>,
-  h6: ({ children }) => <strong>{children}</strong>,
-  ul: ({ children }) => <span>{children}</span>,
-  ol: ({ children }) => <span>{children}</span>,
-  li: ({ children }) => <span>{children} </span>,
-  blockquote: ({ children }) => <span>{children}</span>,
-  pre: ({ children }) => <span>{children}</span>,
-  hr: () => null,
-  img: () => null,
-  a: ({ children }) => <>{children}</>,
-}
-function InlineMarkdown({ text }) {
-  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={INLINE_MD_COMPONENTS}>{text}</ReactMarkdown>
 }
 
 /**
@@ -280,7 +257,7 @@ function PublicAppCard({ app, tries, isNarrow, onShowDesc }) {
         <h4 className="app-name">{name}</h4>
         <div ref={descRef} className="app-desc">
           {app.description
-            ? <InlineMarkdown text={app.description} />
+            ? <RichTextInline value={app.description} />
             : <span className="muted">No description</span>}
         </div>
         {descOverflows && (
@@ -339,14 +316,7 @@ function DescriptionModal({ app, onClose }) {
         </header>
         <div className="app-desc-body">
           {app?.description ? (
-            <div className="app-desc-full md-body">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                components={{ a: ({ node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" /> }}
-              >
-                {app.description}
-              </ReactMarkdown>
-            </div>
+            <RichTextBlock className="app-desc-full md-body" value={app.description} />
           ) : (
             <p className="app-desc-full app-desc-empty">No description.</p>
           )}

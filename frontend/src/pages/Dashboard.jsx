@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
+import WsStatus from '../components/WsStatus.jsx'
 import { api, auth } from '../lib/api.js'
 
 /* =====================================================================
@@ -129,6 +130,97 @@ function ViewsChart({ series }) {
         </text>
       )}
     </svg>
+  )
+}
+
+/* ----------------------- Loading skeletons ----------------------- */
+// Shimmer block. Defaults to a thin "line"; override w/h/r for other shapes.
+const Sk = ({ w = '100%', h = 12, r = 6, circle = false, style }) => (
+  <span className={'sk' + (circle ? ' sk-circle' : '')} aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: circle ? '50%' : r, ...style }} />
+)
+
+function KpiSkeleton() {
+  return (
+    <div className="dash-kpi is-skeleton" aria-hidden="true">
+      <Sk w={34} h={34} r={10} style={{ marginBottom: 8 }} />
+      <Sk w="56%" h={22} style={{ marginBottom: 8 }} />
+      <Sk w="70%" h={11} style={{ marginBottom: 6 }} />
+      <Sk w="86%" h={10} />
+    </div>
+  )
+}
+
+function ChartSkeleton() {
+  const bars = [42, 66, 52, 80, 58, 72, 48, 62, 54, 76]
+  return (
+    <div className="dash-chart-skel" aria-hidden="true">
+      {bars.map((h, i) => <span key={i} className="sk" style={{ height: h + '%' }} />)}
+    </div>
+  )
+}
+
+function FleetSkeleton() {
+  return (
+    <div className="fleet" aria-hidden="true">
+      <Sk w={118} h={118} circle />
+      <div className="fleet-legend" style={{ flex: 1 }}>
+        <Sk w="80%" style={{ marginBottom: 12 }} />
+        <Sk w="66%" style={{ marginBottom: 12 }} />
+        <Sk w="74%" />
+      </div>
+    </div>
+  )
+}
+
+function BarsSkeleton({ rows = 3 }) {
+  return (
+    <div aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div className="ovb" key={i}>
+          <div className="ovb-top"><Sk w="38%" h={11} /><Sk w="26%" h={11} /></div>
+          <div className="ovb-track"><span className="sk" style={{ display: 'block', height: '100%', width: (70 - i * 16) + '%' }} /></div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LeadSkeleton() {
+  return (
+    <div className="lead" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <div className="lead-row" key={i}>
+          <span className="lead-rank">{i + 1}</span>
+          <div className="lead-main">
+            <Sk w="58%" style={{ marginBottom: 8 }} />
+            <div className="lead-track"><span className="sk" style={{ display: 'block', height: '100%', width: (72 - i * 18) + '%' }} /></div>
+          </div>
+          <Sk w={34} h={12} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LogSkeleton({ rows = 6 }) {
+  return (
+    <div aria-hidden="true">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div className="dash-log-row" key={i}>
+          <div className="dl-entity">
+            <Sk w={8} h={8} circle style={{ marginTop: 5, flexShrink: 0 }} />
+            <div className="dl-entity-text" style={{ flex: 1 }}>
+              <Sk w="50%" style={{ marginBottom: 5 }} />
+              <Sk w="72%" h={10} />
+            </div>
+          </div>
+          <div><Sk w="60%" h={18} r={6} /></div>
+          <div><Sk w="55%" h={18} r={999} /></div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Sk w={48} h={11} /></div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -293,20 +385,23 @@ export default function Dashboard() {
   }, [])
 
   // Live activity feed over WebSocket — snapshot on connect + push per new entry.
-  const [live, setLive] = useState(false)
+  // Auto-reconnects forever with exponential backoff (no manual reconnect).
+  const [wsStatus, setWsStatus] = useState('connecting') // connecting | reconnecting | live | offline
   useEffect(() => {
     const loc = typeof window !== 'undefined' ? window.location : null
     const host = loc?.hostname || 'localhost'
     const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
     const token = auth.getAccess()
-    if (!token) return undefined
+    if (!token) { setWsStatus('offline'); return undefined }
     const url = `${proto}//${host}:8001/ws/activity-logs/?token=${encodeURIComponent(token)}`
     let cancelled = false, ws = null, attempt = 0, timer = null
-    const schedule = () => { attempt += 1; timer = setTimeout(connect, Math.min(15000, 800 * Math.pow(2, attempt))) }
+    // Fast recovery: ~250ms first retry, backing off to a 4s cap.
+    const schedule = () => { attempt += 1; timer = setTimeout(connect, Math.min(4000, 250 * Math.pow(2, attempt - 1))) }
     function connect() {
       if (cancelled) return
-      try { ws = new WebSocket(url) } catch { schedule(); return }
-      ws.onopen = () => { attempt = 0; setLive(true) }
+      setWsStatus(attempt === 0 ? 'connecting' : 'reconnecting')
+      try { ws = new WebSocket(url) } catch { setWsStatus('offline'); schedule(); return }
+      ws.onopen = () => { attempt = 0; setWsStatus('live') }
       ws.onmessage = (e) => {
         let msg; try { msg = JSON.parse(e.data) } catch { return }
         if (msg?.type === 'snapshot' && Array.isArray(msg.logs)) {
@@ -316,10 +411,10 @@ export default function Dashboard() {
         }
       }
       ws.onerror = () => { try { ws.close() } catch { /* noop */ } }
-      ws.onclose = () => { setLive(false); if (!cancelled) schedule() }
+      ws.onclose = () => { setWsStatus('reconnecting'); if (!cancelled) schedule() }
     }
     connect()
-    return () => { cancelled = true; setLive(false); if (timer) clearTimeout(timer); try { ws && ws.close() } catch { /* noop */ } }
+    return () => { cancelled = true; if (timer) clearTimeout(timer); try { ws && ws.close() } catch { /* noop */ } }
   }, [])
 
   // Top 3 applications by views.
@@ -362,18 +457,16 @@ export default function Dashboard() {
 
           {/* ===== KPI grid ===== */}
           <section className="dash-kpis">
-            {(loading ? Array.from({ length: 6 }) : KPIS).map((k, i) => (
-              <div className={'dash-kpi' + (loading ? ' is-skeleton' : '')} key={i}>
-                {!loading && (
-                  <>
-                    <span className="kpi-ic"><Ic name={k.icon} size={18} /></span>
-                    <div className="kpi-num">{nf(k.num)}</div>
-                    <div className="kpi-label">{k.label}</div>
-                    <div className="kpi-sub">{k.sub}</div>
-                  </>
-                )}
-              </div>
-            ))}
+            {loading
+              ? Array.from({ length: 6 }).map((_, i) => <KpiSkeleton key={i} />)
+              : KPIS.map((k, i) => (
+                <div className="dash-kpi" key={i}>
+                  <span className="kpi-ic"><Ic name={k.icon} size={18} /></span>
+                  <div className="kpi-num">{nf(k.num)}</div>
+                  <div className="kpi-label">{k.label}</div>
+                  <div className="kpi-sub">{k.sub}</div>
+                </div>
+              ))}
           </section>
 
           {/* ===== Hero — views over time ===== */}
@@ -426,7 +519,7 @@ export default function Dashboard() {
 
             <div className="chart-wrap dash-views-chart">
               {ts.loading
-                ? <div className="dash-ph">Loading views…</div>
+                ? <ChartSkeleton />
                 : customInvalid
                   ? <div className="dash-ph">Pick a valid start and end date.</div>
                   : <ViewsChart series={ts.series} />}
@@ -444,22 +537,24 @@ export default function Dashboard() {
             {/* Fleet health ring */}
             <div className="ov-block">
               <div className="ov-h">Fleet health</div>
-              <div className="fleet">
-                <div className="fleet-ring" style={{ background: `conic-gradient(var(--accent, #F36A1E) ${fleetPct * 3.6}deg, #F1E6D6 0)` }}>
-                  <div className="fleet-hole"><span className="fleet-pct">{fleetPct}%</span><span className="fleet-cap">online</span></div>
+              {loading ? <FleetSkeleton /> : (
+                <div className="fleet">
+                  <div className="fleet-ring" style={{ background: `conic-gradient(var(--accent, #F36A1E) ${fleetPct * 3.6}deg, #F1E6D6 0)` }}>
+                    <div className="fleet-hole"><span className="fleet-pct">{fleetPct}%</span><span className="fleet-cap">online</span></div>
+                  </div>
+                  <div className="fleet-legend">
+                    <div className="fl-row"><span className="fl-dot fl-ok" /> Connected <b>{nf(t?.devicesConnected)}</b></div>
+                    <div className="fl-row"><span className="fl-dot fl-off" /> Offline <b>{nf(t ? (t.devices || 0) - t.devicesConnected : null)}</b></div>
+                    <div className="fl-row fl-total"><span className="fl-dot fl-tot" /> Total devices <b>{nf(t?.devices)}</b></div>
+                  </div>
                 </div>
-                <div className="fleet-legend">
-                  <div className="fl-row"><span className="fl-dot fl-ok" /> Connected <b>{nf(t?.devicesConnected)}</b></div>
-                  <div className="fl-row"><span className="fl-dot fl-off" /> Offline <b>{nf(t ? (t.devices || 0) - t.devicesConnected : null)}</b></div>
-                  <div className="fl-row fl-total"><span className="fl-dot fl-tot" /> Total devices <b>{nf(t?.devices)}</b></div>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Distribution bars */}
             <div className="ov-block">
               <div className="ov-h">Distribution</div>
-              {t && [
+              {loading ? <BarsSkeleton rows={3} /> : t && [
                 { label: 'Applications', filled: t.appsPublished, total: t.apps, cap: 'published' },
                 { label: 'Dashboards', filled: t.dashboardsPublished, total: t.dashboards || 0, cap: 'published' },
                 { label: 'Cameras', filled: t.camerasActive, total: t.cameras || 0, cap: 'active' },
@@ -469,14 +564,13 @@ export default function Dashboard() {
                   <div className="ovb-track"><div className="ovb-fill" style={{ width: pct(b.filled, b.total) + '%' }} /></div>
                 </div>
               ))}
-              {loading && <div className="dash-ph">Loading…</div>}
             </div>
 
             {/* Top applications — always 3 ranked rows (placeholders for empty slots) */}
             <div className="ov-block">
               <div className="ov-h">Top applications <span className="ov-h-sub">by views</span></div>
               {loading ? (
-                <div className="dash-ph">Loading…</div>
+                <LeadSkeleton />
               ) : (
                 <div className="lead">
                   {[0, 1, 2].map((i) => {
@@ -503,7 +597,7 @@ export default function Dashboard() {
           <div className="dash-log-head">
             <div className="log-title">
               Recent activity
-              {live && <span className="dash-live"><span className="dash-live-dot" /> Live</span>}
+              <WsStatus status={wsStatus} />
             </div>
           </div>
           <div className="dash-log-cols">
@@ -511,7 +605,7 @@ export default function Dashboard() {
           </div>
           <div className="dash-log-rows">
             {logs.loading ? (
-              <div className="dash-ph">Loading…</div>
+              <LogSkeleton rows={6} />
             ) : !logs.items.length ? (
               <div className="dash-ph">No activity recorded yet. Create or edit something and it shows here.</div>
             ) : (
@@ -536,8 +630,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
   )
 }

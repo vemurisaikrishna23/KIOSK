@@ -1,0 +1,23 @@
+/* Right-side hero panel — shows the 6:5 kiosk artwork at full viewport
+   height with its natural aspect ratio (no crop, no distortion). The panel
+   width therefore equals 100vh × 6/5; the auth grid lets the left column
+   take the rest of the width. */
+
+.kiosk-right-panel {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 55% 22%, rgba(243, 106, 30, 0.12), transparent 45%),
+    linear-gradient(135deg, #f8efe5 0%, #f1dfca 100%);
+  font-size: 0; /* kill inline-image whitespace */
+}
+
+.kiosk-hero-img {
+  display: block;
+  height: 100vh;
+  width: auto;          /* preserves the image's 6:5 aspect ratio */
+  object-fit: contain;
+  /* subtle visual enhancement */
+  filter: saturate(1.06) contrast(1.03);
+}

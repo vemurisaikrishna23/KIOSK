@@ -29,6 +29,50 @@ function groupByPolicy(permissions) {
 
 const EMPTY_FORM = { id: null, name: '', description: '', permissions: [] /* ids */ }
 
+/* ----------------------- Loading skeletons ----------------------- */
+// Shimmer placeholder block (reuses the global `.sk` shimmer).
+const Sk = ({ w = '100%', h = 12, r = 6, style }) => (
+  <span className="sk" aria-hidden="true"
+    style={{ display: 'block', width: w, height: h, borderRadius: r, ...style }} />
+)
+
+// Collapsed role card placeholder (icon + name/desc + meta pills).
+function RoleCardSkeleton() {
+  return (
+    <article className="role-card" aria-hidden="true">
+      <header className="role-card-head" style={{ cursor: 'default' }}>
+        <div className="role-card-id">
+          <Sk w={36} h={36} r={10} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Sk w="42%" h={15} style={{ marginBottom: 8 }} />
+            <Sk w="72%" h={11} />
+          </div>
+        </div>
+        <div className="role-card-stats">
+          <div className="role-meta-pills">
+            <Sk w={96} h={22} r={999} />
+            <Sk w={66} h={22} r={999} />
+          </div>
+        </div>
+      </header>
+    </article>
+  )
+}
+
+// Permission policy group placeholder (policy label + chip blocks).
+function PolicyGroupSkeleton({ chips = 4 }) {
+  return (
+    <div className="policy-group" aria-hidden="true">
+      <Sk w={90} h={11} style={{ marginBottom: 10 }} />
+      <div className="perm-chips">
+        {Array.from({ length: chips }).map((_, i) => (
+          <Sk key={i} w={70 + (i % 3) * 26} h={26} r={999} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Roles() {
   const navigate = useNavigate()
   if (!auth.getUser()) { navigate('/signin', { replace: true }); return null }
@@ -329,7 +373,9 @@ export default function Roles() {
             {!canView ? (
               <PermissionDenied resource="roles" />
             ) : loading ? (
-              <div className="admin-empty">Loading…</div>
+              <div className="role-list">
+                {Array.from({ length: 5 }).map((_, i) => <RoleCardSkeleton key={i} />)}
+              </div>
             ) : filtered.length === 0 ? (
               <div className="admin-empty">No roles match your filter.</div>
             ) : (
@@ -436,7 +482,7 @@ export default function Roles() {
             </div>
             <div className="list-scroll">
             {loading ? (
-              <div className="admin-empty">Loading…</div>
+              Array.from({ length: 5 }).map((_, i) => <PolicyGroupSkeleton key={i} chips={4 + (i % 3)} />)
             ) : permsByPolicy.length === 0 ? (
               <div className="admin-empty">No permissions seeded yet.</div>
             ) : permsByPolicy.map(({ policy, perms }) => (
@@ -586,8 +632,6 @@ export default function Roles() {
           {toast.text}
         </div>
       )}
-
-      <footer className="kiosk-foot">© 2026 myaccess Inc. · KIOSK IoT Platform</footer>
     </div>
   )
 }

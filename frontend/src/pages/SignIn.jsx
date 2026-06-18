@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
-import SignInIllustration from '../components/SignInIllustration.jsx'
+import KioskRightPanel from '../components/KioskRightPanel.jsx'
+import { syncAvatarFromUser } from '../components/Avatar.jsx'
 import { api, auth, ApiError, parseApiErrors } from '../lib/api.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -65,6 +66,13 @@ export default function SignIn() {
   // status = null | { type: 'success' | 'error', text: string }
   const [status, setStatus] = useState(null)
 
+  // Auto-dismiss the error banner after 3s (success stays until navigation).
+  useEffect(() => {
+    if (status?.type !== 'error') return
+    const t = setTimeout(() => setStatus(null), 3000)
+    return () => clearTimeout(t)
+  }, [status])
+
   /** Client-side validation. Returns true if OK to submit. */
   function validate() {
     const next = { email: [], password: [] }
@@ -111,6 +119,8 @@ export default function SignIn() {
       })
       // Persist (or clear) the remembered identifier for next visit.
       auth.setRememberedId(remember ? identifier : '')
+      // Apply the user's saved avatar icon (from the backend) on this device.
+      syncAvatarFromUser(payload.user)
       setFieldErrors({ email: [], password: [] })
       setStatus({ type: 'success', text: resp?.message || 'Login successful' })
       // Brief pause so the green banner is visible, then go to the dashboard.
@@ -150,11 +160,25 @@ export default function SignIn() {
         <img src="/logos/myaccess.svg" alt="myaccess" className="logo-wordmark" />
       </Link>
 
-      {/* ============ LEFT: form ============ */}
+      {/* ============ LEFT: intro + form ============ */}
       <div className="signin-v2-left">
+        <div className="signin-intro">
+          <span className="signin-intro-eyebrow">SMART KIOSK PLATFORM</span>
+          <h2>
+            Control your entire kiosk fleet,
+            <span className="accent"> in real time.</span>
+          </h2>
+          <p>
+            Monitor live telemetry and camera feeds, manage device health, and
+            publish custom dashboards across every kiosk — securely, from one
+            place. Sign in to pick up where you left off.
+          </p>
+        </div>
+
         <div className="form-wrap">
           <div className="form-card">
             <h1>Login</h1>
+            <p className="signin-sub">Welcome back — sign in to manage your kiosk fleet.</p>
 
             <form onSubmit={submit} noValidate>
               <div className={'field-float' + (hasEmailError ? ' has-error' : '')}>
@@ -261,18 +285,21 @@ export default function SignIn() {
                 <span>{status.text}</span>
               </div>
             )}
+
+            <p className="signin-secure">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" strokeWidth="2" />
+                <path d="M8 11 V8 a4 4 0 0 1 8 0 V11" fill="none" stroke="currentColor" strokeWidth="2" />
+              </svg>
+              Secured with 256-bit SSL encryption
+            </p>
           </div>
         </div>
 
-        <div className="signin-v2-foot">
-          © 2026 myaccess Inc. · KIOSK IoT Platform
-        </div>
       </div>
 
-      {/* ============ RIGHT: illustration ============ */}
-      <div className="signin-v2-right">
-        <SignInIllustration />
-      </div>
+      {/* ============ RIGHT: animated kiosk panel ============ */}
+      <KioskRightPanel />
     </div>
   )
 }

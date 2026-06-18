@@ -52,6 +52,12 @@ urlpatterns = [
         ApplicationViewsTimeseriesAPIView.as_view(),
         name="views-timeseries",
     ),
+    # Live access-queue activity for a dashboard (editor unpublish caution).
+    path(
+        "dashboard-queue-status/<int:dashboard_id>/",
+        DashboardQueueStatusAPIView.as_view(),
+        name="dashboard-queue-status",
+    ),
     # Authenticated internal activity log (dashboard recent activity + Activity Log page).
     path(
         "activity-logs/",

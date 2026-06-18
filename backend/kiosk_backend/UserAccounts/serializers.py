@@ -79,7 +79,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'name', 'email', 'country_code', 'mobile',
+            'id', 'name', 'email', 'country_code', 'mobile', 'avatar',
             'password', 'roles', 'role_details',
             'created_at', 'updated_at', 'deleted_at'
         ]
@@ -184,6 +184,7 @@ class LoginSerializer(serializers.Serializer):
                 "name": user.name,
                 "email": user.email,
                 "mobile": user.mobile,
+                "avatar": user.avatar,
                 "roles": roles_with_permissions,
             },
             "access": str(refresh.access_token),
