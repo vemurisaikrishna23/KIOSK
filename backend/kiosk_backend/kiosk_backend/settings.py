@@ -16,10 +16,24 @@ import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Load .env (project root → backend/kiosk_backend/.env) before reading settings.
+# ------------------------------------------------------------------
+# Environment selection — one switch picks dev vs prod values/keys.
+# ------------------------------------------------------------------
+#   DJANGO_PRODUCTION=True  -> load .env.production  (production values)
+#   DJANGO_PRODUCTION=False -> load .env.development (development values) [default]
+# Set DJANGO_PRODUCTION=True in the OS env (systemd / shell) on the
+# server, or flip the default below.
+PRODUCTION = os.environ.get('DJANGO_PRODUCTION', 'False').strip().lower() in (
+    'true', '1', 'yes', 'on',
+)
+
+# Load the matching env file before reading any settings. load_dotenv does
+# NOT override variables already set in the real OS environment, so the
+# shell/systemd always wins; a plain `.env` (if present) fills any gaps.
 # Optional: if python-dotenv isn't installed, env vars must come from the shell.
 try:
     from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ('.env.production' if PRODUCTION else '.env.development'))
     load_dotenv(BASE_DIR / '.env')
 except ImportError:
     pass
@@ -36,33 +50,27 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-# Flip via env on the server (DJANGO_DEBUG=false).
-DEBUG = os.environ.get('DJANGO_DEBUG', 'true').lower() == 'true'
+# Defaults to off in production, on in development; override with DJANGO_DEBUG.
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False' if PRODUCTION else 'True').strip().lower() in (
+    'true', '1', 'yes', 'on',
+)
 
-# Hosts allowed to serve this backend. The server's public IP needs to
-# be in this list so Django doesn't refuse the request with
-# `DisallowedHost`. '*' is fine while behind a trusted proxy / locked
-# down by the firewall.
+# Hosts allowed to serve this backend. Comma-separated list via
+# DJANGO_ALLOWED_HOSTS. '*' is acceptable while behind a trusted reverse
+# proxy / locked down by the firewall.
 ALLOWED_HOSTS = [
-    '192.210.241.34',
-    'localhost',
-    '127.0.0.1',
-    '*',
+    h.strip()
+    for h in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,*').split(',')
+    if h.strip()
 ]
 
-# Origins allowed to make POST/PUT/PATCH/DELETE that include cookies
-# or CSRF tokens. Must include the scheme. Add both http and https
-# entries if you'll eventually serve over TLS.
+# Origins allowed to make POST/PUT/PATCH/DELETE that include cookies or
+# CSRF tokens. Comma-separated list via DJANGO_CSRF_TRUSTED_ORIGINS — each
+# entry MUST include the scheme (e.g. https://host, https://host:8001).
 CSRF_TRUSTED_ORIGINS = [
-    'http://192.210.241.34',
-    'http://192.210.241.34:80',
-    'http://192.210.241.34:5173',  # vite dev preview, if you ever run it on the box
-    'http://192.210.241.34:8001',
-    'https://kiosk-backend.myaccess.cloud',
-    # LAN access for testing on a phone within the same Wi-Fi network.
-    'http://192.168.1.19',
-    'http://192.168.1.19:5173',
-    'http://192.168.1.19:8001',
+    o.strip()
+    for o in os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '').split(',')
+    if o.strip()
 ]
 
 # Application definition
@@ -131,25 +139,24 @@ ASGI_APPLICATION = 'kiosk_backend.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'kiosk_db',
-        'USER': 'admin',
-        'PASSWORD': 'admin123',
-        'HOST': '38.242.216.156', 
-        'PORT': '5437',
+        'NAME': os.environ.get('DB_NAME', 'kiosk_development_db'),
+        'USER': os.environ.get('DB_USER', 'kiosk'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', 'kiosk'),
+        'HOST': os.environ.get('DB_HOST', '127.0.0.1'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
 MEDIAMTX_SERVER = {
-    "subdomain": "cam.myaccess.cloud",
-    "host": "72.60.221.158",           # Replace with your MediaMTX server IP
-    "username": "root",              # SSH user
-    "password": "Myaccess@2021",  # Or use key-based auth
-    "config_path": "/root/projects/mediamtx/mediamtx.yml",
-    "docker_container": "mediamtx-server",
-    "api_port": 9997,               # default MediaMTX API port
-    "api_user": "admin",            # API username
-    "api_pass": "admin"          # API password
-
+    "subdomain": os.environ.get('MEDIAMTX_SUBDOMAIN', 'cam.myaccess.cloud'),
+    "host": os.environ.get('MEDIAMTX_HOST', '72.60.221.158'),
+    "username": os.environ.get('MEDIAMTX_SSH_USER', 'root'),
+    "password": os.environ.get('MEDIAMTX_SSH_PASSWORD', ''),
+    "config_path": os.environ.get('MEDIAMTX_CONFIG_PATH', '/root/projects/mediamtx/mediamtx.yml'),
+    "docker_container": os.environ.get('MEDIAMTX_CONTAINER', 'mediamtx-server'),
+    "api_port": int(os.environ.get('MEDIAMTX_API_PORT', '9997')),
+    "api_user": os.environ.get('MEDIAMTX_API_USER', 'admin'),
+    "api_pass": os.environ.get('MEDIAMTX_API_PASS', 'admin'),
 }
 
 
@@ -187,14 +194,16 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
-STATIC_ROOT = "/root/projects/kiosk_backend/backend/kiosk_backend/staticfiles"
+STATIC_URL = os.environ.get('DJANGO_STATIC_URL', 'static/')
+# Where `collectstatic` gathers files for WhiteNoise to serve. Set
+# DJANGO_STATIC_ROOT to collect to a path outside the project; leave it
+# blank to use <project>/staticfiles (works on Windows dev + Linux).
+STATIC_ROOT = os.environ.get('DJANGO_STATIC_ROOT') or (BASE_DIR / 'staticfiles')
 
-MEDIA_URL = "/media/"
-# Resolve under BASE_DIR so the same setting works on Windows dev + Linux
-# deployment without manual tweaking. Override via env if a different
-# mount-point is needed in production.
-MEDIA_ROOT = os.environ.get("DJANGO_MEDIA_ROOT") or (BASE_DIR / "media")
+MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
+# Set DJANGO_MEDIA_ROOT to store uploads at a fixed mount-point; leave it
+# blank to use <project>/media.
+MEDIA_ROOT = os.environ.get('DJANGO_MEDIA_ROOT') or (BASE_DIR / 'media')
 
 
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
@@ -248,19 +257,21 @@ CHANNEL_LAYERS = {
 AUTH_USER_MODEL = 'UserAccounts.User'
 
 # CORS — for an open dashboard reachable from any browser we leave
-# this permissive. Lock down to a specific origin list later by
-# setting CORS_ALLOW_ALL_ORIGINS=False and listing CORS_ALLOWED_ORIGINS.
-CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOW_CREDENTIALS = True
+# this permissive by default. Lock down by setting CORS_ALLOW_ALL_ORIGINS=false
+# and listing real origins in DJANGO_CORS_ALLOWED_ORIGINS.
+CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').strip().lower() in (
+    'true', '1', 'yes', 'on',
+)
+CORS_ALLOW_CREDENTIALS = os.environ.get('CORS_ALLOW_CREDENTIALS', 'True').strip().lower() in (
+    'true', '1', 'yes', 'on',
+)
+# Used only when CORS_ALLOW_ALL_ORIGINS is False. Comma-separated list via
+# DJANGO_CORS_ALLOWED_ORIGINS (include the scheme); falls back to the CSRF list.
 CORS_ALLOWED_ORIGINS = [
-    'http://192.210.241.34',
-    'http://192.210.241.34:80',
-    'http://192.210.241.34:5173',
-    'http://localhost:5173',
-    'http://127.0.0.1:5173',
-]
-
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+    o.strip()
+    for o in os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', '').split(',')
+    if o.strip()
+] or CSRF_TRUSTED_ORIGINS
 
 # ============================================================
 # Email — used for password-reset links
@@ -298,3 +309,12 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# ------------------------------------------------------------------
+# Production-only hardening (behind an HTTPS reverse proxy like nginx)
+# ------------------------------------------------------------------
+if PRODUCTION:
+    # Trust nginx's X-Forwarded-Proto header so Django knows the original
+    # request was HTTPS — required for correct CSRF checks & secure cookies.
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    USE_X_FORWARDED_HOST = True

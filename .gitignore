@@ -13,6 +13,10 @@ env/
 # Local environment overrides — never commit secrets
 .env
 **/.env
+.env.development
+.env.production
+**/.env.development
+**/.env.production
 !**/.env.example
 
 # Django

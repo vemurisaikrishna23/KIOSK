@@ -36,7 +36,8 @@ COPY . .
 # =====================================
 EXPOSE 8000
 
-# Run Daphne ASGI server (Django Channels)
-# Replace `school_management.asgi:application` with your actual ASGI app path
-#CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "school_management.asgi:application"]
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "kiosk_backend.asgi:application"]
+# On start: apply DB migrations, gather static files for WhiteNoise, then
+# launch the Daphne ASGI server (Django Channels). `exec` makes Daphne PID 1
+# so it receives stop/restart signals cleanly. Drop the migrate step if you
+# prefer to run migrations manually as a one-off container.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec daphne -b 0.0.0.0 -p 8000 kiosk_backend.asgi:application"]
