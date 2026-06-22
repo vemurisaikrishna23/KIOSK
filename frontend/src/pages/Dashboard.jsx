@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import WsStatus from '../components/WsStatus.jsx'
-import { api, auth } from '../lib/api.js'
+import { api, auth, WS_BASE } from '../lib/api.js'
 
 /* =====================================================================
    Main dashboard — a READ-ONLY analytics overview of the whole platform.
@@ -388,12 +388,9 @@ export default function Dashboard() {
   // Auto-reconnects forever with exponential backoff (no manual reconnect).
   const [wsStatus, setWsStatus] = useState('connecting') // connecting | reconnecting | live | offline
   useEffect(() => {
-    const loc = typeof window !== 'undefined' ? window.location : null
-    const host = loc?.hostname || 'localhost'
-    const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
     const token = auth.getAccess()
     if (!token) { setWsStatus('offline'); return undefined }
-    const url = `${proto}//${host}:8001/ws/activity-logs/?token=${encodeURIComponent(token)}`
+    const url = `${WS_BASE}/activity-logs/?token=${encodeURIComponent(token)}`
     let cancelled = false, ws = null, attempt = 0, timer = null
     // Fast recovery: ~250ms first retry, backing off to a 4s cap.
     const schedule = () => { attempt += 1; timer = setTimeout(connect, Math.min(4000, 250 * Math.pow(2, attempt - 1))) }

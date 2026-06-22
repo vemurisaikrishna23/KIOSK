@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import TopBar from '../components/TopBar.jsx'
 import WsStatus from '../components/WsStatus.jsx'
 import { PermissionDenied } from './Cameras.jsx'
-import { api, ApiError, auth, parseApiErrors } from '../lib/api.js'
+import { api, ApiError, auth, parseApiErrors, WS_BASE } from '../lib/api.js'
 
 function formatRelative(iso) {
   if (!iso) return ''
@@ -135,10 +135,7 @@ export default function DeviceDetail() {
   useEffect(() => {
     if (!canView || !device?.device_token) return
 
-    const loc   = typeof window !== 'undefined' ? window.location : null
-    const host  = loc?.hostname || 'localhost'
-    const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url   = `${proto}//${host}:8001/ws/applications/${device.device_token}/?type=web`
+    const url   = `${WS_BASE}/applications/${device.device_token}/?type=web`
 
     let cancelled      = false
     let reconnectTimer = null

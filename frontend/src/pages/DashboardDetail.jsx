@@ -4,7 +4,7 @@ import { Responsive, WidthProvider } from 'react-grid-layout'
 import TopBar from '../components/TopBar.jsx'
 import WsStatus from '../components/WsStatus.jsx'
 import { PermissionDenied } from './Cameras.jsx'
-import { api, auth, ApiError, parseApiErrors } from '../lib/api.js'
+import { api, auth, ApiError, parseApiErrors, WS_BASE } from '../lib/api.js'
 
 const ResponsiveGrid = WidthProvider(Responsive)
 
@@ -1824,13 +1824,10 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     if (!dashboardId) return undefined
     if (!publicMode && !previewMode) return undefined
     if (!dashboard?.queue_enabled) return undefined
-    const loc = typeof window !== 'undefined' ? window.location : null
-    const host = loc?.hostname || 'localhost'
-    const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
     // Authenticated internal users pass their JWT so the backend recognises
     // them for the admin override ("take control"). Anonymous viewers omit it.
     const qToken = auth.getAccess()
-    const url = `${proto}//${host}:8001/ws/dashboard-queue/${dashboardId}/`
+    const url = `${WS_BASE}/dashboard-queue/${dashboardId}/`
       + (qToken ? `?token=${encodeURIComponent(qToken)}` : '')
     let cancelled = false, reconnectTimer = null, ws = null, attempt = 0
     // Fast recovery: ~250ms first retry, backing off to a 4s cap.
@@ -1873,9 +1870,6 @@ export default function DashboardDetail({ publicMode = false } = {}) {
   useEffect(() => {
     if (!canView || !dashboardId) return undefined
 
-    const loc   = typeof window !== 'undefined' ? window.location : null
-    const host  = loc?.hostname || 'localhost'
-    const proto = loc?.protocol === 'https:' ? 'wss:' : 'ws:'
     // Authenticate the socket with the user's JWT when present:
     //   • editor (not publicMode) → editor=1: full bypass of the access queue
     //     so the admin can build/test the board.
@@ -1883,7 +1877,7 @@ export default function DashboardDetail({ publicMode = false } = {}) {
     //     who they are so the "take control" admin override can authorise their
     //     writes. Anonymous public viewers send nothing and stay queue-gated.
     const token = auth.getAccess()
-    const url   = `${proto}//${host}:8001/ws/dashboards/${dashboardId}/`
+    const url   = `${WS_BASE}/dashboards/${dashboardId}/`
       + (token ? `?token=${encodeURIComponent(token)}${publicMode ? '' : '&editor=1'}` : '')
 
     let cancelled       = false

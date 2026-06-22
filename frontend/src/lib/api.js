@@ -32,6 +32,10 @@ const API_BASE = resolveApiBase()
 const CAMERAS_BASE = API_BASE.replace(/\/api\/?$/, '/cameraapi')
 // Applications are mounted at /applications/ on the same host.
 const APPS_BASE = API_BASE.replace(/\/api\/?$/, '/applications')
+// WebSocket base — same origin as the API, but ws/wss scheme and the /ws path.
+// Derived from API_BASE so it tracks VITE_API_BASE_URL (e.g. a separate backend
+// domain) or the runtime host. https://api.example.com/api → wss://api.example.com/ws
+export const WS_BASE = API_BASE.replace(/\/api\/?$/, '/ws').replace(/^http/i, 'ws')
 
 const ACCESS_KEY = 'kiosk_access'
 const REFRESH_KEY = 'kiosk_refresh'
